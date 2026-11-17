@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
-"""Draw the README figures from the benchmark results, in light and dark, English and Korean. Standard library only.
+"""Draw the README figures, the social card and the plugin icon from the benchmark results.
 
-    python scripts/make_figures.py          # every SVG into docs/figures/
-    python scripts/make_figures.py --png    # also docs/figures/social-preview.png (needs Chrome or Edge)
+Each figure is HTML and CSS set in Instrument Sans and IBM Plex Mono (scripts/fonts, SIL Open Font License), rendered
+to PNG at twice its size by headless Chrome or Edge, in light and dark and in English and Korean. The design rules are
+in docs/design.md: a case file, where every image shows evidence from bench/results/ and the one bold device is a
+highlighter mark on the line that decided an outcome.
 
-hero      the banner: what the guard does, a recorded agent run, the headline numbers
-pipeline  how a tool call reaches the guard, and what the scan does
+    python scripts/make_figures.py                # every figure into docs/figures/
+    python scripts/make_figures.py --only hero    # some of: hero how chain results scan repos social icon
+
+hero      the claim, a recorded agent run that was stopped, and the tested numbers
+how       how the guard decides: four checks in the order a step meets them, and its three answers
+chain     attacks the guard stops only as chains: each step alone, then in one session (bench/chains.py)
 results   malicious repositories caught by the rules and by models reading the repository
-scan      what `pah scan` prints for one TrapRepo case (made by running the scanner, colors as in a terminal)
+scan      what `pah scan` prints for one TrapRepo case (made by running the scanner)
 repos     the widely used repositories scanned in full for false alarms
 social    the 1280 x 640 card for the repository's social preview
+icon      the plugin icon, 512 x 512
 
 Every number comes from bench/results/; nothing is typed in by hand except the words around it.
 """
 from __future__ import annotations
 
+import base64
+import html
 import json
 import re
 import shutil
@@ -22,727 +31,251 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from xml.sax.saxutils import escape, quoteattr
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "bench" / "results"
 OUT = ROOT / "docs" / "figures"
-DATE = "2026-11-11"
+FONTS = Path(__file__).resolve().parent / "fonts"
+WIDTH = 960
 
-SANS = ('-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, "Apple SD Gothic Neo", '
-        '"Malgun Gothic", "Noto Sans KR", sans-serif')
-MONO = ('ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "D2Coding", "Malgun Gothic", '
-        'monospace')
-
-# GitHub's own palette, so the figures sit naturally on the page in either theme. Outcome colors were checked for
-# color-blind separation (adjacent pairs, protan/deutan/tritan) against the card surface of each theme.
 THEMES = {
-    "light": {
-        "card": "#ffffff", "card2": "#f6f8fa", "border": "#d1d9e0", "line": "#e1e6eb",
-        "fg": "#1f2328", "muted": "#59636e", "subtle": "#818b98",
-        "accent": "#2f6fde", "accent_fg": "#1f5bc6", "accent_bg": "#ebf2fe",
-        "good": "#1a7f37", "good_bg": "#dafbe1", "good_line": "#9fe0b0",
-        "warn": "#9a6700", "warn_bg": "#fff8c5", "warn_line": "#e8d27a",
-        "bad": "#cf222e", "bad_bg": "#ffebe9", "bad_line": "#ffb8b1",
-        "bar_all": "#2f6fde", "bar_some": "#e0a526", "bar_missed": "#cf222e", "bar_refused": "#8c959f",
-        "ink_all": "#ffffff", "ink_some": "#1f2328", "ink_missed": "#ffffff", "ink_refused": "#ffffff",
-        "hero_a": "#eef4ff", "hero_b": "#ffffff", "dots": "#2f6fde", "dots_op": "0.13", "glow_op": "0.16",
-        "band": "#f6f8fa",
-        "term": {"bg": "#f6f8fa", "border": "#d1d9e0", "bar": "#eaeef2", "fg": "#1f2328", "muted": "#59636e",
-                 "red": "#cf222e", "orange": "#bc4c00", "yellow": "#9a6700", "cyan": "#1b7c83", "blue": "#0550ae",
-                 "green": "#116329", "badge_fg": "#ffffff", "warn_badge_fg": "#1f2328",
-                 "badge_red": "#cf222e", "badge_yellow": "#d4a72c", "badge_green": "#2da44e", "badge_gray": "#818b98"},
-    },
-    "dark": {
-        "card": "#0d1117", "card2": "#151b23", "border": "#3d444d", "line": "#262c36",
-        "fg": "#f0f6fc", "muted": "#9198a1", "subtle": "#6e7681",
-        "accent": "#4c8df6", "accent_fg": "#79b0ff", "accent_bg": "#152338",
-        "good": "#3fb950", "good_bg": "#12261a", "good_line": "#2a5a35",
-        "warn": "#d29922", "warn_bg": "#2a2111", "warn_line": "#6b5212",
-        "bad": "#f85149", "bad_bg": "#2d1214", "bad_line": "#7a2a2a",
-        "bar_all": "#4c8df6", "bar_some": "#d4a232", "bar_missed": "#da3633", "bar_refused": "#6e7681",
-        "ink_all": "#ffffff", "ink_some": "#0d1117", "ink_missed": "#ffffff", "ink_refused": "#ffffff",
-        "hero_a": "#0f1a2e", "hero_b": "#0d1117", "dots": "#8fb4ff", "dots_op": "0.10", "glow_op": "0.22",
-        "band": "#151b23",
-        "term": {"bg": "#151b23", "border": "#3d444d", "bar": "#1c232c", "fg": "#e6edf3", "muted": "#8b949e",
-                 "red": "#ff7b72", "orange": "#ffa657", "yellow": "#e3b341", "cyan": "#56d4dd", "blue": "#79c0ff",
-                 "green": "#7ee787", "badge_fg": "#ffffff", "warn_badge_fg": "#0d1117",
-                 "badge_red": "#da3633", "badge_yellow": "#d29922", "badge_green": "#2ea043", "badge_gray": "#6e7681"},
-    },
+    "light": {"ink": "#13213c", "muted": "#59636e", "faint": "#818b98", "line": "#d1d9e0", "panel": "#f6f8fa",
+              "marker": "#ffe45e", "on-marker": "#13213c", "pass": "#12805c", "warn": "#b8800a", "block": "#bb3a32",
+              "neutral": "#8c959f", "on-pass": "#ffffff", "on-warn": "#13213c", "on-block": "#ffffff",
+              "on-neutral": "#13213c", "accent": "#1b6ac9", "tile": "#13213c", "hat": "#ffffff", "tile-line": "#13213c"},
+    "dark": {"ink": "#e6edf3", "muted": "#9198a1", "faint": "#6e7681", "line": "#3d444d", "panel": "#151b23",
+             "marker": "#e8c547", "on-marker": "#0d1117", "pass": "#1f9a72", "warn": "#c08a10", "block": "#bb3a32",
+             "neutral": "#6e7681", "on-pass": "#0d1117", "on-warn": "#0d1117", "on-block": "#ffffff",
+             "on-neutral": "#ffffff", "accent": "#5aa3f0", "tile": "#1d2d4d", "hat": "#ffffff", "tile-line": "#3d4f73"},
 }
-# The recorded agent run in the hero is shown in a dark terminal in both themes.
-HERO_TERM = {"bg": "#0b1020", "border": "#26304a", "bar": "#121a2e", "fg": "#e6edf3", "muted": "#8b949e",
-             "dim": "#c4cdd8", "prompt": "#79c0ff", "tool": "#3fb950", "red": "#ff7b72", "high": "#ffa657",
-             "low": "#8b949e", "reply": "#e6edf3"}
-AGENTS = ["Claude Code", "Codex", "Gemini CLI", "Antigravity", "Cursor", "Copilot", "Devin", "Kiro", "Cline"]
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Words. Numbers are filled in from the results.
+AGENTS = "Claude Code, Codex, Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro, Cline"
 
 STR = {
     "en": {
-        "hero_alt": "agent-white-hat: the antivirus for people who use AI agents",
-        "tagline": [[("The antivirus for", "fg")], [("people who use", "fg")], [("AI agents.", "accent")]],
-        "tag_size": 31,
-        "hero_sub": "Scans your computer, watches what arrives and quarantines what it blocks; reads repositories, "
-                    "skills, MCP servers and packages before they run. The checks run in code, on your machine.",
-        "one_guard": "ONE GUARD FOR",
-        "term_title": "agent session · approvals off",
-        "caption": "Recorded run: Claude Code {cc}, approvals off · bench/live_drill.py",
-        "stats": [("malicious test repositories", "caught, rules only, offline"),
-                  ("benign look-alikes", "flagged"),
-                  ("widely used repositories", "blocked"),
-                  ("live agent runs in which", "the payload ran")],
-        "pipe_title": "How it works",
-        "pipe_sub": "Every command your agent runs passes the guard first. A setup command gets the whole project scanned "
-                    "before it may run.",
-        "touch_h": "What your agent touches",
-        "touch": ["Git repositories", "Packages: npm, PyPI, …", "Agent Skills", "MCP servers", "Archives, downloads",
-                  "AGENTS.md, CLAUDE.md"],
-        "agent_h": "Your AI agent",
-        "guard_h": "The guard",
-        "guard_sub": "a pre-tool hook",
-        "guard_body": "Checks each command for download-and-run, decode-and-run, credential reads, persistence, "
-                      "approvals turned off, look-alike packages and registry redirects.",
-        "guard_setup": "Setup commands (npm install, pip install -e ., make, pytest) scan the project first.",
-        "out_h": "Outcome",
-        "outcomes": [("BLOCK", "bad", "Denied. Nothing runs."), ("WARN", "warn", "You are asked."),
-                     ("PASS", "good", "Your agent's own rules apply.")],
-        "out_note": "The guard never answers \u201callow\u201d.",
-        "a_ab": ["clones,", "reads"],
-        "a_bc": ["every", "tool call"],
-        "a_cd": ["command", "checks"],
-        "a_scan": "setup: scan the project",
-        "a_verdict": "verdict",
-        "scan_h": "Inside the scan",
-        "stages": [(["Map what runs", "on its own"],
-                    "Agent hooks, npm and pip lifecycle scripts, IDE tasks, dev containers, build scripts, git hooks, "
-                    "instruction files, and the files they run."),
-                   (["Read everything"],
-                    "Whole files, never truncated. Base64, hex and escapes decoded; hidden Unicode, padding, archives, "
-                    "and binaries found by what they are."),
-                   (["Judge by context"],
-                    "The same line is critical in a hook, high in code and quiet in docs. Downloads judged by host; "
-                    "combinations escalate."),
-                   (["Verdict"], "High or critical blocks, medium warns. Anything not read in full is never called "
-                                 "clean.")],
-        "addons": ["+ local antivirus: Microsoft Defender, ClamAV", "+ known vulnerabilities: OSV (--online)",
-                   "+ config watch: pah watch"],
+        "headline": "The antivirus for people who use AI agents.",
+        "lede": "It reads what would run before your agent runs it: hooks, skills, MCP servers, install scripts and model "
+                "files. Then it stops the steps that add up to an attack.",
+        "run_head": "Recorded run: Claude Code {cc}, approvals off, told to set up a project it had just cloned",
+        "blocked": "Blocked by agent-white-hat before it ran:",
+        "ledger": [("{caught}", "/{malicious}", "malicious test repositories caught"),
+                   ("{flagged}", "/{benign}", "benign look-alikes flagged"),
+                   ("{chains}", "/{chain_runs}", "attack chains stopped in nine agents"),
+                   ("{repos_blocked}", "/{repos}", "widely used repositories blocked")],
+        "agents": f"One guard in {AGENTS}.",
+        "how_title": "How the guard decides",
+        "how_sub": "Every tool call your agent makes meets these checks in this order. The guard only adds restrictions: it "
+                   "never answers \u201callow\u201d.",
+        "stages": [("The step on its own", "Download-and-run, decode-and-run, credential reads, persistence, approvals "
+                                           "switched off, look-alike packages, registry redirects."),
+                   ("The project, before setup", "npm install, pip install -e ., pytest, make or loading a model first "
+                                                 "gets the folder scanned: hooks, install scripts, skills, MCP servers, "
+                                                 "model files."),
+                   ("The session so far", "The step is judged with the ones before it: credentials read, then an "
+                                          "upload; a download, then chmod +x, then a run."),
+                   ("What came back", "Pages, MCP results and files the agent reads are checked for instructions aimed "
+                                      "at it. After one, the session's risky steps need you.")],
+        "answers": [("block", "\u2715", "Denied", "a high or critical finding"),
+                    ("warn", "?", "Asked", "a medium finding; agents that cannot ask deny it"),
+                    ("neutral", "\u2013", "Left to your agent", "nothing found")],
+        "chain_title": "Harmless one step at a time",
+        "chain_sub": "Two attacks from the chain drill, sent to Claude Code's hook: every step alone, then the same steps "
+                     "in one session.",
+        "alone": "Alone",
+        "session": "In one session",
+        "verdicts": {"pass": "Allowed", "ask": "Asked", "deny": "Denied"},
+        "chains": {"download-chmod-run": "Download, make executable, run",
+                   "dns-exfil-after-read": "Read cloud credentials, then leak them in a DNS lookup"},
+        "read": "Read",
+        "chain_foot": "Across nine agents: {caught} of {runs} attack runs stopped, {only} of them only because of the "
+                      "steps before; {extra} of {ordinary} ordinary runs got a prompt the same steps would not get alone.",
         "res_title": "Malicious repositories caught, out of {n}",
-        "res_sub1": "TrapRepo: {n} malicious and {b} benign repositories built from real 2025-26 techniques, with inert payloads.",
-        "res_sub2": "Each model read the repository (up to 100,000 characters) and answered \u201csafe\u201d or "
-                    "\u201cunsafe\u201d, {k} runs per case.",
-        "legend": ["Caught in every run", "Caught in some runs", "Missed in every run", "Refused in every run (no answer)"],
+        "res_sub": "TrapRepo's first {n} malicious and {b} benign repositories, built from real 2025\u201326 techniques "
+                   "with inert payloads. Each model read the repository (up to 100,000 characters) and answered "
+                   "\u201csafe\u201d or \u201cunsafe\u201d, {k} runs per case.",
+        "legend": ["Caught in every run", "Caught in some runs", "Missed in every run", "Refused, no answer"],
         "res_rules": "rules only, offline",
         "res_model": "the model alone",
-        "res_benign": "Benign flagged",
+        "res_benign": "benign flagged",
         "res_every": "every run",
-        "res_any": "any run",
+        "res_any": "in any run",
         "res_of": "{a} of {b}",
-        "res_foot": "A refused review is not a clean result: agent-white-hat reports it as \u201cnot reviewed\u201d. "
-                    "Every case, run and answer is in bench/results/.",
+        "res_foot": "A refused review is not a clean result: agent-white-hat reports it as \u201cnot reviewed\u201d. Every "
+                    "case, run and answer is in bench/results/.",
         "repo_title": "{n} widely used repositories, scanned in full",
-        "repo_big": "0 blocked",
-        "repo_sub": "{p} pass and {w} warn, across {f} files. Each warning is worth knowing before an agent sets the "
-                    "project up.",
-        "groups": ["JavaScript", "Python", "Rust", "AI agents, MCP", "Shell, installers", "Go, Java, containers"],
-        "repo_notes": ["ruff, the MCP servers and everything-claude-code ship agent hooks;",
-                       "a gemini-cli skill pipes a third-party install script into sh."],
-        "repo_legend": ["pass", "warn", "block"],
+        "repo_sub": "{p} pass and {w} warn across {f} files; none blocked. Each warning is worth knowing before an agent "
+                    "sets the project up.",
+        "groups": ["JavaScript", "Python", "Rust", "AI agents and MCP", "Shell and installers", "Go, Java, containers"],
+        "repo_legend": [("pass", "\u2713", "pass"), ("warn", "!", "warn"), ("block", "\u2715", "block")],
+        "repo_note": "ruff, the MCP servers and everything-claude-code ship agent hooks; a gemini-cli skill pipes a "
+                     "third-party install script into sh.",
         "scan_cmd": "pah scan ./acme-utils",
-        "scan_title": "Terminal",
         "scan_note": "Trimmed: each high or critical finding also prints why it matters and what to do.",
-        "social_tag": ["The antivirus for people", "who use AI agents."],
+        "social": "The antivirus for people who use AI agents.",
     },
     "ko": {
-        "hero_alt": "agent-white-hat: AI 에이전트를 쓰는 사람을 위한 백신",
-        "tagline": [[("AI 에이전트를 쓰는", "fg")], [("사람을 위한 ", "fg"), ("백신.", "accent")]],
-        "tag_size": 34,
-        "hero_sub": "컴퓨터를 검사하고, 들어오는 것을 지켜보고, 막은 것은 격리합니다. 레포지토리·스킬·MCP 서버·패키지는 "
-                    "실행 전에 읽습니다. 판정은 코드가, 내 컴퓨터에서 합니다.",
-        "one_guard": "하나의 가드로",
-        "term_title": "에이전트 세션 · 승인 끔",
-        "caption": "실제 실행 기록: Claude Code {cc}, 승인 끔 · bench/live_drill.py",
-        "stats": [("악성 테스트 레포지토리", "탐지 (규칙만, 오프라인)"),
-                  ("비슷한 정상 레포지토리", "오탐"),
-                  ("널리 쓰이는 레포지토리", "차단"),
-                  ("실제 에이전트 실행 중", "페이로드가 실행된 횟수")],
-        "pipe_title": "작동 방식",
-        "pipe_sub": "에이전트가 실행하는 모든 명령은 먼저 가드를 거칩니다. 설치·설정 명령이면 프로젝트 전체를 검사한 뒤에만 "
-                    "실행됩니다.",
-        "touch_h": "에이전트가 다루는 것",
-        "touch": ["Git 레포지토리", "패키지: npm, PyPI …", "에이전트 스킬", "MCP 서버", "압축 파일·다운로드",
-                  "AGENTS.md·CLAUDE.md"],
-        "agent_h": "내 AI 에이전트",
-        "guard_h": "가드",
-        "guard_sub": "도구 실행 전 훅",
-        "guard_body": "명령마다 확인합니다: 내려받아 실행, 디코딩해 실행, 자격 증명 읽기, 지속성, 승인 끄기, 비슷한 이름의 "
-                      "패키지, 레지스트리 변경.",
-        "guard_setup": "설치·설정 명령(npm install, pip install -e ., make, pytest)은 프로젝트를 먼저 검사합니다.",
-        "out_h": "결과",
-        "outcomes": [("BLOCK", "bad", "거부. 아무것도 실행되지 않습니다."), ("WARN", "warn", "나에게 묻습니다."),
-                     ("PASS", "good", "에이전트 자체 규칙대로.")],
-        "out_note": "가드는 \u2018허용\u2019이라고 답하지 않습니다.",
-        "a_ab": ["클론,", "읽기"],
-        "a_bc": ["모든", "도구 호출"],
-        "a_cd": ["명령", "검사"],
-        "a_scan": "설치·설정: 프로젝트 검사",
-        "a_verdict": "판정",
-        "scan_h": "검사 안에서 일어나는 일",
-        "stages": [(["스스로 실행되는 것", "찾기"],
-                    "에이전트 훅, npm·pip 라이프사이클 스크립트, IDE 작업, 개발 컨테이너, 빌드 스크립트, git 훅, "
-                    "지시 파일과 그것들이 실행하는 파일."),
-                   (["전부 읽기"],
-                    "파일을 자르지 않고 끝까지. Base64·hex·이스케이프를 풀고, 숨은 유니코드, 패딩, 압축 파일, 이름을 속인 "
-                    "바이너리를 찾습니다."),
-                   (["맥락으로 판단"],
-                    "같은 줄도 훅에서는 critical, 코드에서는 high, 문서에서는 조용히. 다운로드는 호스트로 판단하고, 조합은 "
-                    "심각도를 올립니다."),
-                   (["판정"], "high·critical은 차단, medium은 경고. 끝까지 읽지 못한 것은 깨끗하다고 하지 않습니다.")],
-        "addons": ["+ 로컬 백신: Microsoft Defender, ClamAV", "+ 알려진 취약점: OSV (--online)",
-                   "+ 설정 감시: pah watch"],
-        "res_title": "악성 레포지토리 {n}개 중 탐지 수",
-        "res_sub1": "TrapRepo: 2025–26년 실제 기법으로 만든 악성 {n}개와 정상 {b}개, 페이로드는 무해합니다.",
-        "res_sub2": "모델은 레포지토리를 읽고(최대 10만 자) \u2018안전\u2019 또는 \u2018위험\u2019으로 답했고, 사례마다 {k}번 "
-                    "실행했습니다.",
-        "legend": ["매 실행 탐지", "일부 실행만 탐지", "매번 놓침", "매번 거절 (답 없음)"],
+        "headline": "AI 에이전트를 쓰는 사람을 위한 백신.",
+        "lede": "에이전트가 실행하기 전에, 실행될 것을 먼저 읽습니다. 훅, 스킬, MCP 서버, 설치 스크립트, 모델 파일. 그리고 "
+                "모이면 공격이 되는 단계를 멈춥니다.",
+        "run_head": "실제 실행 기록: 승인을 끈 Claude Code {cc}에게 방금 클론한 프로젝트 설정을 맡김",
+        "blocked": "Blocked by agent-white-hat before it ran:",
+        "ledger": [("{caught}", "/{malicious}", "악성 함정 레포 탐지"),
+                   ("{flagged}", "/{benign}", "정상 레포 오탐"),
+                   ("{chains}", "/{chain_runs}", "공격 연쇄 차단, 에이전트 9종"),
+                   ("{repos_blocked}", "/{repos}", "널리 쓰이는 레포 차단")],
+        "agents": f"하나의 가드로: {AGENTS}.",
+        "how_title": "가드가 판단하는 방식",
+        "how_sub": "에이전트의 도구 호출은 모두 이 순서로 확인을 거칩니다. 가드는 제한을 더할 뿐, \u201c허용\u201d으로 답하지 "
+                   "않습니다.",
+        "stages": [("단계 하나만 보고", "다운로드 후 실행, 디코드 후 실행, 자격 증명 읽기, 지속성, 승인 끄기, 비슷한 이름의 "
+                                     "패키지, 레지스트리 바꾸기."),
+                   ("설치 전에 프로젝트를", "npm install, pip install -e ., pytest, make, 모델 불러오기는 먼저 폴더를 "
+                                         "검사합니다: 훅, 설치 스크립트, 스킬, MCP 서버, 모델 파일."),
+                   ("지금까지의 세션과 함께", "앞 단계와 함께 판단합니다: 자격 증명을 읽고 업로드, 내려받고 chmod +x, "
+                                           "그리고 실행."),
+                   ("돌아온 내용을", "에이전트가 읽은 페이지, MCP 결과, 파일에 에이전트를 향한 지시가 있는지 봅니다. 있으면 "
+                                   "그 세션의 위험한 단계는 사용자가 정합니다.")],
+        "answers": [("block", "\u2715", "거부", "높음·치명 발견"),
+                    ("warn", "?", "확인 요청", "중간 발견, 묻지 못하는 에이전트는 거부"),
+                    ("neutral", "\u2013", "에이전트 규칙에 맡김", "발견 없음")],
+        "chain_title": "한 단계씩 보면 무해한 공격",
+        "chain_sub": "공격 연쇄 훈련의 공격 두 개를 Claude Code 훅에 보냈습니다. 단계마다 따로, 그리고 같은 단계를 한 "
+                     "세션으로.",
+        "alone": "따로",
+        "session": "한 세션으로",
+        "verdicts": {"pass": "허용", "ask": "확인 요청", "deny": "거부"},
+        "chains": {"download-chmod-run": "내려받기, 실행 권한 주기, 실행",
+                   "dns-exfil-after-read": "클라우드 자격 증명을 읽고 DNS 조회로 빼내기"},
+        "incidents": {"download-chmod-run": "Load/Mine(2026년 9~10월)과 ChainDrop(2026년 8월)의 로더",
+                      "dns-exfil-after-read": "Hades PyPI 공격과 여러 npm 탈취 도구가 쓴 DNS 유출(2025~2026년)"},
+        "rule_titles": {"PAH-B002": "내려받은 파일에 실행 권한을 주거나 실행",
+                        "PAH-B001": "자격 증명을 읽은 뒤 데이터를 밖으로 보냄"},
+        "read": "Read",
+        "chain_foot": "에이전트 9종 전체: 공격 실행 {runs}개 중 {caught}개 차단, 그중 {only}개는 앞 단계 때문에만 잡혔습니다. "
+                      "평범한 실행 {ordinary}개에는 따로 보낼 때 없던 확인이 {extra}번 생겼습니다.",
+        "res_title": "악성 레포지토리 탐지, {n}개 중",
+        "res_sub": "TrapRepo 첫 악성 {n}개와 정상 {b}개: 2025~26년 실제 기법을 무해한 페이로드로 재현했습니다. 모델은 "
+                   "레포지토리를 읽고(최대 100,000자) \u201c안전\u201d 또는 \u201c위험\u201d으로 답했고, 사례마다 {k}번 "
+                   "돌렸습니다.",
+        "legend": ["매번 탐지", "일부 실행에서 탐지", "매번 놓침", "거절, 답 없음"],
         "res_rules": "규칙만, 오프라인",
-        "res_model": "모델 단독",
-        "res_benign": "정상 레포 오탐",
-        "res_every": "매 실행",
+        "res_model": "모델만",
+        "res_benign": "정상 오탐",
+        "res_every": "매번",
         "res_any": "한 번이라도",
-        "res_of": "{b}개 중 {a}",
-        "res_foot": "거절은 깨끗하다는 뜻이 아닙니다: agent-white-hat은 \u2018검토 안 됨\u2019으로 보고합니다. "
-                    "모든 사례·실행·답변은 bench/results/에 있습니다.",
+        "res_of": "{b}개 중 {a}개",
+        "res_foot": "검토 거절은 깨끗하다는 결과가 아닙니다: agent-white-hat은 \u201c검토 안 됨\u201d으로 보고합니다. 모든 "
+                    "사례·실행·답은 bench/results/에 있습니다.",
         "repo_title": "널리 쓰이는 레포지토리 {n}개, 통째로 검사",
-        "repo_big": "차단 0",
-        "repo_sub": "파일 {f}개, 통과 {p} · 경고 {w}. 경고는 모두 에이전트에게 설치를 맡기기 전에 알아 둘 만한 것입니다.",
+        "repo_sub": "파일 {f}개에서 통과 {p}, 경고 {w}, 차단 0. 경고는 모두 에이전트에게 설치를 맡기기 전에 알아 둘 만한 "
+                    "것입니다.",
         "groups": ["JavaScript", "Python", "Rust", "AI 에이전트·MCP", "셸·설치 스크립트", "Go·Java·컨테이너"],
-        "repo_notes": ["ruff·MCP 서버 모음·everything-claude-code는 에이전트 훅을 넣어 두었고,",
-                       "gemini-cli의 스킬 하나는 제3자 설치 스크립트를 sh로 바로 실행시킵니다."],
-        "repo_legend": ["통과", "경고", "차단"],
-        "scan_cmd": "pah scan ./acme-utils --lang ko",
-        "scan_title": "터미널",
-        "scan_note": "일부 생략: high·critical 항목은 위험한 이유와 조치도 함께 출력합니다.",
-        "social_tag": ["AI 에이전트를 쓰는", "사람을 위한 백신."],
+        "repo_legend": [("pass", "\u2713", "통과"), ("warn", "!", "경고"), ("block", "\u2715", "차단")],
+        "repo_note": "ruff, MCP 서버 모음, everything-claude-code는 에이전트 훅을 담고 있고, gemini-cli의 스킬 하나는 "
+                     "제3자 설치 스크립트를 sh로 실행합니다.",
+        "scan_cmd": "pah scan ./acme-utils",
+        "scan_note": "줄임: 높음·치명 발견마다 왜 중요한지와 할 일도 출력합니다.",
+        "social": "AI 에이전트를 쓰는 사람을 위한 백신.",
     },
 }
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Text measurement. SVG text is drawn by the viewer's fonts, so layout uses Helvetica's metrics (as wide as or wider
-# than the system fonts in the stack) and leaves slack.
 
-_REG = [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278] + [556] * 10 + \
-       [278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
-        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556,
-        278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334,
-        260, 334, 584]
-_BOLD = [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278] + [556] * 10 + \
-        [333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
-         667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556,
-         333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389,
-         280, 389, 584]
-_OTHER = {"·": 278, "—": 1000, "–": 556, "…": 1000, "→": 1000, "↓": 600, "\u2018": 222, "\u2019": 222,
-          "\u201c": 333, "\u201d": 333, "✕": 800, "●": 600, "›": 333, "×": 584}
+# ---------------------------------------------------------------------------------------------------------------- data
 
-
-def _wide(ch: str) -> bool:
-    o = ord(ch)
-    return 0x1100 <= o <= 0x11FF or 0x3000 <= o <= 0x9FFF or 0xAC00 <= o <= 0xD7A3 or 0xFF00 <= o <= 0xFFEF
-
-
-def tw(s: str, size: float, weight: int = 400, mono: bool = False) -> float:
-    """Approximate rendered width in px."""
-    if mono:
-        return sum(1.0 if _wide(c) else 0.61 for c in s) * size
-    k = min(1.0, max(0.0, (weight - 400) / 300))
-    total = 0.0
-    for c in s:
-        o = ord(c)
-        if _wide(c):
-            total += 950 + 30 * k
-        elif 32 <= o <= 126:
-            total += _REG[o - 32] + (_BOLD[o - 32] - _REG[o - 32]) * k
-        else:
-            total += _OTHER.get(c, 600)
-    return total / 1000 * size * 1.04
-
-
-def wrap(s: str, size: float, width: float, weight: int = 400, mono: bool = False) -> list[str]:
-    lines: list[str] = []
-    cur = ""
-    for word in s.split(" "):
-        trial = f"{cur} {word}" if cur else word
-        if cur and tw(trial, size, weight, mono) > width:
-            lines.append(cur)
-            cur = word
-        else:
-            cur = trial
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# SVG pieces
-
-def f(v: float) -> str:
-    return f"{v:.1f}".rstrip("0").rstrip(".")
-
-
-def svg_open(w: int, h: int, title: str, desc: str) -> list[str]:
-    return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" '
-            f'aria-labelledby="title desc" font-family={quoteattr(SANS)}>',
-            f'<title id="title">{escape(title)}</title><desc id="desc">{escape(desc)}</desc>']
-
-
-def text(x: float, y: float, s: str, size: float, fill: str, weight: int = 400, anchor: str = "start",
-         mono: bool = False, extra: str = "") -> str:
-    a = f' text-anchor="{anchor}"' if anchor != "start" else ""
-    w = f' font-weight="{weight}"' if weight != 400 else ""
-    fam = f" font-family={quoteattr(MONO)}" if mono else ""
-    return f'<text x="{f(x)}" y="{f(y)}" font-size="{f(size)}"{w} fill="{fill}"{a}{fam}{extra}>{escape(s)}</text>'
-
-
-def runs(x: float, y: float, parts: list[tuple[str, str, int]], size: float, mono: bool = False,
-         anchor: str = "start") -> str:
-    """One line of text in several colors: parts are (text, color, weight)."""
-    fam = f" font-family={quoteattr(MONO)}" if mono else ""
-    a = f' text-anchor="{anchor}"' if anchor != "start" else ""
-    spans = "".join(f'<tspan fill="{c}"' + (f' font-weight="{wt}"' if wt != 400 else "") + f">{escape(s)}</tspan>"
-                    for s, c, wt in parts if s)
-    return f'<text x="{f(x)}" y="{f(y)}" font-size="{f(size)}"{fam}{a} xml:space="preserve">{spans}</text>'
-
-
-def rect(x: float, y: float, w: float, h: float, rx: float, fill: str, stroke: str | None = None,
-         extra: str = "") -> str:
-    s = f' stroke="{stroke}"' if stroke else ""
-    return f'<rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="{f(rx)}" fill="{fill}"{s}{extra}/>'
-
-
-def pill(x: float, y: float, label: str, size: float, fg: str, bg: str, stroke: str | None = None, weight: int = 600,
-         pad: float = 9, h: float | None = None, mono: bool = False) -> tuple[str, float]:
-    h = h or size + 11
-    w = tw(label, size, weight, mono) + 2 * pad
-    return (rect(x, y, w, h, h / 2, bg, stroke) +
-            text(x + w / 2, y + h / 2 + size * 0.36, label, size, fg, weight, "middle", mono)), w
-
-
-def logo(x: float, y: float, size: float, color: str) -> str:
-    """The shield from the plugin icon (scripts/make_icon.py), as vectors."""
-    k = size / 100
-    return (f'<g transform="translate({f(x)} {f(y)}) scale({k:.4f})">'
-            f'<rect width="100" height="100" rx="18" fill="{color}"/>'
-            '<path d="M50 17 L76 26 L76 50 Q74 72 50 84 Q26 72 24 50 L24 26 Z" fill="#ffffff"/>'
-            f'<path d="M36 50 L43 43 L48 49 L60 35 L67 42 L48 62 Z" fill="{color}"/></g>')
-
-
-def arrow(x1: float, y1: float, x2: float, y2: float, color: str, label: str | list[str] = "", lsize: float = 12,
-          lcolor: str = "") -> str:
-    """A straight arrow; a horizontal one carries its label (one or more short lines) above the shaft."""
-    out = [f'<line x1="{f(x1)}" y1="{f(y1)}" x2="{f(x2)}" y2="{f(y2)}" stroke="{color}" stroke-width="1.6"/>']
-    head = f'fill="none" stroke="{color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"'
-    if x1 == x2:  # vertical: label to the right
-        s = 1 if y2 > y1 else -1
-        out.append(f'<path d="M{f(x2 - 5)} {f(y2 - 7 * s)} L{f(x2)} {f(y2)} L{f(x2 + 5)} {f(y2 - 7 * s)}" {head}/>')
-        if label:
-            out.append(text(x1 + 9, (y1 + y2) / 2 + 4, str(label), lsize, lcolor or color, 500))
-    else:
-        s = 1 if x2 > x1 else -1
-        out.append(f'<path d="M{f(x2 - 7 * s)} {f(y2 - 5)} L{f(x2)} {f(y2)} L{f(x2 - 7 * s)} {f(y2 + 5)}" {head}/>')
-        lines = [label] if isinstance(label, str) else label
-        for i, line in enumerate(lines):
-            if line:
-                ly = y1 - 9 - (len(lines) - 1 - i) * (lsize + 2)
-                out.append(text((x1 + x2) / 2, ly, line, lsize, lcolor or color, 500, "middle"))
-    return "".join(out)
-
-
-def flow(items: list[str], x0: float, y0: float, width: float, size: float, gap: float, row_h: float,
-         pad: float = 9, weight: int = 500) -> list[tuple[str, float, float, float]]:
-    """Lay chips out left to right, wrapping at width: returns (label, x, y, w)."""
-    placed = []
-    x, y = x0, y0
-    for label in items:
-        w = tw(label, size, weight) + 2 * pad
-        if x > x0 and x + w > x0 + width:
-            x, y = x0, y + row_h
-        placed.append((label, x, y, w))
-        x += w + gap
-    return placed
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# Data
 
 def load(name: str) -> dict:
-    """The latest dated result of a kind. Model runs are not repeated for every rule change, so each kind carries
-    its own date, and comparisons with the models use only the cases the models saw."""
+    """The latest dated result of a kind. Model runs are not repeated for every rule change, so each kind carries its
+    own date, and comparisons with the models use only the cases the models saw."""
     found = sorted(RESULTS.glob(f"20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{name}.json"))
-    path = found[-1] if found else RESULTS / f"{DATE}-{name}.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    if not found:
+        raise FileNotFoundError(f"no dated result for {name} in {RESULTS}")
+    return json.loads(found[-1].read_text(encoding="utf-8"))
 
 
-def headline() -> dict:
+def numbers() -> dict:
     rules = load("rules")["rows"]
-    mal = [r for r in rules if r["kind"] == "malicious"]
+    mal = [r for r in rules if r["kind"] == "malicious" and not r.get("skipped")]
     ben = [r for r in rules if r["kind"] == "benign"]
     repos = load("real-repos")["repos"]
-    live = [r for name in ("live-drill", "live-drill-nested", "live-drill-pretool") for r in load(name)["runs"]]
-    return {
-        "caught": sum(r["pah"] in ("block", "warn") for r in mal), "malicious": len(mal),
-        "flagged": sum(r["pah"] in ("block", "warn") for r in ben), "benign": len(ben),
-        "repos": len(repos), "repos_blocked": sum(r["verdict"] == "block" for r in repos),
-        "live": len(live), "live_ran": sum(bool(r.get("payload_ran")) for r in live),
-    }
+    chains = load("chains")["summary"]
+    return {"caught": sum(r["pah"] in ("block", "warn") for r in mal), "malicious": len(mal),
+            "flagged": sum(r["pah"] in ("block", "warn") for r in ben), "benign": len(ben),
+            "repos": len(repos), "repos_blocked": sum(r["verdict"] == "block" for r in repos),
+            "repos_pass": sum(r["verdict"] == "pass" for r in repos), "repos_warn": sum(r["verdict"] == "warn" for r in repos),
+            "files": sum(r.get("files", 0) for r in repos),
+            "chains": chains["attack_runs_caught"], "chain_runs": chains["attack_runs"],
+            "chain_only": chains["caught_only_as_chain"], "ordinary": chains["benign_runs"],
+            "extra": chains["benign_runs_with_added_prompts"]}
 
 
 def recorded_run() -> dict:
-    """The hero's terminal: the first trap run of the pre-command-hook live drill, as recorded."""
+    """The hero's log: the first trap run of the pre-command-hook live drill, as recorded."""
     data = load("live-drill-pretool")
     run = next(r for r in data["runs"] if r["kind"] == "malicious" and r["blocked"])
     blocked = run["blocked"][0]
     tool, _, command = blocked["action"].partition(": ")
-    reason = blocked["reason"].split(" and blocked running its setup: ", 1)[-1]
-    reason = reason.split(". Show the user", 1)[0]
+    reason = blocked["reason"].split(" and blocked running its setup: ", 1)[-1].split(". Show the user", 1)[0]
     findings = []
     for part in reason.split("; "):
         m = re.match(r"(CRITICAL|HIGH|MEDIUM|LOW) (.+)", part.strip())
-        if not m:
-            continue
-        title, _, detail = m.group(2).partition(": ")
-        host = re.search(r"\(to [^)]+\)", detail)
-        findings.append((m.group(1), title, host.group(0) if host else detail))
+        if m:
+            title, _, detail = m.group(2).partition(": ")
+            host = re.search(r"\(to [^)]+\)", detail)
+            findings.append((m.group(1), title, host.group(0) if host else detail))
     sentences = re.split(r"(?<=\.) ", run["final"].strip().split("\n")[0])
     prompt = re.split(r"(?<=\.) ", data["prompt"])
-    return {"cc": data["claude_code"].rsplit("@", 1)[-1], "prompt": " ".join(prompt[:1]) + " " +
-            prompt[1].split(" (")[0] + " \u2026", "tool": tool, "command": command, "findings": findings,
-            "reply": " ".join(sentences[:2])}
+    return {"cc": data["claude_code"].rsplit("@", 1)[-1],
+            "prompt": prompt[0] + " " + prompt[1].split(" (")[0] + " \u2026", "tool": tool, "command": command,
+            "findings": findings, "reply": " ".join(sentences[:2])}
 
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Figures
+def chain_rows(ids: tuple[str, ...] = ("download-chmod-run", "dns-exfil-after-read"), agent: str = "claude") -> list[dict]:
+    """Two chains from the drill, with each step's decision alone and in one session, and the rule that stopped it."""
+    sys.path.insert(0, str(ROOT))
+    from pah import behavior  # noqa: F401  (registers the chain rules)
+    from pah.model import RULES
 
-def hero(lang: str, theme: str) -> str:
-    t, s, h, rec = THEMES[theme], STR[lang], headline(), recorded_run()
-    W, H = 960, 520
-    out = svg_open(W, H, s["hero_alt"], s["hero_sub"])
-    out.append(
-        '<defs>'
-        f'<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{t["hero_a"]}"/>'
-        f'<stop offset="0.65" stop-color="{t["hero_b"]}"/></linearGradient>'
-        f'<pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" '
-        f'fill="{t["dots"]}" fill-opacity="{t["dots_op"]}"/></pattern>'
-        f'<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{t["accent"]}" '
-        f'stop-opacity="{t["glow_op"]}"/><stop offset="1" stop-color="{t["accent"]}" stop-opacity="0"/></radialGradient>'
-        f'<clipPath id="card"><rect x="0" y="0" width="{W}" height="{H}" rx="16"/></clipPath>'
-        '</defs>')
-    out.append('<g clip-path="url(#card)">')
-    out.append(rect(0, 0, W, H, 0, "url(#bg)"))
-    out.append(f'<rect x="440" y="0" width="{W - 440}" height="{H - 96}" fill="url(#dots)"/>')
-    out.append('<ellipse cx="700" cy="215" rx="330" ry="210" fill="url(#glow)"/>')
-    band_y = H - 96
-    out.append(rect(0, band_y, W, 96, 0, t["band"]))
-    out.append(f'<line x1="0" y1="{band_y}" x2="{W}" y2="{band_y}" stroke="{t["border"]}"/>')
-    out.append('</g>')
-    out.append(rect(0.5, 0.5, W - 1, H - 1, 15.5, "none", t["border"]))
-
-    # left column
-    x = 44
-    out.append(logo(x, 38, 38, t["accent"]))
-    out.append(text(x + 50, 64, "agent-white-hat", 21, t["fg"], 700))
-    size = s["tag_size"]
-    y = 128 if len(s["tagline"]) == 3 else 150
-    for line in s["tagline"]:
-        spans = "".join(f'<tspan fill="{t[key]}">{escape(part)}</tspan>' for part, key in line)
-        out.append(f'<text x="{x}" y="{f(y)}" font-size="{size}" font-weight="700" letter-spacing="-0.4" '
-                   f'xml:space="preserve">{spans}</text>')
-        y += size * 1.27
-    y += 6
-    for line in wrap(s["hero_sub"], 14.5, 384):
-        out.append(text(x, y, line, 14.5, t["muted"]))
-        y += 21.5
-    y += 14
-    out.append(text(x, y, s["one_guard"], 10.5, t["subtle"], 700, extra=' letter-spacing="1.2"'))
-    for label, cx, cy, cw in flow(AGENTS, x, y + 10, 384, 12, 6, 30):
-        out.append(rect(cx, cy, cw, 24, 12, t["card"], t["border"]))
-        out.append(text(cx + cw / 2, cy + 16.2, label, 12, t["fg"], 500, "middle"))
-
-    # the recorded run
-    T = HERO_TERM
-    tx, ty, tw_, th = 458, 36, 466, 352
-    out.append(f'<rect x="{tx + 4}" y="{ty + 10}" width="{tw_}" height="{th}" rx="14" fill="#000" fill-opacity="'
-               f'{"0.16" if theme == "light" else "0.45"}"/>')
-    out.append(rect(tx, ty, tw_, th, 12, T["bg"], T["border"]))
-    out.append(f'<path d="M{tx + 12} {ty + 0.5} H{tx + tw_ - 12} A11.5 11.5 0 0 1 {tx + tw_ - 0.5} {ty + 12} V{ty + 34} '
-               f'H{tx + 0.5} V{ty + 12} A11.5 11.5 0 0 1 {tx + 12} {ty + 0.5} Z" fill="{T["bar"]}"/>')
-    for i, c in enumerate(("#ff5f57", "#febc2e", "#28c840")):
-        out.append(f'<circle cx="{tx + 18 + i * 16}" cy="{ty + 17}" r="5" fill="{c}"/>')
-    out.append(text(tx + tw_ / 2, ty + 21.5, s["term_title"], 11.5, T["muted"], 500, "middle"))
-    out.append(f'<line x1="{tx}" y1="{ty + 34.5}" x2="{tx + tw_}" y2="{ty + 34.5}" stroke="{T["border"]}"/>')
-    ms, lh = 11.8, 19.6
-    cols = int((tw_ - 32) / (ms * 0.61))
-    lx, ly = tx + 16, ty + 60
-
-    def fit(s: str, n: int) -> list[str]:
-        return wrap(s, ms, n * ms * 0.61, mono=True)
-
-    lines: list[list[tuple[str, str, int]]] = []
-    for i, part in enumerate(fit(rec["prompt"], cols - 2)):
-        lines.append([("› " if i == 0 else "  ", T["prompt"], 700), (part, T["fg"], 400)])
-    lines.append([])
-    lines.append([("● ", T["tool"], 400), (rec["tool"], T["fg"], 700), (f"({rec['command']})", T["dim"], 400)])
-    lines.append([("  ✕ ", T["red"], 700), ("Blocked by agent-white-hat before it ran:", T["red"], 400)])
-    for sev, title, detail in rec["findings"]:
-        color = T["high"] if sev in ("HIGH", "CRITICAL") else T["low"]
-        tag = "    " + sev.ljust(4) + " "
-        one = f"{title} {detail}" if detail.startswith("(") else f"{title}: {detail}"
-        body = [one] if len(tag) + len(one) <= cols else fit(title, cols - len(tag)) + fit(detail, cols - len(tag))
-        for i, part in enumerate(body):
-            lines.append([(tag if i == 0 else " " * len(tag), color, 700), (part, T["dim"], 400)])
-    lines.append([])
-    for i, part in enumerate(fit(rec["reply"], cols - 2)):
-        lines.append([("● " if i == 0 else "  ", T["reply"], 400), (part, T["reply"], 400)])
-    for parts in lines:
-        if parts:
-            out.append(runs(lx, ly, parts, ms, mono=True))
-        ly += lh
-    out.append(text(tx + 16, ty + th - 14, s["caption"].format(cc=rec["cc"]), 11, T["muted"]))
-
-    # headline numbers
-    cells = [(h["caught"], h["malicious"]), (h["flagged"], h["benign"]), (h["repos_blocked"], h["repos"]),
-             (h["live_ran"], h["live"])]
-    cw = W / 4
-    for i, ((a, b), (l1, l2)) in enumerate(zip(cells, s["stats"], strict=True)):
-        cx = i * cw + 44 if i == 0 else i * cw + 30
-        if i:
-            out.append(f'<line x1="{f(i * cw)}" y1="{band_y + 20}" x2="{f(i * cw)}" y2="{H - 20}" stroke="{t["border"]}"/>')
-        out.append(runs(cx, band_y + 41, [(str(a), t["accent"] if i == 0 else t["fg"], 700),
-                                          (f" / {b}", t["subtle"], 600)], 26))
-        out.append(text(cx, band_y + 62, l1, 12.5, t["muted"]))
-        out.append(text(cx, band_y + 79, l2, 12.5, t["muted"]))
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
+    fixtures = {c["id"]: c for c in json.loads((ROOT / "bench" / "fixtures" / "drill-chains.json")
+                                               .read_text(encoding="utf-8"))["attacks"]}
+    results = {(r["chain"], r["agent"]): r for r in load("chains")["rows"]}
+    rule_for = {"download-chmod-run": "PAH-B002", "dns-exfil-after-read": "PAH-B001"}
+    out = []
+    for cid in ids:
+        row = results[(cid, agent)]
+        steps = [{"do": s["do"], "target": s["target"], "alone": r["alone"], "got": r["got"]}
+                 for s, r in zip(fixtures[cid]["steps"], row["steps"], strict=True)]
+        out.append({"id": cid, "steps": steps, "rule": rule_for[cid], "title": RULES[rule_for[cid]].title,
+                    "incident": fixtures[cid]["incident"]})
+    return out
 
 
-def pipeline(lang: str, theme: str) -> str:
-    t, s = THEMES[theme], STR[lang]
-    top = 104
-    A, B, C, D = (28, 184), (268, 188), (512, 208), (776, 156)
-    # the outcome column sets the height of the top row
-    oy, outcome_rows = top + 44, []
-    for label, kind, desc in s["outcomes"]:
-        lines = wrap(desc, 12, D[1] - 28)
-        outcome_rows.append((oy, label, kind, lines))
-        oy += 20 + 14 + len(lines) * 16 + 8
-    note = wrap(s["out_note"], 11.5, D[1] - 28)
-    bh = max(236, oy - top + len(note) * 15 + 8)
-    # the scan stages set the height of the bottom panel
-    W, n = 960, len(s["stages"])
-    sw = (W - 56 - 32 - (n - 1) * 26) / n
-    title_lines = max(len(title) for title, _ in s["stages"])
-    bodies = [wrap(body, 12.4, sw - 28) for _, body in s["stages"]]
-    body_top = 50 + (title_lines - 1) * 16
-    sh = max(body_top + (18 if i == n - 1 else 0) + (len(b) - 1) * 17 + 16 for i, b in enumerate(bodies))
-    ph = 44 + sh + 16 + 24 + 16
-    H = int(top + bh + 52 + ph + 26)
-    out = svg_open(W, H, s["pipe_title"], s["pipe_sub"])
-    out.append(rect(0.5, 0.5, W - 1, H - 1, 15.5, t["card"], t["border"]))
-    out.append(text(28, 42, s["pipe_title"], 20, t["fg"], 700))
-    y = 66
-    for line in wrap(s["pipe_sub"], 13.5, 900):
-        out.append(text(28, y, line, 13.5, t["muted"]))
-        y += 20
-
-    def box(col, title, sub=""):
-        x, w = col
-        parts = [rect(x, top, w, bh, 12, t["card2"], t["border"]), text(x + 14, top + 26, title, 13.5, t["fg"], 700)]
-        if sub:
-            parts.append(text(x + 14, top + 44, sub, 11.5, t["muted"]))
-        return "".join(parts)
-
-    # A: inputs
-    out.append(box(A, s["touch_h"]))
-    for i, item in enumerate(s["touch"]):
-        iy = top + 52 + i * 29
-        out.append(rect(A[0] + 14, iy, A[1] - 28, 23, 6, t["card"], t["border"]))
-        out.append(rect(A[0] + 22, iy + 8, 7, 7, 2, t["subtle"]))
-        out.append(text(A[0] + 36, iy + 15.8, item, 12, t["fg"]))
-    # B: agents
-    out.append(box(B, s["agent_h"]))
-    cw2 = (B[1] - 28 - 8) / 2
-    for i, name in enumerate(AGENTS):
-        cx = B[0] + 14 + (i % 2) * (cw2 + 8)
-        cy = top + 52 + (i // 2) * 30
-        if i == len(AGENTS) - 1 and i % 2 == 0:
-            cx = B[0] + 14 + (cw2 + 8) / 2
-        out.append(rect(cx, cy, cw2, 23, 11.5, t["card"], t["border"]))
-        out.append(text(cx + cw2 / 2, cy + 15.8, name, 11.5, t["fg"], 500, "middle"))
-    # C: the guard
-    x, w = C
-    out.append(rect(x, top, w, bh, 12, t["accent_bg"], t["accent"]))
-    out.append(logo(x + 14, top + 13, 22, t["accent"]))
-    out.append(text(x + 44, top + 29, s["guard_h"], 14, t["fg"], 700))
-    out.append(text(x + 44 + tw(s["guard_h"], 14, 700) + 8, top + 29, s["guard_sub"], 11.5, t["accent_fg"], 500))
-    yy = top + 56
-    for line in wrap(s["guard_body"], 12.2, w - 28):
-        out.append(text(x + 14, yy, line, 12.2, t["fg"]))
-        yy += 17.5
-    yy += 8
-    out.append(f'<line x1="{x + 14}" y1="{yy - 9}" x2="{x + w - 14}" y2="{yy - 9}" stroke="{t["accent"]}" '
-               f'stroke-opacity="0.35"/>')
-    yy += 6
-    for line in wrap(s["guard_setup"], 12.2, w - 28):
-        out.append(text(x + 14, yy, line, 12.2, t["accent_fg"], 600))
-        yy += 17.5
-    # D: outcome
-    out.append(box(D, s["out_h"]))
-    for oy, label, kind, lines in outcome_rows:
-        p, pw = pill(D[0] + 14, oy, label, 11, t["card"] if theme == "dark" else "#ffffff", t[kind], pad=8, h=20)
-        out.append(p)
-        for j, line in enumerate(lines):
-            out.append(text(D[0] + 14, oy + 36 + j * 16, line, 12, t["fg"]))
-    for j, line in enumerate(note):
-        out.append(text(D[0] + 14, top + bh - 14 - (len(note) - 1 - j) * 15, line, 11.5, t["muted"]))
-    # arrows between the boxes
-    ay = top + 118
-    out.append(arrow(A[0] + A[1] + 6, ay, B[0] - 6, ay, t["subtle"], s["a_ab"], lcolor=t["muted"]))
-    out.append(arrow(B[0] + B[1] + 6, ay, C[0] - 6, ay, t["accent"], s["a_bc"], lcolor=t["accent_fg"]))
-    out.append(arrow(C[0] + C[1] + 6, ay, D[0] - 6, ay, t["accent"], s["a_cd"], lcolor=t["accent_fg"]))
-
-    # the scan
-    py = top + bh + 52
-    out.append(rect(28, py, W - 56, ph, 12, t["card2"], t["border"]))
-    out.append(arrow(C[0] + C[1] / 2, top + bh + 2, C[0] + C[1] / 2, py - 3, t["accent"], s["a_scan"],
-                     lcolor=t["accent_fg"]))
-    out.append(text(44, py + 28, s["scan_h"], 13.5, t["fg"], 700))
-    sy = py + 44
-    for i, (title, body_lines) in enumerate(zip((st[0] for st in s["stages"]), bodies, strict=True)):
-        sx = 44 + i * (sw + 26)
-        last = i == n - 1
-        out.append(rect(sx, sy, sw, sh, 10, t["card"], t["accent"] if last else t["border"]))
-        out.append(f'<circle cx="{f(sx + 22)}" cy="{f(sy + 22)}" r="11" fill="{t["accent"]}"/>')
-        out.append(text(sx + 22, sy + 26.2, str(i + 1), 12, "#ffffff", 700, "middle"))
-        for j, line in enumerate(title):
-            out.append(text(sx + 40, sy + 26.5 + j * 16, line, 13, t["fg"], 700))
-        by = sy + body_top
-        if last:
-            bx = sx + 14
-            for label, kind in (("BLOCK", "bad"), ("WARN", "warn"), ("PASS", "good")):
-                p, pw = pill(bx, by - 13, label, 10.5, "#ffffff" if theme == "light" else t["card"], t[kind], pad=7,
-                             h=19)
-                out.append(p)
-                bx += pw + 5
-            by += 18
-        for line in body_lines:
-            out.append(text(sx + 14, by, line, 12.4, t["muted"]))
-            by += 17
-        if not last:
-            out.append(arrow(sx + sw + 4, sy + sh / 2, sx + sw + 22, sy + sh / 2, t["subtle"]))
-    # the verdict feeds the outcome
-    vx = 44 + (n - 1) * (sw + 26) + sw / 2
-    vx = min(max(vx, D[0] + 30), D[0] + D[1] - 30)
-    out.append(arrow(vx, sy - 2, vx, top + bh + 3, t["accent"], s["a_verdict"], lcolor=t["accent_fg"]))
-    ax = 44
-    for label in s["addons"]:
-        p, pw = pill(ax, py + ph - 38, label, 11.5, t["fg"], t["card"], t["border"], weight=500, pad=11, h=24)
-        out.append(p)
-        ax += pw + 10
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
-
-
-def results_rows(lang: str) -> tuple[list[dict], int]:
-    s = STR[lang]
+def results_rows() -> tuple[list[dict], int, int, int]:
     models = load("models")
     rules = load("rules")
     seen = {r["id"] for r in models["rows"]}  # the cases the models were given
     mal = [r for r in rules["rows"] if r["kind"] == "malicious" and r["id"] in seen and not r.get("skipped")]
     ben = [r for r in rules["rows"] if r["kind"] == "benign" and r["id"] in seen]
-    rows = [{"name": "personal-anti-hack", "note": s["res_rules"], "all": sum(r["pah"] in ("block", "warn") for r in mal),
-             "some": 0, "missed": sum(r["pah"] not in ("block", "warn") for r in mal), "refused": 0,
-             "false": sum(r["pah"] in ("block", "warn") for r in ben), "benign": len(ben), "total": len(mal)}]
-    mal = [r for r in models["rows"] if r["kind"] == "malicious"]
-    ben = [r for r in models["rows"] if r["kind"] == "benign"]
+    rows = [{"name": "agent-white-hat", "ours": True, "all": sum(r["pah"] in ("block", "warn") for r in mal), "some": 0,
+             "missed": sum(r["pah"] not in ("block", "warn") for r in mal), "refused": 0,
+             "false": sum(r["pah"] in ("block", "warn") for r in ben)}]
+    mmal = [r for r in models["rows"] if r["kind"] == "malicious"]
+    mben = [r for r in models["rows"] if r["kind"] == "benign"]
     names = {"openai:gpt-6-astra": "GPT-6 Astra", "meta:muse-spark-1.3": "Muse Spark 1.3",
              "anthropic:claude-opus-5-5": "Claude Opus 5.5"}
     for spec, name in names.items():
-        row = {"name": name, "note": s["res_model"], "all": 0, "some": 0, "missed": 0, "refused": 0,
-               "total": len(mal), "benign": len(ben)}
-        for r in mal:
+        row = {"name": name, "ours": False, "all": 0, "some": 0, "missed": 0, "refused": 0}
+        for r in mmal:
             ts = r["models"][spec]
             k = sum(x["verdict"] == "unsafe" for x in ts)
             key = "all" if k == len(ts) else "some" if k else ("missed" if any(x["verdict"] == "safe" for x in ts)
                                                                else "refused")
             row[key] += 1
-        row["false"] = sum(any(x["verdict"] == "unsafe" for x in r["models"][spec]) for r in ben)
+        row["false"] = sum(any(x["verdict"] == "unsafe" for x in r["models"][spec]) for r in mben)
         rows.append(row)
-    return rows, models.get("trials", 3)
+    return rows, len(mmal), len(mben), models.get("trials", 3)
 
 
-def results(lang: str, theme: str) -> str:
-    t, s = THEMES[theme], STR[lang]
-    rows, trials = results_rows(lang)
-    total, benign = rows[0]["total"], rows[0]["benign"]
-    W = 960
-    left, bar_w = 228, 486
-    top, row_h, bar_h = 168, 60, 30
-    H = top + row_h * len(rows) + 58
-    summary = "; ".join(f"{r['name']}: {r['all']} of {total} caught in every run, {r['some']} in some runs, "
-                        f"{r['missed']} missed, {r['refused']} refused; {r['false']} of {r['benign']} benign flagged"
-                        for r in rows)
-    out = svg_open(W, H, s["res_title"].format(n=total), summary)
-    out.append(rect(0.5, 0.5, W - 1, H - 1, 15.5, t["card"], t["border"]))
-    out.append(text(28, 42, s["res_title"].format(n=total), 20, t["fg"], 700))
-    out.append(text(28, 66, s["res_sub1"].format(n=total, b=benign), 13.5, t["muted"]))
-    out.append(text(28, 86, s["res_sub2"].format(k=trials), 13.5, t["muted"]))
-    keys = [("all", "bar_all"), ("some", "bar_some"), ("missed", "bar_missed"), ("refused", "bar_refused")]
-    x = 28
-    for (_key, color), label in zip(keys, s["legend"], strict=True):
-        out.append(rect(x, 110, 12, 12, 3, t[color]))
-        out.append(text(x + 18, 120.5, label, 13, t["muted"]))
-        x += 18 + tw(label, 13) + 24
-    rx = left + bar_w + 30
-    out.append(text(rx, top - 14, s["res_benign"], 12.5, t["muted"], 600))
-    unit = bar_w / total
-    for i, row in enumerate(rows):
-        y = top + i * row_h
-        if i == 0:
-            out.append(rect(16, y - 13, W - 32, row_h - 4, 10, t["accent_bg"]))
-        out.append(text(28, y + 13, row["name"], 14.5, t["fg"], 700 if i == 0 else 600))
-        out.append(text(28, y + 32, row["note"], 12.5, t["muted"]))
-        out.append(rect(left, y, bar_w, bar_h, 5, t["line"]))
-        bx = left
-        for key, color in keys:
-            n = row[key]
-            if not n:
-                continue
-            w = n * unit
-            gap = 2 if bx + w < left + bar_w - 0.5 else 0
-            out.append(f'<rect x="{f(bx)}" y="{y}" width="{f(max(w - gap, 1.5))}" height="{bar_h}" rx="5" '
-                       f'fill="{t[color]}"><title>{escape(row["name"])}: {n} of {total}</title></rect>')
-            if w >= 26:
-                out.append(text(bx + 9, y + 19.5, str(n), 13, t[f"ink_{key}"], 700))
-            bx += w
-        frac = row["false"] / row["benign"]
-        out.append(runs(rx, y + 20, [(s["res_of"].format(a=row["false"], b=row["benign"]), t["fg"], 700)], 14.5))
-        out.append(text(rx, y + 38, s["res_every"] if i == 0 else s["res_any"], 12, t["muted"]))
-        mx = rx + 92
-        out.append(rect(mx, y + 9, 96, 8, 4, t["line"]))
-        if frac:
-            out.append(rect(mx, y + 9, max(96 * frac, 4), 8, 4, t["bar_missed"]))
-    foot = top + row_h * len(rows) + 4
-    out.append(f'<line x1="28" y1="{foot}" x2="{W - 28}" y2="{foot}" stroke="{t["line"]}"/>')
-    out.append(text(28, foot + 28, s["res_foot"], 12.5, t["muted"]))
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
-
-
-# The scan figure is made by running the scanner on a TrapRepo case and keeping its own colors.
-ANSI = re.compile(r"\033\[([\d;]*)m")
-
-
-def _scan_text(lang: str) -> str:
+def scan_output(lang: str) -> str:
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "bench"))
     import materialize  # bench/materialize.py
@@ -757,99 +290,6 @@ def _scan_text(lang: str) -> str:
         rep.target = "./acme-utils"
         rep.stats["seconds"] = round(rep.stats.get("seconds", 0), 1)  # as measured, rounded so the figure is stable
         return report.text(rep, lang=lang, color=True)
-
-
-def _segments(line: str, pal: dict) -> list[tuple[str, str, int, str | None]]:
-    """Split one ANSI-colored line into (text, color, weight, background)."""
-    out, pos = [], 0
-    color, weight, bg = pal["fg"], 400, None
-    codes = {"31": pal["red"], "33": pal["yellow"], "36": pal["cyan"], "97": pal["badge_fg"], "30": pal["warn_badge_fg"]}
-    backs = {"41": pal["badge_red"], "43": pal["badge_yellow"], "42": pal["badge_green"], "47": pal["badge_gray"]}
-    for m in ANSI.finditer(line):
-        if m.start() > pos:
-            out.append((line[pos:m.start()], color, weight, bg))
-        for code in (m.group(1) or "0").split(";"):
-            if code in ("0", ""):
-                color, weight, bg = pal["fg"], 400, None
-            elif code == "1":
-                weight = 700
-            elif code == "2":
-                color = pal["muted"]
-            elif code in codes:
-                color = codes[code]
-            elif code in backs:
-                bg = backs[code]
-        pos = m.end()
-    if pos < len(line):
-        out.append((line[pos:], color, weight, bg))
-    return out
-
-
-def scan_figure(lang: str, theme: str, raw: str) -> str:
-    t, s = THEMES[theme], STR[lang]
-    pal = t["term"]
-    cols, ms, lh = 112, 12.4, 19.5
-    lines: list[str] = []
-    for line in raw.split("\n"):
-        plain = ANSI.sub("", line)
-        if re.match(r"\s+(Why|Fix|이유|조치): ", plain):
-            continue
-        lines.append(line)
-    # wrap long plain lines (no color codes inside the wrapped ones) with a hanging indent
-    wrapped: list[str] = []
-    for line in lines:
-        plain = ANSI.sub("", line)
-        if len(plain) <= cols or ANSI.search(line):
-            wrapped.append(line)
-            continue
-        indent = len(plain) - len(plain.lstrip(" "))
-        hang = indent + (2 if plain.lstrip().startswith(("•", ">")) else 0)
-        width = cols - hang
-        first = True
-        rest = plain
-        while rest:
-            if len(rest) <= (cols if first else width):
-                wrapped.append(rest if first else " " * hang + rest)
-                break
-            limit = cols if first else width
-            cut = rest.rfind(" ", 0, limit)
-            cut = cut if cut > limit // 2 else limit
-            wrapped.append(rest[:cut] if first else " " * hang + rest[:cut])
-            rest = rest[cut:].lstrip(" ")
-            first = False
-    W = 960
-    head = 46
-    H = int(head + 24 + (len(wrapped) + 2) * lh + 40)
-    desc = ANSI.sub("", raw)
-    out = svg_open(W, H, f"$ {s['scan_cmd']}", desc[:1800])
-    out.append(rect(0.5, 0.5, W - 1, H - 1, 12, pal["bg"], pal["border"]))
-    out.append(f'<path d="M12 0.5 H{W - 12} A11.5 11.5 0 0 1 {W - 0.5} 12 V{head - 10} H0.5 V12 A11.5 11.5 0 0 1 12 0.5 Z" '
-               f'fill="{pal["bar"]}"/>')
-    out.append(f'<line x1="0" y1="{head - 9.5}" x2="{W}" y2="{head - 9.5}" stroke="{pal["border"]}"/>')
-    for i, c in enumerate(("#ff5f57", "#febc2e", "#28c840")):
-        out.append(f'<circle cx="{20 + i * 17}" cy="18.5" r="5.5" fill="{c}"/>')
-    out.append(text(W / 2, 23, s["scan_title"], 12, pal["muted"], 500, "middle"))
-    x0, y = 22, head + 18
-    out.append(runs(x0, y, [("$ ", pal["green"], 700), (s["scan_cmd"], pal["fg"], 400)], ms, mono=True))
-    y += lh * 1.5
-    # Colored pieces are placed on a fixed character grid, so badges line up whatever monospace font draws them.
-    cw = ms * 0.6
-    for line in wrapped:
-        segs = _segments(line, pal)
-        col = 0
-        for seg, color, wt, bg in segs:
-            x = x0 + col * cw
-            if bg:
-                label = seg.strip()
-                out.append(rect(x, y - ms + 0.5, len(seg) * cw, ms + 5.5, 3, bg))
-                out.append(runs(x + len(seg) * cw / 2, y, [(label, color, wt)], ms, mono=True, anchor="middle"))
-            else:
-                out.append(runs(x, y, [(seg, color, wt)], ms, mono=True))
-            col += len(seg)
-        y += lh
-    out.append(text(x0, H - 16, s["scan_note"], 11.5, pal["muted"]))
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
 
 
 REPO_GROUPS = [
@@ -871,92 +311,432 @@ def _k(n: int) -> str:
     return f"{n / 1000:.1f}k".replace(".0k", "k") if n >= 1000 else str(n)
 
 
-def repos_figure(lang: str, theme: str) -> str:
-    t, s = THEMES[theme], STR[lang]
+# ----------------------------------------------------------------------------------------------------------- the page
+
+_FONT_CSS: list[str] = []
+
+
+def font_css() -> str:
+    if not _FONT_CSS:
+        faces = [("Instrument Sans", 400, "InstrumentSans-Regular.ttf"), ("Instrument Sans", 700, "InstrumentSans-Bold.ttf"),
+                 ("IBM Plex Mono", 400, "IBMPlexMono-Regular.ttf"), ("IBM Plex Mono", 700, "IBMPlexMono-Bold.ttf")]
+        for family, weight, file in faces:
+            data = base64.b64encode((FONTS / file).read_bytes()).decode("ascii")
+            _FONT_CSS.append(f'@font-face{{font-family:"{family}";font-weight:{weight};font-style:normal;'
+                             f'src:url(data:font/ttf;base64,{data}) format("truetype")}}')
+    return "\n".join(_FONT_CSS)
+
+
+BASE_CSS = """
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:transparent}
+body{font-family:"Instrument Sans","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;color:var(--ink);
+  -webkit-font-smoothing:antialiased;font-kerning:normal;text-rendering:geometricPrecision;word-break:keep-all;
+  overflow-wrap:break-word}
+.mono,code{font-family:"IBM Plex Mono","D2Coding","Malgun Gothic",ui-monospace,monospace}
+.fig{padding:30px 34px 34px}
+h1,h2,h3{font-weight:700;letter-spacing:-0.012em;text-wrap:balance}
+p,.lab{text-wrap:pretty}
+h2{font-size:28px;line-height:1.15}
+.sub{font-size:16.5px;line-height:1.5;color:var(--muted);margin-top:8px;max-width:840px}
+.foot{font-size:14.5px;line-height:1.5;color:var(--muted);margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+.swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px}
+.icon{flex:none;display:inline-block;vertical-align:-3px}
+"""
+
+MEASURE = ("<script>document.fonts.ready.then(function(){var f=document.querySelector('.fig');"
+           "document.body.setAttribute('data-h',Math.ceil(f.getBoundingClientRect().height))})</script>")
+
+
+def page(theme: str, body: str, css: str, width: int = WIDTH, lang: str = "en") -> str:
+    tokens = ";".join(f"--{k}:{v}" for k, v in THEMES[theme].items())
+    return (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><style>{font_css()}\n'
+            f':root{{{tokens}}}{BASE_CSS}body{{width:{width}px}}{css}</style></head>'
+            f'<body>{body}{MEASURE}</body></html>')
+
+
+def e(s) -> str:
+    return html.escape(str(s), quote=False)
+
+
+def mark(size: int, theme: str = "light", tile: str | None = None, hat: str | None = None) -> str:
+    """The white hat on its tile."""
+    t = THEMES[theme]
+    tile, hat = tile or t["tile"], hat or t["hat"]
+    return (f'<svg width="{size}" height="{size}" viewBox="0 0 64 64" aria-hidden="true">'
+            f'<rect x="0.5" y="0.5" width="63" height="63" rx="14" fill="{tile}" stroke="{t["tile-line"]}"/>'
+            f'<path d="M18.6 47.6 L21.4 25.4 C22.2 20.4 25.6 18.2 29.2 19.4 L32 20.8 L34.8 19.4 C38.4 18.2 41.8 20.4 '
+            f'42.6 25.4 L45.4 47.6 Z" fill="{hat}"/>'
+            f'<rect x="16" y="36.6" width="32" height="4" fill="{tile}"/>'
+            f'<path d="M5.6 41.6 C13.8 45.6 22.8 46.8 32 46.8 C41.2 46.8 50.2 45.6 58.4 41.6 C60.2 40.8 61.4 42.8 59.8 44.2 '
+            f'C51.8 50.8 42 53.2 32 53.2 C22 53.2 12.2 50.8 4.2 44.2 C2.6 42.8 3.8 40.8 5.6 41.6 Z" fill="{hat}"/></svg>')
+
+
+# --------------------------------------------------------------------------------------------------------- the figures
+
+HERO_CSS = """
+.brand{display:flex;align-items:center;gap:11px}
+.wordmark{font-size:21px;font-weight:700;letter-spacing:-0.01em}
+h1{font-size:50px;line-height:1.05;letter-spacing:-0.024em;margin-top:26px;max-width:830px}
+:lang(ko) h1{font-size:44px;line-height:1.18;letter-spacing:-0.01em}
+.lede{font-size:19px;line-height:1.48;color:var(--muted);margin-top:14px;max-width:780px}
+.log{margin-top:26px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.log-head{font-size:14px;color:var(--muted);padding:10px 16px;border-bottom:1px solid var(--line)}
+.log-body{padding:13px 16px 15px;font-size:14.5px;line-height:1.66}
+.l{padding-left:20px;text-indent:-20px}
+.user{color:var(--muted)}
+.tool b{font-weight:700}
+.hit{margin:2px 0}
+.marker{background:var(--marker);color:var(--on-marker);font-weight:700;padding:2px 7px;margin-left:-7px;border-radius:3px;
+  -webkit-box-decoration-break:clone;box-decoration-break:clone}
+.fd{padding-left:20px}
+.sev{display:inline-block;width:62px;font-weight:700}
+.sev.HIGH,.sev.CRITICAL{color:var(--block)}
+.sev.MEDIUM{color:var(--warn)}
+.sev.LOW{color:var(--muted)}
+.reply{margin-top:3px}
+.ledger{display:grid;grid-template-columns:repeat(4,1fr);margin-top:26px}
+.cell{padding:2px 18px 0;border-left:1px solid var(--line)}
+.cell:first-child{padding-left:0;border-left:0}
+.num{font-size:36px;font-weight:700;letter-spacing:-0.02em;line-height:1}
+.num span{font-weight:400;color:var(--muted)}
+.lab{font-size:15px;line-height:1.38;color:var(--muted);margin-top:7px}
+.agents{font-size:15px;color:var(--muted);margin-top:22px;padding-top:14px;border-top:1px solid var(--line)}
+"""
+
+
+def hero(lang: str, theme: str) -> str:
+    s, n, run = STR[lang], numbers(), recorded_run()
+    findings = "".join(f'<div class="fd"><span class="sev {e(sev)}">{e(sev)}</span>{e(title)}'
+                       f'{" " if detail.startswith("(") else ": "}{e(detail)}</div>' for sev, title, detail in run["findings"])
+    ledger = "".join(f'<div class="cell"><div class="num">{e(a.format(**n))}<span>{e(b.format(**n))}</span></div>'
+                     f'<div class="lab">{e(label)}</div></div>' for a, b, label in s["ledger"])
+    body = f"""<div class="fig">
+<div class="brand">{mark(38, theme)}<span class="wordmark">agent-white-hat</span></div>
+<h1>{e(s["headline"])}</h1>
+<p class="lede">{e(s["lede"])}</p>
+<div class="log"><div class="log-head">{e(s["run_head"].format(cc=run["cc"]))}</div>
+<div class="log-body mono">
+<div class="l user">&rsaquo; {e(run["prompt"])}</div>
+<div class="l tool">&#9679; <b>{e(run["tool"])}</b>({e(run["command"])})</div>
+<div class="l hit"><span class="marker">&#10005; {e(s["blocked"])}</span></div>
+{findings}
+<div class="l reply">&#9679; {e(run["reply"])}</div>
+</div></div>
+<div class="ledger">{ledger}</div>
+<div class="agents">{e(s["agents"])}</div>
+</div>"""
+    return page(theme, body, HERO_CSS, lang=lang)
+
+
+HOW_CSS = """
+.stages{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:0 26px;margin-top:28px}
+.stage{position:relative}
+.stage:not(:last-child):after{content:"";position:absolute;top:15px;left:39px;right:-18px;height:1px;background:var(--line)}
+.n{width:31px;height:31px;border-radius:50%;border:1.5px solid var(--ink);display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:15px}
+.stage h3{font-size:18px;line-height:1.25;margin-top:14px}
+.stage p{font-size:15px;line-height:1.5;color:var(--muted);margin-top:7px}
+.answers{display:grid;grid-template-columns:repeat(3,1fr);gap:0 26px;margin-top:28px;padding-top:18px;border-top:1px solid var(--line)}
+.answer{display:flex;gap:11px;align-items:flex-start}
+.answer b{display:block;font-size:16px}
+.answer span{display:block;font-size:14.5px;line-height:1.42;color:var(--muted);margin-top:2px}
+.answer .icon{margin-top:2px}
+"""
+
+
+ICON_PATHS = {  # drawn on a 20 x 20 grid in the label color
+    "\u2715": '<path d="M7 7 L13 13 M13 7 L7 13"/>',
+    "\u2713": '<path d="M6 10.4 L8.9 13.2 L14.2 7.2"/>',
+    "\u2013": '<path d="M6.5 10 H13.5"/>',
+    "!": '<path d="M10 5.8 V11.2"/><circle cx="10" cy="14.2" r="0.6"/>',
+    "?": ('<path d="M7.6 7.9 C7.8 6.5 8.8 5.7 10.1 5.7 C11.5 5.7 12.5 6.6 12.5 7.9 C12.5 9.6 10.1 9.8 10.1 11.6"/>'
+          '<circle cx="10.1" cy="14.3" r="0.6"/>'),
+}
+
+
+def glyph(kind: str, text: str, size: int = 18, outline: bool = False) -> str:
+    """A status icon: a filled circle in the verdict color with its sign, or an outline for a neutral answer."""
+    fill, ink = ("none", "var(--muted)") if outline else (f"var(--{kind})", f"var(--on-{kind})")
+    ring = ' stroke="var(--neutral)" stroke-width="1.5"' if outline else ""
+    sign = ICON_PATHS[text].replace("<circle ", f'<circle fill="{ink}" ')
+    return (f'<svg class="icon" width="{size}" height="{size}" viewBox="0 0 20 20" aria-hidden="true">'
+            f'<circle cx="10" cy="10" r="{8.9 if outline else 9.6}" fill="{fill}"{ring}/>'
+            f'<g fill="none" stroke="{ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{sign}</g></svg>')
+
+
+def how(lang: str, theme: str) -> str:
+    s = STR[lang]
+    stages = "".join(f'<li class="stage"><div class="n">{i}</div><h3>{e(t)}</h3><p>{e(p)}</p></li>'
+                     for i, (t, p) in enumerate(s["stages"], 1))
+    answers = "".join(f'<div class="answer">{glyph(kind, g, 20, outline=kind == "neutral")}<div><b>{e(label)}</b>'
+                      f'<span>{e(note)}</span></div></div>'
+                      for kind, g, label, note in s["answers"])
+    body = (f'<div class="fig"><h2>{e(s["how_title"])}</h2><p class="sub">{e(s["how_sub"])}</p>'
+            f'<ol class="stages">{stages}</ol><div class="answers">{answers}</div></div>')
+    return page(theme, body, HOW_CSS, lang=lang)
+
+
+CHAIN_CSS = """
+.chain{margin-top:26px}
+.chain + .chain{margin-top:30px}
+.chain-title{font-size:18px;font-weight:700}
+.chain-title span{display:block;font-size:14.5px;font-weight:400;color:var(--muted);margin-top:3px}
+.grid{display:grid;margin-top:12px;border-top:1px solid var(--line)}
+.grid > div{padding:11px 14px 11px 0;border-bottom:1px solid var(--line)}
+.rowlab{font-size:14.5px;color:var(--muted);padding-top:13px!important}
+.step{display:flex;gap:10px;align-items:flex-start}
+.sn{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--ink);display:flex;align-items:center;
+  justify-content:center;font-size:12.5px;font-weight:700;margin-top:1px}
+.step code{font-size:13.5px;line-height:1.5;word-break:normal;overflow-wrap:anywhere}
+.step .tool{font-family:"Instrument Sans",sans-serif;font-weight:700;font-size:14px;margin-right:6px}
+.v{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+.v.pass{color:var(--muted);font-weight:400}
+.why{margin-top:10px;font-size:15px;line-height:1.5}
+.why .rule{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:700;margin-right:8px}
+.why .hl{background:var(--marker);color:var(--on-marker);padding:1px 6px;border-radius:3px;font-weight:700}
+"""
+
+
+def verdict(lang: str, got: str) -> str:
+    s = STR[lang]
+    kind = {"pass": "pass", "ask": "warn", "deny": "block", "flag": "warn"}.get(got, "pass")
+    sign = {"pass": "\u2013", "warn": "?", "block": "\u2715"}[kind]
+    icon = glyph(kind, sign, 20, outline=kind == "pass")
+    return f'<span class="v {kind}">{icon}{e(s["verdicts"].get(got, got))}</span>'
+
+
+def breakable(cmd: str) -> str:
+    """A command that may wrap after / . = | and spaces, never inside a word."""
+    return re.sub(r"([/.=|])", r"\1<wbr>", e(cmd))
+
+
+def chain(lang: str, theme: str) -> str:
+    s, n = STR[lang], numbers()
+    blocks = []
+    for c in chain_rows():
+        k = len(c["steps"])
+        cols = f"132px repeat({k}, 1fr)"
+        cells = ['<div></div>']
+        for i, st in enumerate(c["steps"], 1):
+            target = st["target"]
+            text = (f'<span class="tool">{e(s["read"])}</span><code>{breakable(target)}</code>' if st["do"] == "read"
+                    else f'<code>{breakable(target)}</code>')
+            cells.append(f'<div class="step"><span class="sn">{i}</span><span>{text}</span></div>')
+        cells.append(f'<div class="rowlab">{e(s["alone"])}</div>')
+        cells += [f'<div>{verdict(lang, st["alone"])}</div>' for st in c["steps"]]
+        cells.append(f'<div class="rowlab">{e(s["session"])}</div>')
+        cells += [f'<div>{verdict(lang, st["got"])}</div>' for st in c["steps"]]
+        blocks.append(f'<section class="chain"><div class="chain-title">{e(s["chains"][c["id"]])}'
+                      f'<span>{e(s.get("incidents", {}).get(c["id"], c["incident"].split(":")[0]))}</span></div>'
+                      f'<div class="grid" style="grid-template-columns:{cols}">{"".join(cells)}</div>'
+                      f'<div class="why"><span class="rule">{e(c["rule"])}</span>'
+                      f'<span class="hl">{e(s.get("rule_titles", {}).get(c["rule"], c["title"]))}</span></div>'
+                      f'</section>')
+    foot = s["chain_foot"].format(caught=n["chains"], runs=n["chain_runs"], only=n["chain_only"], extra=n["extra"],
+                                  ordinary=n["ordinary"])
+    body = (f'<div class="fig"><h2>{e(s["chain_title"])}</h2><p class="sub">{e(s["chain_sub"])}</p>'
+            f'{"".join(blocks)}<p class="foot">{e(foot)}</p></div>')
+    return page(theme, body, CHAIN_CSS, lang=lang)
+
+
+RESULTS_CSS = """
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:20px;font-size:14.5px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.rows{margin-top:18px}
+.row{display:grid;grid-template-columns:190px 1fr 132px;gap:0 22px;align-items:center;padding:13px 0;
+  border-top:1px solid var(--line)}
+.who b{display:block;font-size:17px}
+.who span{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.ours .who b{font-size:18px}
+.bar{display:flex;gap:2px;height:28px}
+.seg{border-radius:4px;display:flex;align-items:center;padding-left:9px;font-size:14px;font-weight:700;min-width:0;
+  overflow:visible;white-space:nowrap}
+.benign b{display:block;font-size:17px}
+.benign span{display:block;font-size:13.5px;color:var(--muted);margin-top:2px}
+.colhead{display:grid;grid-template-columns:190px 1fr 132px;gap:0 22px;font-size:13.5px;color:var(--muted);margin-top:14px}
+"""
+
+
+def results(lang: str, theme: str) -> str:
+    s = STR[lang]
+    rows, n_mal, n_ben, trials = results_rows()
+    keys = [("all", "pass"), ("some", "warn"), ("missed", "block"), ("refused", "neutral")]
+    legend = "".join(f'<span><span class="swatch" style="background:var(--{kind})"></span>{e(label)}</span>'
+                     for (key, kind), label in zip(keys, s["legend"], strict=True))
+    bar_px = WIDTH - 68 - 190 - 132 - 44
+    out = []
+    for r in rows:
+        total = sum(r[k] for k, _ in keys) or 1
+        segs = []
+        for key, kind in keys:
+            v = r[key]
+            if not v:
+                continue
+            width = bar_px * v / total
+            label = str(v) if width >= 22 else ""
+            segs.append(f'<div class="seg" style="flex:{v} 1 0;background:var(--{kind});color:var(--on-{kind})">{label}</div>')
+        when = s["res_every"] if r["ours"] else s["res_any"]
+        out.append(f'<div class="row{" ours" if r["ours"] else ""}"><div class="who"><b>{e(r["name"])}</b>'
+                   f'<span>{e(s["res_rules"] if r["ours"] else s["res_model"])}</span></div>'
+                   f'<div class="bar">{"".join(segs)}</div>'
+                   f'<div class="benign"><b>{e(s["res_of"].format(a=r["false"], b=n_ben))}</b>'
+                   f'<span>{e(s["res_benign"])}, {e(when)}</span></div></div>')
+    body = (f'<div class="fig"><h2>{e(s["res_title"].format(n=n_mal))}</h2>'
+            f'<p class="sub">{e(s["res_sub"].format(n=n_mal, b=n_ben, k=trials))}</p>'
+            f'<div class="legend">{legend}</div><div class="rows">{"".join(out)}</div>'
+            f'<p class="foot">{e(s["res_foot"])}</p></div>')
+    return page(theme, body, RESULTS_CSS, lang=lang)
+
+
+SCAN_CSS = """
+.term{border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.term-head{font-size:14px;padding:11px 18px;border-bottom:1px solid var(--line)}
+.term-head b{color:var(--pass)}
+.term pre{font-family:"IBM Plex Mono","D2Coding","Malgun Gothic",monospace;font-size:13.2px;line-height:1.62;
+  padding:14px 18px 18px}
+.ln{white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;min-height:1.62em}
+.b{font-weight:700}.d{opacity:.62}
+.note{font-size:14.5px;color:var(--muted);margin-top:12px}
+"""
+
+ANSI = re.compile(r"\033\[([\d;]*)m")
+FG = {"30": "var(--ink)", "31": "var(--block)", "32": "var(--pass)", "33": "var(--warn)", "36": "var(--accent)",
+      "37": "var(--ink)", "90": "var(--muted)", "97": "#ffffff"}
+BG = {"41": ("var(--block)", "var(--on-block)"), "42": ("var(--pass)", "var(--on-pass)"),
+      "43": ("var(--warn)", "var(--on-warn)"), "47": ("var(--neutral)", "var(--on-neutral)")}
+
+
+def ansi_html(line: str) -> str:
+    out, state, pos = [], {"b": False, "d": False, "fg": None, "bg": None}, 0
+
+    def emit(text: str) -> None:
+        if not text:
+            return
+        style, cls = [], []
+        if state["bg"]:
+            bg, fg = BG[state["bg"]]
+            style.append(f"background:{bg};color:{fg};padding:0 4px;border-radius:3px")
+        elif state["fg"]:
+            style.append(f"color:{FG.get(state['fg'], 'inherit')}")
+        if state["b"]:
+            cls.append("b")
+        if state["d"]:
+            cls.append("d")
+        attrs = (f' class="{" ".join(cls)}"' if cls else "") + (f' style="{";".join(style)}"' if style else "")
+        out.append(f"<span{attrs}>{e(text)}</span>" if attrs else e(text))
+
+    for m in ANSI.finditer(line):
+        emit(line[pos:m.start()])
+        for code in (m.group(1) or "0").split(";"):
+            if code in ("0", ""):
+                state = {"b": False, "d": False, "fg": None, "bg": None}
+            elif code == "1":
+                state["b"] = True
+            elif code == "2":
+                state["d"] = True
+            elif code == "22":
+                state["b"] = state["d"] = False
+            elif code in FG:
+                state["fg"] = code
+            elif code in BG:
+                state["bg"] = code
+            elif code == "39":
+                state["fg"] = None
+            elif code == "49":
+                state["bg"] = None
+        pos = m.end()
+    emit(line[pos:])
+    return "".join(out)
+
+
+def scan(lang: str, theme: str, raw: str) -> str:
+    s = STR[lang]
+    lines = [ln for ln in raw.split("\n") if not re.match(r"\s+(Why|Fix|이유|조치): ", ANSI.sub("", ln))]
+    while lines and not ANSI.sub("", lines[-1]).strip():
+        lines.pop()
+    rows = []
+    for ln in lines:
+        plain = ANSI.sub("", ln)
+        indent = len(plain) - len(plain.lstrip(" "))
+        hang = indent + (2 if plain.lstrip().startswith(("\u2022", ">")) else 0)
+        rows.append(f'<div class="ln" style="padding-left:{hang}ch;text-indent:-{hang}ch">{ansi_html(ln)}</div>')
+    pre = "".join(rows)
+    body = (f'<div class="fig"><div class="term"><div class="term-head mono"><b>$</b> {e(s["scan_cmd"])}</div>'
+            f'<pre>{pre}</pre></div><p class="note">{e(s["scan_note"])}</p></div>')
+    return page(theme, body, SCAN_CSS, lang=lang)
+
+
+REPOS_CSS = """
+.groups{margin-top:22px;border-top:1px solid var(--line)}
+.g{display:grid;grid-template-columns:178px 1fr;gap:0 18px;padding:12px 0;border-bottom:1px solid var(--line)}
+.gl{font-size:15px;font-weight:700;padding-top:2px}
+.items{display:flex;flex-wrap:wrap;gap:8px 20px}
+.it{display:inline-flex;align-items:center;gap:7px;font-size:15.5px;white-space:nowrap}
+.it em{font-style:normal;font-size:13.5px;color:var(--muted)}
+.legend{display:flex;gap:22px;margin-top:16px;font-size:14.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.note{display:flex;gap:10px;margin-top:12px;font-size:15px;line-height:1.5}
+.note .icon{margin-top:2px}
+"""
+
+
+def repos(lang: str, theme: str) -> str:
+    s, n = STR[lang], numbers()
     data = {r["repo"]: r for r in load("real-repos")["repos"]}
-    listed = [r for g in REPO_GROUPS for r in g]
-    missing = sorted(set(data) - set(listed))
-    if missing:
-        raise SystemExit(f"repos figure: add {missing} to REPO_GROUPS")
-    n, files = len(data), sum(r["files"] for r in data.values())
-    counts = {v: sum(r["verdict"] == v for r in data.values()) for v in ("pass", "warn", "block")}
-    W = 960
-    gx, chip_h, gap, row_h = 196, 26, 7, 34
-    rows_y = 104
-    layout, y = [], rows_y
-    for gi, group in enumerate(REPO_GROUPS):
-        labels = [REPO_NAMES.get(r, r.split("/", 1)[1]) for r in group]
-        items = [f"{lab}  {_k(data[r]['files'])}" for lab, r in zip(labels, group, strict=True)]
-        placed = flow(items, gx, y, W - 28 - gx, 12.2, gap, row_h, pad=11, weight=500)
-        layout.append((gi, group, labels, placed))
-        y = placed[-1][2] + row_h + 8
-    H = int(y + 82)
-    desc = "; ".join(f"{r}: {data[r]['verdict']} ({data[r]['files']} files)" for r in listed)
-    out = svg_open(W, H, s["repo_title"].format(n=n), desc)
-    out.append(rect(0.5, 0.5, W - 1, H - 1, 15.5, t["card"], t["border"]))
-    out.append(text(28, 42, s["repo_title"].format(n=n), 20, t["fg"], 700))
-    big = s["repo_big"]
-    p, pw = pill(W - 28 - (tw(big, 15, 700) + 32), 22, big, 15, t["good"], t["good_bg"], t["good_line"], pad=16, h=32)
-    out.append(p)
-    sub = s["repo_sub"].format(p=counts["pass"], w=counts["warn"], f=f"{files:,}")
-    yy = 68
-    for line in wrap(sub, 13.5, 760):
-        out.append(text(28, yy, line, 13.5, t["muted"]))
-        yy += 19
-    for gi, group, _labels, placed in layout:
-        out.append(text(28, placed[0][2] + 17.8, s["groups"][gi], 13, t["muted"], 600))
-        for (item, cx, cy, cw), repo in zip(placed, group, strict=True):
-            verdict = data[repo]["verdict"]
-            kind = {"pass": "good", "warn": "warn", "block": "bad"}[verdict]
-            name, _, size = item.partition("  ")
-            out.append(f'<g><title>{escape(repo)}: {verdict}, {data[repo]["files"]} files</title>' +
-                       rect(cx, cy, cw, chip_h, 13, t[f"{kind}_bg"], t[f"{kind}_line"]) +
-                       runs(cx + 11, cy + 17.3, [(name, t["fg"], 600), ("  " + size, t[kind], 500)], 12.2) + "</g>")
-    fy = H - 66
-    out.append(f'<line x1="28" y1="{fy}" x2="{W - 28}" y2="{fy}" stroke="{t["line"]}"/>')
-    lx = 28
-    for label, kind in zip(s["repo_legend"], ("good", "warn", "bad"), strict=True):
-        out.append(rect(lx, fy + 18, 12, 12, 6, t[f"{kind}_bg"], t[f"{kind}_line"]))
-        out.append(text(lx + 18, fy + 28.5, label, 12.5, t["muted"]))
-        lx += 18 + tw(label, 12.5) + 20
-    out.append(text(28, fy + 50, "\u26a0 " + "  ".join(s["repo_notes"]), 12.5, t["warn"]))
-    out.append(text(W - 28, fy + 28.5, "bench/real_repos.py", 11.5, t["subtle"], 400, "end", mono=True))
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
+    signs = {"pass": "\u2713", "warn": "!", "block": "\u2715"}
+    rows = []
+    for label, group in zip(s["groups"], REPO_GROUPS, strict=True):
+        items = []
+        for repo in group:
+            r = data[repo]
+            name = REPO_NAMES.get(repo, repo.split("/")[1])
+            items.append(f'<span class="it">{glyph(r["verdict"], signs[r["verdict"]])}{e(name)}'
+                         f'<em>{e(_k(r.get("files", 0)))}</em></span>')
+        rows.append(f'<div class="g"><div class="gl">{e(label)}</div><div class="items">{"".join(items)}</div></div>')
+    legend = "".join(f'<span>{glyph(kind, g)}{e(label)}</span>' for kind, g, label in s["repo_legend"])
+    files = f"{n['files']:,}"
+    body = (f'<div class="fig"><h2>{e(s["repo_title"].format(n=n["repos"]))}</h2>'
+            f'<p class="sub">{e(s["repo_sub"].format(p=n["repos_pass"], w=n["repos_warn"], f=files))}</p>'
+            f'<div class="groups">{"".join(rows)}</div><div class="legend">{legend}</div>'
+            f'<p class="note">{glyph("warn", "!")}<span>{e(s["repo_note"])}</span></p></div>')
+    return page(theme, body, REPOS_CSS, lang=lang)
+
+
+SOCIAL_CSS = """
+body{width:1280px;height:640px;background:#13213c;color:#ffffff}
+.fig{width:1280px;height:640px;padding:72px 84px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:16px}
+.wordmark{font-size:30px;font-weight:700;letter-spacing:-0.01em}
+h1{font-size:68px;line-height:1.04;letter-spacing:-0.026em;margin-top:40px;max-width:980px}
+.ledger{display:grid;grid-template-columns:repeat(4,auto);justify-content:start;gap:0 0;margin-top:auto}
+.cell{padding:0 44px;border-left:1px solid #3d4f73}
+.cell:first-child{padding-left:0;border-left:0}
+.num{font-size:44px;font-weight:700;letter-spacing:-0.02em;line-height:1}
+.num span{font-weight:400;color:#9aa8c2}
+.lab{font-size:19px;color:#b9c4d8;margin-top:10px;max-width:220px;line-height:1.3}
+.evidence{margin-top:34px;font-family:"IBM Plex Mono",monospace;font-size:24px;line-height:1.6;color:#b9c4d8}
+.evidence .marker{background:#ffe45e;color:#13213c;font-weight:700;padding:3px 10px;margin-left:-10px;border-radius:4px}
+"""
 
 
 def social() -> str:
-    t, s, h = THEMES["dark"], STR["en"], headline()
-    W, H = 1280, 640
-    out = svg_open(W, H, "agent-white-hat", s["hero_sub"])
-    out.append(
-        '<defs>'
-        '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#13213d"/>'
-        '<stop offset="0.6" stop-color="#0d1117"/></linearGradient>'
-        '<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" '
-        'fill="#8fb4ff" fill-opacity="0.12"/></pattern>'
-        f'<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{t["accent"]}" '
-        'stop-opacity="0.35"/><stop offset="1" stop-color="#4c8df6" stop-opacity="0"/></radialGradient>'
-        '</defs>')
-    out.append(rect(0, 0, W, H, 0, "url(#bg)"))
-    out.append(rect(0, 0, W, H, 0, "url(#dots)"))
-    out.append('<ellipse cx="1080" cy="150" rx="420" ry="300" fill="url(#glow)"/>')
-    out.append('<g transform="translate(842 70) scale(4.6)" opacity="0.13" fill="none" stroke="#8fb4ff" '
-               'stroke-width="0.9" stroke-linejoin="round"><path d="M50 17 L76 26 L76 50 Q74 72 50 84 Q26 72 24 50 L24 26 Z"/>'
-               '<path d="M36 50 L43 43 L48 49 L60 35 L67 42 L48 62 Z"/></g>')
-    out.append(logo(96, 92, 96, t["accent"]))
-    out.append(text(96, 300, "agent-white-hat", 76, "#f0f6fc", 800, extra=' letter-spacing="-1.5"'))
-    for i, line in enumerate(s["social_tag"]):
-        out.append(text(96, 368 + i * 48, line, 38, "#9fb8e6" if i else "#c9d6ee", 500))
-    stats = [(f"{h['caught']}/{h['malicious']}", "malicious repos caught"), (f"{h['flagged']}/{h['benign']}",
-             "false alarms"), (f"{h['repos_blocked']}/{h['repos']}", "popular repos blocked"), ("9", "agents, one guard")]
-    x = 96
-    for value, label in stats:
-        out.append(text(x, 534, value, 40, "#f0f6fc", 700))
-        out.append(text(x, 566, label, 20, "#8b949e"))
-        x += max(tw(value, 40, 700), tw(label, 20)) + 64
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
+    s, n = STR["en"], numbers()
+    ledger = "".join(f'<div class="cell"><div class="num">{e(a.format(**n))}<span>{e(b.format(**n))}</span></div>'
+                     f'<div class="lab">{e(label)}</div></div>' for a, b, label in s["ledger"])
+    body = (f'<div class="fig"><div class="brand">{mark(60, "light", tile="#13213c", hat="#ffffff")}'
+            f'<span class="wordmark">agent-white-hat</span></div><h1>{e(s["social"])}</h1>'
+            f'<div class="evidence"><div>&#9679; npm install</div><div><span class="marker">&#10005; '
+            f'{e(s["blocked"].rstrip(":"))}</span></div></div><div class="ledger">{ledger}</div></div>')
+    return page("light", body, SOCIAL_CSS, width=1280)
+
+
+def icon() -> str:
+    body = f'<div class="fig" style="padding:0;width:512px;height:512px">{mark(512, "light", tile="#13213c")}</div>'
+    return page("light", body, "body{width:512px;height:512px}", width=512)
+
+
+# ------------------------------------------------------------------------------------------------------- rendering
 
 
 def browser() -> str | None:
@@ -968,32 +748,52 @@ def browser() -> str | None:
     return None
 
 
+def render(doc: str, dest: Path, width: int, height: int | None = None, transparent: bool = True, scale: int = 2) -> None:
+    exe = browser()
+    if not exe:
+        raise SystemExit("make_figures.py needs Chrome or Edge to render the figures")
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "figure.html"
+        src.write_text(doc, encoding="utf-8")
+        base = [exe, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--disable-extensions",
+                f"--user-data-dir={Path(tmp) / 'profile'}", "--virtual-time-budget=4000"]
+        if height is None:
+            dom = subprocess.run(base + ["--dump-dom", src.as_uri()], capture_output=True, timeout=180)
+            m = re.search(rb'data-h="(\d+)"', dom.stdout)
+            if not m:
+                raise SystemExit(f"could not measure {dest.name}: {dom.stderr.decode(errors='replace')[-400:]}")
+            height = int(m.group(1))
+        args = base + [f"--force-device-scale-factor={scale}", f"--window-size={width},{height}", f"--screenshot={dest}"]
+        if transparent:
+            args.append("--default-background-color=00000000")
+        subprocess.run(args + [src.as_uri()], check=True, capture_output=True, timeout=180)
+
+
+FIGURES = ("hero", "how", "chain", "results", "scan", "repos")
+
+
 def main(argv: list[str]) -> int:
+    only = set(argv[argv.index("--only") + 1:]) if "--only" in argv else None
     OUT.mkdir(parents=True, exist_ok=True)
     written = []
     for lang in STR:
-        raw = _scan_text(lang)
+        raw = scan_output(lang) if not only or "scan" in only else ""
         for theme in THEMES:
-            for name, svg in (("hero", hero(lang, theme)), ("pipeline", pipeline(lang, theme)),
-                              ("results", results(lang, theme)), ("scan", scan_figure(lang, theme, raw)),
-                              ("repos", repos_figure(lang, theme))):
-                path = OUT / f"{name}-{lang}-{theme}.svg"
-                path.write_text(svg, encoding="utf-8", newline="\n")
-                written.append(path)
-    social_svg = OUT / "social-preview.svg"
-    social_svg.write_text(social(), encoding="utf-8", newline="\n")
-    written.append(social_svg)
-    if "--png" in argv:
-        exe = browser()
-        if not exe:
-            print("--png needs Chrome or Edge", file=sys.stderr)
-            return 1
-        with tempfile.TemporaryDirectory() as profile:
-            subprocess.run([exe, "--headless=new", "--disable-gpu", "--hide-scrollbars", f"--user-data-dir={profile}",
-                            "--force-device-scale-factor=1", "--window-size=1280,640",
-                            f"--screenshot={OUT / 'social-preview.png'}", social_svg.resolve().as_uri()],
-                           check=True, capture_output=True, timeout=120)
+            for name in FIGURES:
+                if only and name not in only:
+                    continue
+                doc = {"hero": hero, "how": how, "chain": chain, "results": results, "repos": repos}.get(name)
+                doc = doc(lang, theme) if doc else scan(lang, theme, raw)
+                dest = OUT / f"{name}-{lang}-{theme}.png"
+                render(doc, dest, WIDTH)
+                written.append(dest)
+    if not only or "social" in only:
+        render(social(), OUT / "social-preview.png", 1280, 640, transparent=False, scale=1)
         written.append(OUT / "social-preview.png")
+    if not only or "icon" in only:
+        dest = ROOT / ".claude-plugin" / "icon.png"
+        render(icon(), dest, 512, 512, transparent=True, scale=1)
+        written.append(dest)
     for p in written:
         print(p.relative_to(ROOT).as_posix())
     return 0
