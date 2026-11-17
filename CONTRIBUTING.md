@@ -36,6 +36,11 @@ Lint the way CI does: `ruff check --select F,E9,B,UP --ignore UP007,B904 --targe
   it in the scanner; `python bench/fuzz.py --check` must end with 0 got past and 0 false alarms.
 - Keep the benchmark at 0 benign flagged. If the rule could fire on ordinary projects, also run
   `python bench/real_repos.py` (it downloads widely used repositories and scans them).
+- A new incident goes in `pah/data/incidents.json` (sources, the rules and TrapRepo cases that catch it, the traces it leaves, the response in order); regenerate `docs/incidents.md` with `python -I pah_entry.py incident list --markdown > docs/incidents.md`. `tests/test_incidents.py` checks that its cases are caught by its rules.
+- An attack that shows only as a sequence of agent steps goes in `bench/fixtures/drill-chains.json`, with an ordinary
+  session that uses the same steps; `python bench/chains.py` must stop every attack and add no prompt to the ordinary
+  ones.
+- Where code goes: [docs/architecture.md](docs/architecture.md).
 - Regenerate the rule list with `python -I pah_entry.py rules --markdown > docs/rules.md`, and the README figures with
   `python scripts/make_figures.py` when headline numbers change.
 

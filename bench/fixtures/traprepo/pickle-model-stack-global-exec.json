@@ -1,0 +1,27 @@
+{
+  "id": "pickle-model-stack-global-exec",
+  "title": "Pickled model that imports builtins.exec through STACK_GLOBAL",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "Protocol 4 names the function with two strings and STACK_GLOBAL instead of a GLOBAL line, which early scanners did not resolve; loading calls builtins.exec on a code string.",
+  "trigger": "pickle.load / joblib.load",
+  "incident": "Pickle scanner evasions catalogued by fickling and ModelScan (2023-2025)",
+  "sources": [
+    "https://github.com/trailofbits/fickling",
+    "https://github.com/protectai/modelscan"
+  ],
+  "notes": "The executed code only prints the canary marker.",
+  "files": {
+    "README.md": "# churn-model\n\nGradient-boosted churn model.\n\n```python\nimport pickle\nmodel = pickle.load(open('model.pkl', 'rb'))\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.pkl",
+      "generator": "b64",
+      "params": {
+        "data": "gASMCGJ1aWx0aW5zjARleGVjk4wTcHJpbnQoJ1BBSC1DQU5BUlknKYVSLg=="
+      }
+    }
+  ]
+}

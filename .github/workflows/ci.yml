@@ -36,6 +36,8 @@ jobs:
         run: python bench/run.py --name ci
       - name: attack drill, every agent hook protocol (in-process, offline)
         run: python bench/drill.py --name ci
+      - name: chain drill, every attack chain stopped and no extra prompt in ordinary sessions
+        run: python bench/chains.py --name ci
       - name: this repository passes its own scan, and so does what an agent loads from it
         shell: bash
         run: |

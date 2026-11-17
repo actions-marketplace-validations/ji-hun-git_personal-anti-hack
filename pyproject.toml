@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-white-hat"
-version = "0.3.0"
+version = "0.5.1"
 description = "The antivirus for people who use AI agents: full scans, real-time protection and quarantine, and a guard that reads repositories, skills, MCP servers and packages before they run."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,7 +33,7 @@ Changelog = "https://github.com/ji-hun-git/agent-white-hat/blob/main/CHANGELOG.m
 Issues = "https://github.com/ji-hun-git/agent-white-hat/issues"
 
 [tool.setuptools]
-packages = ["pah"]
+packages = ["pah", "pah.surfaces"]
 
 [tool.setuptools.package-data]
-pah = ["data/*.txt"]
+pah = ["data/*.txt", "data/*.json"]

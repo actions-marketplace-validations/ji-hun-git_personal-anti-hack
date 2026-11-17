@@ -43,6 +43,14 @@ tokens, which infostealers now collect on purpose.
 
 - **It is static.** Behavior that appears only at run time (a second stage fetched from a server that is clean during
   review) is caught only by its shape: the fetch, the decode, the send. It does not execute code to watch it.
+- **The session view sees what the hooks see.** Chains are built from the agent's tool calls. What a program does
+  after it starts (its child processes, its network traffic) is invisible to hooks, and a kernel rootkit such as
+  IronWorm's hides from user space entirely; that needs an endpoint agent with a driver. Agents without a read or
+  output hook (Codex, Devin and Kiro have no read hook; Antigravity, Devin, Kiro and Cline no output hook) give the
+  session rules less to work with. Steps an agent sends without a session id are grouped by folder.
+- **Output checks look for instructions, not intent.** Injected text that reads like ordinary documentation can pass;
+  the session rules then still require approval for sends, setting changes and runs of downloaded files only after
+  an output was flagged.
 - **Rules are public.** An attacker can test against them, as with every open scanner. New techniques need new rules;
   report bypasses (see SECURITY.md).
 - **Severity is a judgment.** Rules are tuned to block what runs on its own and to stay quiet on ordinary code; a

@@ -1,0 +1,19 @@
+{
+  "id": "benign-rubygem-native-extension",
+  "title": "Gem with an ordinary C extension built by extconf.rb",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "package-install",
+  "technique": "extconf.rb only checks for a header and writes a Makefile with mkmf, as native gems do.",
+  "trigger": "gem install builds the extension",
+  "incident": "Legitimate native gem (mirrors rubygem-extconf-bun-loader without the download)",
+  "notes": "Benign twin: extconf.rb uses mkmf only; no network, no other program.",
+  "files": {
+    "fastzip.gemspec": "Gem::Specification.new do |s|\n  s.name = 'fastzip'\n  s.version = '0.4.2'\n  s.summary = 'zlib bindings'\n  s.files = Dir['lib/**/*.rb', 'ext/**/*.{rb,c,h}']\n  s.extensions = ['ext/fastzip/extconf.rb']\nend\n",
+    "ext/fastzip/extconf.rb": "require 'mkmf'\nabort 'zlib.h is missing' unless have_header('zlib.h')\nhave_library('z')\ncreate_makefile('fastzip/fastzip')\n",
+    "ext/fastzip/fastzip.c": "#include <ruby.h>\n#include <zlib.h>\nvoid Init_fastzip(void) {}\n",
+    "lib/fastzip.rb": "require 'fastzip/fastzip'\n",
+    "README.md": "# fastzip\n\nzlib bindings for Ruby.\n"
+  },
+  "sources": []
+}

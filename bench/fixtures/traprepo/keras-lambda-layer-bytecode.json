@@ -1,0 +1,26 @@
+{
+  "id": "keras-lambda-layer-bytecode",
+  "title": "Keras model with Python bytecode in a Lambda layer",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "config.json in the .keras archive holds a Lambda layer whose function is marshalled bytecode; load_model rebuilds and runs it (safe_mode is bypassable and ignored for .h5).",
+  "trigger": "keras.models.load_model",
+  "incident": "Keras code execution on load: CVE-2024-3660 and the 2025 safe_mode bypasses (CVE-2025-1550, CVE-2025-9905)",
+  "sources": [
+    "https://github.com/keras-team/keras/security/advisories"
+  ],
+  "notes": "The bytecode is an inert stand-in, not a compiled function.",
+  "files": {
+    "README.md": "# price-regressor\n\nSmall Keras regressor.\n\n```python\nimport keras\nmodel = keras.models.load_model('model.keras')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.keras",
+      "generator": "b64",
+      "params": {
+        "data": "UEsDBBQAAAAIAMV5cV1THoGSOwAAAD8AAAANAAAAbWV0YWRhdGEuanNvbqtWyk4tSiyOL0stKs7Mz1OyUlAy1jPVM1DSUVBKSSxJjS9OLEtNAQkbGRiZ6Roa6hoYOhgYWIGRUi0AUEsDBBQAAAAIAMV5cV2Ex8H56wAAAAUCAAALAAAAY29uZmlnLmpzb26NkN1Kw0AQhV+l7HURxRZE8CKx6I0IsYRgRZbp7mRdOtnF/alI6LubrE3BlBbvhnMO35yZljVWRkJ2O2EbdODZdMIEgffcQJPkJX5GNEEDJc+aWqtOb9kQ8H8CBN/ofKe/tWP2xd47WrFA4/EEXQ5eNDr03JtuBhH0FoK2po84pMh2035Q2gd0KAe0iUSd8/8qT9CsJZzoQgezjkbs17cjAue/Mc5HFGFlCsy+six7yPPl/dWiKOd5SRsF1ZyEKdSroctV9bxdPZZKXL98rJsiQDW761ESa4iUftCflapbH93hzt2ZH7yf8X4AUEsDBBQAAAAIAMV5cV03/DlODQAAAEAAAAAQAAAAbW9kZWwud2VpZ2h0cy5oNev0cHHj5ZLiYiATAABQSwECFAAUAAAACADFeXFdUx6BkjsAAAA/AAAADQAAAAAAAAAAAAAAgAEAAAAAbWV0YWRhdGEuanNvblBLAQIUABQAAAAIAMV5cV2Ex8H56wAAAAUCAAALAAAAAAAAAAAAAACAAWYAAABjb25maWcuanNvblBLAQIUABQAAAAIAMV5cV03/DlODQAAAEAAAAAQAAAAAAAAAAAAAACAAXoBAABtb2RlbC53ZWlnaHRzLmg1UEsFBgAAAAADAAMAsgAAALUBAAAAAA=="
+      }
+    }
+  ]
+}

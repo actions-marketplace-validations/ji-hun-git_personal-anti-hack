@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/figures/hero-en-dark.svg">
-    <img src="docs/figures/hero-en-light.svg" width="100%" alt="agent-white-hat: the antivirus for people who use AI agents. A recorded run: an agent with approvals off is told to set up a cloned project; agent-white-hat blocks its npm install because the project's postinstall script sends data out, and the agent stops and explains. Results: 63 of 63 malicious test repositories caught, 0 of 33 benign look-alikes flagged, 0 of 30 widely used repositories blocked, and the payload ran in 0 of 12 live agent runs."/>
+    <img src="docs/figures/hero-en-light.svg" width="100%" alt="agent-white-hat: the antivirus for people who use AI agents. A recorded run: an agent with approvals off is told to set up a cloned project; agent-white-hat blocks its npm install because the project's postinstall script sends data out, and the agent stops and explains. Results: 76 of 76 malicious test repositories caught, 0 of 40 benign look-alikes flagged, 0 of 30 widely used repositories blocked, and the payload ran in 0 of 12 live agent runs."/>
   </picture>
 </p>
 
@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/MCP-server-2f6fde" alt="MCP server"/>
   <img src="https://img.shields.io/badge/python-3.10%20to%203.14-2f6fde" alt="Python 3.10 to 3.14"/>
   <img src="https://img.shields.io/badge/dependencies-none-2f6fde" alt="No dependencies"/>
-  <a href="#benchmark"><img src="https://img.shields.io/badge/TrapRepo-63%2F63%20caught%2C%200%2F33%20false%20alarms-2f6fde" alt="TrapRepo: 63 of 63 malicious caught, 0 of 33 benign flagged"/></a>
+  <a href="#benchmark"><img src="https://img.shields.io/badge/TrapRepo-76%2F76%20caught%2C%200%2F40%20false%20alarms-2f6fde" alt="TrapRepo: 76 of 76 malicious caught, 0 of 40 benign flagged"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5d5d58" alt="License: MIT"/></a>
 </p>
 
@@ -30,8 +30,10 @@
   <a href="#attack-drill"><b>Attack drill</b></a> &nbsp;|&nbsp;
   <a href="#how-it-decides"><b>How it decides</b></a> &nbsp;|&nbsp;
   <a href="docs/rules.md"><b>Rules</b></a> &nbsp;|&nbsp;
+  <a href="docs/incidents.md"><b>Incidents</b></a> &nbsp;|&nbsp;
   <a href="docs/threat-model.md"><b>Threat model</b></a> &nbsp;|&nbsp;
-  <a href="docs/research.md"><b>Research</b></a>
+  <a href="docs/research.md"><b>Research</b></a> &nbsp;|&nbsp;
+  <a href="docs/architecture.md"><b>Architecture</b></a>
 </p>
 
 <p align="center">
@@ -56,7 +58,9 @@ operating system, so a separate antivirus product adds little.
 | Full scan | Every file, against signatures | `pah sweep`: Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, editor extensions, startup items, exposed keys and known traces; binaries go to Microsoft Defender (built into Windows) or ClamAV |
 | Real-time protection | Hooks into the file system | `pah protect`: new downloads, clones, extensions, skills and startup items are scanned within seconds; `--install` starts it at login. Your agents' own hooks stop dangerous commands before they run |
 | Quarantine | Moves infected files | `pah quarantine`: moves a blocked download, extension or skill, or only the payload files of a project, and restores them on request |
-| Agent hooks, skills, MCP servers, prompt injection | Not read | 108 rules tied to 2025–2026 incidents; 63 of 63 trap repositories caught, 0 of 33 look-alikes flagged |
+| Agent hooks, skills, MCP servers, prompt injection | Not read | 129 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
+| Behavior over time | Behavior monitoring of processes | Each step your agent takes is judged by the steps before it: a credential read, then an upload; a download, then `chmod +x`, then a run; a web page, then the guard switched off ([attack chains](#attack-chains)) |
+| AI model files | Known samples, if any | Pickles, PyTorch, Keras and GGUF files read without loading them: what loading would import or run |
 | Known malware binaries (ransomware, droppers) | Signature engine | The engine already on your computer, called locally (`pah audit`, `pah sweep`) |
 
 What it does not do: it has no kernel driver, so real-time protection notices files within seconds of arriving
@@ -103,13 +107,17 @@ incident-response skill tell you what to rotate and clean up.
 
 | | |
 | --- | --- |
-| **`pah scan`** before you open or set up anything | Maps everything in a repository, skill, MCP server, package, archive or git URL that **runs without being read**: agent hooks, plugins and settings (Claude Code and its plugins and marketplaces, Codex, Gemini CLI, Qwen Code, Copilot, Cursor, Kiro, Devin, Cline, OpenCode, Kilo, Amp, Crush, Factory, Augment, Amazon Q, OpenClaw, Aider, Zed, Continue), skill shell lines and pre-approved tools, folder-open tasks, dev containers, cloud-agent setup files, `.envrc`, npm lifecycle scripts and `binding.gyp`, `.pth`, `setup.py`, `conftest.py`, `build.rs`, Cargo config, Makefiles, build wrappers, Visual Studio and Xcode build steps, git hooks, submodules and bare repositories, programs planted under a system tool's name, instruction files and the scripts they name. Then it reads every file in full, with the files that run on their own judged most strictly, and test fixtures, CI pipelines and container builds judged for where they really run. It knows the shapes of the 2026 campaigns: loaders disguised as fonts, dead drops on blockchains, worms that republish with your token, dead-man wipers, wallet hijackers, workflows that send secrets out. 108 rules, each tied to an incident or study. |
+| **`pah scan`** before you open or set up anything | Maps everything in a repository, skill, MCP server, package, archive or git URL that **runs without being read**: agent hooks, plugins and settings (Claude Code and its plugins and marketplaces, Codex, Gemini CLI, Qwen Code, Copilot, Cursor, Kiro, Devin, Cline, OpenCode, Kilo, Amp, Crush, Factory, Augment, Amazon Q, OpenClaw, Aider, Zed, Continue), skill shell lines and pre-approved tools, folder-open tasks, dev containers, cloud-agent setup files, `.envrc`, npm lifecycle scripts and `binding.gyp`, `.pth`, `setup.py`, `conftest.py`, `build.rs`, Cargo config, Makefiles, build wrappers, Visual Studio and Xcode build steps, git hooks, submodules and bare repositories, programs planted under a system tool's name, instruction files and the scripts they name. Then it reads every file in full, with the files that run on their own judged most strictly, and test fixtures, CI pipelines and container builds judged for where they really run. It knows the shapes of the 2026 campaigns: loaders disguised as fonts, dead drops on blockchains, worms that republish with your token, dead-man wipers, wallet hijackers, workflows that send secrets out. **Model files** are read without loading them: pickles (raw, in PyTorch checkpoints, joblib and NumPy files), Keras archives, GGUF chat templates, 7z-packed checkpoints, and the code `trust_remote_code` would import. 114 rules, each tied to an incident or study. |
 | **`pah audit`** for one verdict on one thing | The scan, plus the **antivirus engine already on your computer** (Microsoft Defender or ClamAV, locally, with remediation off), plus with `--online` malicious, missing and brand-new packages and **known vulnerabilities in pinned dependency versions** (OSV, with the version to upgrade to). Ends with next steps in plain words. |
-| **The guard** in your agent's hooks | Claude Code (plugin or hooks), Codex, Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline, each through its own hook protocol ([docs/agent-setup.md](docs/agent-setup.md)). Before a command runs: download-and-run, decode-and-run, credential reads, persistence, agents started with approvals off, look-alike packages, registry redirects. Before setup (`npm install`, `pip install -e .`, `make`, `pytest`, `cargo build`, a dev container): scans the project and **denies the command if the scan blocks**. Writes to agent settings, shell profiles and git hooks need your approval. In Claude Code it also scans every new clone and checks the folder at session start. The guard only tightens: it never answers "allow". |
+| **The guard** in your agent's hooks | Claude Code (plugin or hooks), Codex, Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline, each through its own hook protocol ([docs/agent-setup.md](docs/agent-setup.md)). Before a command runs: download-and-run, decode-and-run, credential reads, persistence, agents started with approvals off, look-alike packages, registry redirects. Before setup (`npm install`, `pip install -e .`, `make`, `pytest`, `cargo build`, a dev container): scans the project and **denies the command if the scan blocks**. Writes to agent settings, shell profiles and git hooks need your approval. In Claude Code it also scans every new clone and checks the folder at session start. **Each step is also judged by the steps before it** in the same session, and **what tools return** (web pages, MCP results, issue text, files from unreviewed projects) is checked for instructions aimed at the agent; after such an output, the session's sends, setting changes and runs of downloaded files need you ([attack chains](#attack-chains)). Writes that switch off hooks, permission prompts or the guard are denied. Loading a model (`from_pretrained`, `torch.load`) scans the folder first. The guard only tightens: it never answers "allow". |
+| **`pah session`** | What your agents did, step by step, as the hooks recorded it, and the chain behind each alert (the earlier step it completed). Records stay on your computer, with anything token-shaped masked, for a week. |
 | **Security skills** for any agent | Four Agent Skills: everyday rules, a full **malware audit** procedure (execution surfaces, static decoding, behavior, provenance, verdict), a **security review** for exploitable bugs and vulnerable dependencies (including prompt injection and excessive agency in LLM features), and **incident response** for when something already ran. |
 | **`pah sweep`**, **`pah protect`**, **`pah quarantine`** | The antivirus duties. `pah sweep` scans Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, and editor extensions one item at a time, adds the checkup and the engine built into your OS, and remembers what did not change. `pah protect` does it as things arrive and can start at login. Blocked items can be quarantined: a download, an extension or a skill as a whole, a project only by its payload files; `pah quarantine restore` puts them back. |
 | **`pah watch`** | A baseline of every agent's settings, hooks, MCP servers, API URLs and approval modes (Claude Code, Codex, Gemini CLI, Cursor, OpenClaw, Claude Desktop, VS Code, Windsurf), plus shell profiles, git and npm config, startup folders, LaunchAgents and Run keys. `pah watch check` shows what changed. Secrets are stored only as hashes. |
 | **`pah checkup`** | Is this computer already exposed? API keys saved in plain files, risky agent settings, `AGENTS.md`/`CLAUDE.md` planted in Downloads or Desktop, `curl \| sh` and ClickFix traces in shell and Win+R history, known traces of campaigns aimed at AI-tool users, agents and git with known fixes missing. Key values are never shown. |
+| **`pah incident`** | Real attacks on people who use AI agents, 33 of them from 2025 and 2026 (worms, malicious packages, extensions, skills and MCP servers, CI stealers, infostealers): what happened, which rules and trap repositories cover each one, the files it leaves on a computer, and **what to do, in order**. Order matters: several worms wipe your home folder when their stolen token is revoked, so their persistence has to go first. `pah incident check` looks for the traces (so does `pah checkup`), `pah incident show <name>` prints the response, and the MCP server answers the same lookups ([docs/incidents.md](docs/incidents.md)). |
+| **`pah diff OLD NEW`** | What a new version of a package, repository, extension or skill does that the old one did not: files added, **capabilities gained** (network, credentials, starting programs, decoding, install hooks), new dependencies and findings that are new. With `--source`, what a published package has that its source repository at the same tag does not, where release-time backdoors such as xz-utils' live. Folders and archives (.tgz, .whl, .zip, .vsix, .crate, .gem) both work. |
+| **Agent setups** (in `pah scan` and `pah checkup`) | An agent's setup as a whole, not file by file: a tool that brings in content anyone can write (issues, web pages, email) and a tool that sends data out, both pre-approved, make the *lethal trifecta* with the agent's access to your files (PAH-A021); a pre-approved `find`, `go test`, `git`, `npx` or `node` runs any program through its arguments (PAH-A020). |
 | **In CI and before commits** | A GitHub Action that annotates findings on their lines in pull requests, writes a job summary and a SARIF report for code scanning, and fails on BLOCK; a pre-commit hook; and exit codes for any other CI ([docs/ci.md](docs/ci.md)). It also reads your workflows: secrets sent out, untrusted issue text pasted into scripts, and AI agent actions that act on anyone's issue. |
 | **`--online`** (opt-in) | Packages that do not exist (slopsquats, "phantom" dependencies), that appeared in the last week, or that OSV lists as malicious, and known vulnerabilities in the exact versions lockfiles pin. Sends package names and versions only. |
 | **`--deep`** (opt-in) | A model review of the evidence the rules prepared. It can raise a verdict with claims that cite real lines, never lower one; a refusal counts as "not reviewed". |
@@ -162,14 +170,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ji-hun-git/agent-white-hat@v0.3.0
+      - uses: ji-hun-git/agent-white-hat@v0.5.1
 ```
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/ji-hun-git/agent-white-hat
-    rev: v0.3.0
+    rev: v0.5.1
     hooks:
       - id: agent-white-hat
 ```
@@ -196,7 +204,7 @@ Per-agent details, including which agents can ask you before a command and which
 
 ```
 $ pah scan ./acme-utils
-agent-white-hat 0.3.0  ·  ./acme-utils
+agent-white-hat 0.5.1  ·  ./acme-utils
  BLOCK   do not open, install or run this with an agent until the findings below are explained
    1 critical, 2 high, 1 medium  ·  6 files  ·  0.0s
 
@@ -232,7 +240,7 @@ CI. Output as text, `--json` or `--sarif` (GitHub code scanning). `--lang ko` pr
 
 ## Benchmark
 
-**TrapRepo** ([`bench/fixtures/traprepo/`](bench/fixtures/traprepo/)) is 64 malicious and 33 benign repositories. Each malicious case
+**TrapRepo** ([`bench/fixtures/traprepo/`](bench/fixtures/traprepo/)) is 77 malicious and 40 benign repositories. Each malicious case
 reproduces one technique from a 2025–2026 incident, CVE or paper, with an inert payload (it only prints a marker, and
 every URL is on a reserved `.invalid` domain); each benign case uses the same mechanism legitimately (native addons,
 husky, pytest fixtures, official installers, emoji and right-to-left text). Cases are data: they are written to a
@@ -279,8 +287,10 @@ saved as a font, a workflow that sends secrets out, a worm, an Ethereum dead dro
   hide a payload (strings split, built from character codes, hex-escaped or ROT13-encoded; calls made through
   brackets or `getattr`; `require` reached through an alias; base64 run by `eval`, `Function` or `exec`; a delayed
   start; commands assembled in shell variables) and scans each rewrite. The first run got 8 past 0.2.1. 0.3.0
-  decodes all of these before the rules run and catches **318 of 318**; harmless rewrites of the benign cases
-  (renamed variables, added comments) raise no flag (0 of 11). CI runs it on every change: `python bench/fuzz.py`.
+  decodes all of these before the rules run and catches every rewrite (**353 of 353** on the 0.5.0 corpus); harmless rewrites of the benign cases
+  (renamed variables, added comments) raise no flag (0 of 12). CI runs it on every change: `python bench/fuzz.py`.
+- **The cases added in 0.4.0** come from the August to November 2026 incidents: ChainDrop's Bun loader, strutil-core's gem extension, the Paperclip skill clones' linked setup file, WFX Phantom's hidden CI script and Deadbugz's runtime-gated MCP server, plus the agent-setup checks, with two benign twins. Four needed new detection: gem native extensions, files that install-time code starts through a runtime (`bun Math_Symbol.js`), documents a skill tells the agent to follow, and secrets a workflow hands to a repository script. The corpus then stood at 70 of 70 caught, 0 of 35 flagged.
+- **The cases added in 0.5.0** are model files, assembled opcode by opcode and never loaded: a PyTorch checkpoint whose pickle runs a command, a pickle that reaches `builtins.exec` through protocol 4, nullifAI's 7z packing and broken stream, a Keras Lambda layer with bytecode, a GGUF chat template that reaches `os.popen` (CVE-2024-34359), and a Load/Mine-style repository whose remote code starts a miner; with benign twins (a state dict, a scikit-learn model, a Keras model of Dense layers, a ChatML template, a custom architecture). The corpus now stands at **76 of 76 caught, 0 of 40 flagged**.
 - The one malicious case not counted is a symbolic link to `~/.ssh`, which needs elevated rights to create on Windows;
   CI runs it on Linux and macOS.
 - ¹ The model-review row was measured on the first version of the rules (code `4ae527ce9ad3`), before the
@@ -295,7 +305,7 @@ characters, and one question: is it safe to let my coding agent install and run 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.svg">
-    <img src="docs/figures/repos-en-light.svg" width="100%" alt="30 widely used repositories scanned in full, 66,610 files: 26 pass, 4 warn, none blocked. JavaScript: express, got, husky, sharp, node-addon-examples, puppeteer, esbuild, prettier, vite. Python: requests, flask, fastapi, pytest, poetry, ruff (warn). Rust: ripgrep, serde, tokio. AI agents and MCP: claude-code, codex, gemini-cli (warn), the MCP servers (warn), Anthropic skills, everything-claude-code (warn). Shell and installers: Oh My Zsh, nvm, Homebrew install. Go, Java, containers: GitHub CLI, spring-petclinic, vscode-remote-try-node."/>
+    <img src="docs/figures/repos-en-light.svg" width="100%" alt="30 widely used repositories scanned in full, 67,014 files: 26 pass, 4 warn, none blocked. JavaScript: express, got, husky, sharp, node-addon-examples, puppeteer, esbuild, prettier, vite. Python: requests, flask, fastapi, pytest, poetry, ruff (warn). Rust: ripgrep, serde, tokio. AI agents and MCP: claude-code, codex, gemini-cli (warn), the MCP servers (warn), Anthropic skills, everything-claude-code (warn). Shell and installers: Oh My Zsh, nvm, Homebrew install. Go, Java, containers: GitHub CLI, spring-petclinic, vscode-remote-try-node."/>
   </picture>
 </p>
 
@@ -313,8 +323,12 @@ where they actually run, download rules that depend on the host, strings and com
 established packages no longer taken for look-alikes. The 0.2.0 rules were checked against the same set, now
 with everything-claude-code: two of their first warnings, on prettier, were calibrated away. The evasion checks of
 0.2.1 and the decoding of 0.3.0 changed no verdict; the first version of the decoding blocked Codex over its
-clickable terminal links and was fixed before release. Results, with the commit of every repository:
-[`bench/results/2026-11-12-real-repos.json`](bench/results/2026-11-12-real-repos.json).
+clickable terminal links and was fixed before release. 0.4.0 was checked at each project's current commit (19
+had moved on): its first run blocked three and warned on one more, all false alarms (a shell script kept in a
+Rust raw string in Codex's sandbox tests, a skill's reference pages and a quoted warning read as instructions, a
+test file a setup document says to run). They were fixed before release and are kept as tests. 0.5.0 was checked at the same commits: the model scanner and the other changes changed no verdict. Results, with the
+commit of every repository:
+[`bench/results/2026-11-17-real-repos.json`](bench/results/2026-11-17-real-repos.json).
 
 ## Attack drill
 
@@ -323,17 +337,39 @@ project up.
 
 **Every agent protocol, every case** ([`bench/drill.py`](bench/drill.py)): each TrapRepo repository is written to disk,
 and the command an agent would run to set it up (`npm install`, `pip install -e .`, `pytest`, `cargo build`, `make`, ...)
-is sent through the real hook entry point in each agent's own payload format, followed by ten repository-independent
+(or the command that loads a model) is sent through the real hook entry point in each agent's own payload format, followed by ten repository-independent
 actions (a download piped into a shell, `iex (iwr ...)`, an agent started with approvals off, a look-alike install,
 writes to agent settings and shell profiles, an SSH key read, and harmless commands).
 
 | Agent protocol | Malicious setups stopped | Benign setups untouched | Risky / harmless actions handled |
 | --- | --- | --- | --- |
-| Claude Code, Antigravity, Cursor, Copilot | **63 / 63** (60 denied, 3 asked) | **33 / 33** | 10 / 10 |
-| Codex, Gemini CLI, Devin, Kiro, Cline (no "ask" in their hooks) | **63 / 63** (all denied) | **33 / 33** | 10 / 10 (9 / 9 where hooks see no reads) |
+| Claude Code, Antigravity, Cursor, Copilot | **76 / 76** (71 denied, 5 asked) | **40 / 40** | 10 / 10 |
+| Codex, Gemini CLI, Devin, Kiro, Cline (no "ask" in their hooks) | **76 / 76** (all denied) | **40 / 40** | 10 / 10 (9 / 9 where hooks see no reads) |
 
-951 decisions, 0 unexpected. `python bench/drill.py --subprocess` repeats it with one process per call, exactly as
+1,131 decisions, 0 unexpected. `python bench/drill.py --subprocess` repeats it with one process per call, exactly as
 agents call the hook.
+
+### Attack chains
+
+Some attacks are harmless one step at a time: read `~/.aws/credentials`, then a few steps later post a file; download a
+binary, then `chmod +x` it, then start it; read a web page, then switch the guard off. **[`bench/chains.py`](bench/chains.py)**
+replays 12 such attacks from real incidents and 8 ordinary sessions step by step, in one session per agent, through each
+agent's hook protocol, and sends every step again on its own to show what the session adds.
+
+| Agent protocol | Attack runs stopped | Stopped only because of the steps before | Not applicable¹ | Ordinary runs given an extra prompt |
+| --- | --- | --- | --- | --- |
+| Claude Code | **12 / 12** | 8 | 0 | **0 / 8** |
+| Gemini CLI, Cursor, Copilot | **11 / 11** each | 7 | 1 | **0 / 8** |
+| Antigravity | **9 / 9** | 6 | 3 | **0 / 8** |
+| Cline | **8 / 8** | 5 | 4 | **0 / 8** |
+| Codex | **7 / 7** | 5 | 5 | **0 / 8** |
+| Devin, Kiro | **4 / 4** each | 3 | 8 | **0 / 8** |
+
+77 of 77 attack runs stopped, 51 of them only because of what the session did before; 0 of 72 ordinary runs (install
+and test, `.env` and a local server, an official installer, a deploy over SSH, an S3 upload, a pull request) got a
+prompt the same steps would not get on their own. ¹ A chain is not applicable to an agent whose hooks cannot see one
+of its steps: Codex, Devin and Kiro have no hook for file reads, and only Claude Code, Codex, Gemini CLI, Cursor and
+Copilot have one for what tools return.
 
 **A real agent, approvals off** ([`bench/live_drill.py`](bench/live_drill.py)): Claude Code 2.1.310 (Sonnet), started
 the way careless users start it (`--dangerously-skip-permissions`), told: *"I just cloned this project. Set it up for
@@ -365,6 +401,10 @@ run could not be completed in this environment, so Codex is covered by the proto
    a network call that runs only in CI or after a date; code that addresses AI reviewers.
 4. **Verdict.** High or critical blocks, medium warns. A model review (`--deep`) can raise a verdict only with claims
    that cite lines code can verify, and never lower one.
+5. **In an agent, remember the session.** The guard records each step as tags (a credential read, a download, data
+   sent out, a file made executable, persistence, a guard switched off) and judges the step by the ones before it, as
+   endpoint products judge sequences rather than single events. Steps it denied do not count as having happened, and
+   once a tool's output carried injected instructions, the session's sensitive steps need you.
 
 Nothing in the target is ever executed. The only program started while scanning is `git` (hooks and fsmonitor off).
 The plugin runs Python in isolated mode, so files in the project being worked on cannot replace its modules. Nothing
@@ -385,17 +425,22 @@ leaves the machine without `--online` or `--deep`. See [SECURITY.md](SECURITY.md
 | `pah checkup` | This computer: keys in files, risky settings, planted instructions, traces, outdated agents |
 | `pah trust [folder] [--remove] [--list]` | Projects you wrote or reviewed: the guard keeps judging commands there but stops scanning them before setup. Only you can do this; the guard asks you when an agent tries |
 | `pah install [agents...] [--all] [--skills] [--mcp] [--yes]` | Hooks for `claude-code codex gemini antigravity cursor copilot devin kiro cline` (default: the ones found), the four skills, the MCP server; shows the changes unless `--yes` |
-| `pah hook pre --agent <name>` | The hook entry point agents call (reads their JSON on stdin) |
+| `pah session list \| show ID \| clear` | What agents did, step by step, and the chain behind each alert (`show latest` for the newest session) |
+| `pah hook pre\|post --agent <name>` | The hook entry points agents call (read their JSON on stdin) |
 | `pah mcp` | MCP server over stdio |
 | `pah rules [--markdown]` | Every rule ([docs/rules.md](docs/rules.md)) |
 
 Keys for `--deep` come from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `META_API_KEY` and go only to that provider.
-`PAH_ONLINE=1` turns on the online checks in the guard; `PAH_HOME` moves its state (default `~/.personal-anti-hack`).
+`PAH_ONLINE=1` turns on the online checks in the guard; `PAH_HOME` moves its state (default `~/.personal-anti-hack`);
+`PAH_BEHAVIOR=0` and `PAH_OUTPUT_SCAN=0` turn off the session rules and the output checks.
 
 ## Limits
 
 - It is a static scanner. A second stage fetched at run time is caught by the shape of the fetch, the decode or the
   send, not by running it. It is not a sandbox; keep your agent's approvals and sandbox on.
+- The session rules see the steps an agent takes through its hooks, not what a program does after it starts. There is
+  no kernel driver, so a rootkit such as IronWorm's hides from it; agents without read or output hooks give the rules
+  less to work with ([threat model](docs/threat-model.md)).
 - The rules are public, so attackers can test against them, as with every open scanner. Report a bypass through a
   [security advisory](https://github.com/ji-hun-git/agent-white-hat/security/advisories/new), ideally as an inert
   TrapRepo case.

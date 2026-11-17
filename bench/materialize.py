@@ -40,11 +40,11 @@ VALID_EXPECTED = {"block", "warn", "pass"}
 VALID_CATEGORIES = {
     "agent-config", "instruction-file", "ide", "package-install", "python",
     "rust", "build", "git", "skill", "mcp", "content-obfuscation", "binary",
-    "docs", "ci",
+    "docs", "ci", "model",
 }
 KNOWN_GENERATORS = {
     "repeat_text", "pyc", "zip", "binary", "git_dir",
-    "variation_selectors", "tag_chars",
+    "variation_selectors", "tag_chars", "b64",
 }
 REQUIRED_FIELDS = [
     "id", "title", "kind", "expected", "category", "technique", "trigger",
@@ -127,7 +127,16 @@ def gen_tag_chars(params: dict) -> bytes:
     return "".join(out).encode("utf-8")
 
 
+def gen_b64(params: dict) -> bytes:
+    """Bytes built by the case builder (model files: pickles, PyTorch zips, Keras archives, GGUF), stored as base64.
+    The builder assembles them opcode by opcode; nothing in them is ever loaded."""
+    import base64
+
+    return base64.b64decode(params["data"])
+
+
 _FILE_GENERATORS = {
+    "b64": gen_b64,
     "repeat_text": gen_repeat_text,
     "pyc": gen_pyc,
     "zip": gen_zip,

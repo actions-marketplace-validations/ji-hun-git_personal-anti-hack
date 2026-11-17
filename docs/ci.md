@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ji-hun-git/agent-white-hat@v0.3.0
+      - uses: ji-hun-git/agent-white-hat@v0.5.1
 ```
 
 The step fails when the verdict is BLOCK (a high or critical finding). High and critical findings appear as errors and
@@ -35,7 +35,7 @@ permissions:
   security-events: write
 steps:
   - uses: actions/checkout@v7
-  - uses: ji-hun-git/agent-white-hat@v0.3.0
+  - uses: ji-hun-git/agent-white-hat@v0.5.1
     with:
       fail-on: none
   - uses: github/codeql-action/upload-sarif@v4
@@ -50,7 +50,7 @@ steps:
 A workflow that installs a third-party tool, builds a submodule or opens a downloaded archive can scan it first:
 
 ```yaml
-- uses: ji-hun-git/agent-white-hat@v0.3.0
+- uses: ji-hun-git/agent-white-hat@v0.5.1
   with:
     path: vendor/some-tool          # or an archive, or https://github.com/owner/repo
     sarif: ""
@@ -93,7 +93,7 @@ The scan step also sets `critical`, `high`, `medium` and `low` counts.
 ```yaml
 repos:
   - repo: https://github.com/ji-hun-git/agent-white-hat
-    rev: v0.3.0
+    rev: v0.5.1
     hooks:
       - id: agent-white-hat
         # stages: [pre-push]   # in a large repository, scan before each push instead of each commit
@@ -104,7 +104,7 @@ The hook scans the whole repository and stops the commit on BLOCK, printing the 
 ## Any other CI
 
 ```sh
-python -m pip install https://github.com/ji-hun-git/agent-white-hat/archive/refs/tags/v0.3.0.tar.gz
+python -m pip install https://github.com/ji-hun-git/agent-white-hat/archive/refs/tags/v0.5.1.tar.gz
 pah scan . --fail-on block --sarif-out personal-anti-hack.sarif
 ```
 

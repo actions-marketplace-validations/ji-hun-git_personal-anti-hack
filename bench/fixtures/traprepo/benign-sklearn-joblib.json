@@ -1,0 +1,24 @@
+{
+  "id": "benign-sklearn-joblib",
+  "title": "Fitted scikit-learn estimator saved with joblib",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "model",
+  "technique": "The pickle rebuilds a LogisticRegression with copy_reg._reconstructor and numpy arrays.",
+  "trigger": "joblib.load",
+  "incident": "Legitimate scikit-learn model (benign twin of pickle-model-stack-global-exec)",
+  "notes": "Only sklearn, numpy, copy_reg and builtins.object.",
+  "files": {
+    "README.md": "# churn-model\n\nLogistic regression churn model.\n\n```python\nimport joblib\nmodel = joblib.load('model.joblib')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.joblib",
+      "generator": "b64",
+      "params": {
+        "data": "gAJjY29weV9yZWcKX3JlY29uc3RydWN0b3IKKGNza2xlYXJuLmxpbmVhcl9tb2RlbC5fbG9naXN0aWMKTG9naXN0aWNSZWdyZXNzaW9uCmNfX2J1aWx0aW5fXwpvYmplY3QKTnRSfShYBQAAAGNvZWZfY251bXB5LmNvcmUubXVsdGlhcnJheQpfcmVjb25zdHJ1Y3QKKGNudW1weQpuZGFycmF5CihLAHRDAWJ0UlgBAAAAQ0sBdWIu"
+      }
+    }
+  ],
+  "sources": []
+}

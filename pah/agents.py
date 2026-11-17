@@ -175,6 +175,47 @@ def respond(agent: str, action: str, reason: str) -> tuple[str, int, str]:
     return json.dumps({"decision": action, "reason": reason}), 0, ""
 
 
+POST_AGENTS = {"codex", "gemini", "cursor", "copilot"}  # agents whose post-tool hooks can answer
+_OUTPUT_KEYS = ("tool_response", "tool_output", "toolResult", "tool_result", "result", "output", "response")
+
+
+def run_post(agent: str, raw: str) -> tuple[str, int, str]:
+    """After a tool ran: if its output carries instructions aimed at the agent, warn the agent in its own protocol
+    (Codex and Gemini CLI replace a high-severity output with the warning) and mark the session."""
+    if agent not in POST_AGENTS:
+        return "", 0, ""
+    try:
+        data = json.loads(raw or "{}")
+    except ValueError:
+        return "", 0, ""
+    if not isinstance(data, dict):
+        return "", 0, ""
+    from .behavior import record_output, tool_name_of
+    from .outputs import inspect, message
+
+    tool = tool_name_of(data)
+    tool_input = _as_dict(data.get("tool_input") or data.get("toolArgs") or data.get("input") or {})
+    response = next((data[k] for k in _OUTPUT_KEYS if k in data), None)
+    cwd = str(data.get("cwd") or "")
+    result = inspect(tool, tool_input, response, cwd)
+    if result is None:
+        return "", 0, ""
+    record_output(agent, data, tool, result["severity"], result["source"], result["summary"], cwd)
+    text = message(result)[:4000]
+    high = result["severity"] in ("high", "critical")
+    if agent == "codex":
+        out = {"decision": "block", "reason": text} if high else {
+            "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}
+    elif agent == "gemini":
+        out = {"decision": "deny", "reason": text} if high else {
+            "hookSpecificOutput": {"hookEventName": "AfterTool", "additionalContext": text}}
+    elif agent == "cursor":
+        out = {"additional_context": text}
+    else:  # copilot
+        out = {"additionalContext": text}
+    return json.dumps(out), 0, ""
+
+
 def run_pre(agent: str, raw: str) -> tuple[str, int, str]:
     try:
         data = json.loads(raw or "{}")
@@ -182,5 +223,8 @@ def run_pre(agent: str, raw: str) -> tuple[str, int, str]:
         return respond(agent, "defer", "")
     if not isinstance(data, dict):
         return respond(agent, "defer", "")
-    decision = decide(normalize(agent, data))
+    from .behavior import observe
+
+    event = normalize(agent, data)
+    decision = observe(agent, data, event, decide(event))  # the step judged by what the session did before it
     return respond(agent, decision.action, decision.reason)

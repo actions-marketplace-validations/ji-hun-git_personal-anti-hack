@@ -1,0 +1,450 @@
+{
+ "date": "2026-11-17",
+ "platform": "win32",
+ "repos": [
+  {
+   "repo": "expressjs/express",
+   "commit": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
+   "verdict": "pass",
+   "files": 217,
+   "seconds": 3.3,
+   "surfaces": 0,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "sindresorhus/got",
+   "commit": "6b5aafc1cd538998728be6f45c65b0f80bae01b2",
+   "verdict": "pass",
+   "files": 140,
+   "seconds": 8.8,
+   "surfaces": 2,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "typicode/husky",
+   "commit": "3f0023dc10d7003d70f2e31aa56300eab80e76d6",
+   "verdict": "pass",
+   "files": 60,
+   "seconds": 1.3,
+   "surfaces": 0,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "lovell/sharp",
+   "commit": "9a34cfeda175bb30538157a24a0c681d7180496c",
+   "verdict": "pass",
+   "files": 805,
+   "seconds": 4.8,
+   "surfaces": 15,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "nodejs/node-addon-examples",
+   "commit": "1e4f284f30ed0ac40ec216bdf93ab12f726039a3",
+   "verdict": "pass",
+   "files": 290,
+   "seconds": 1.8,
+   "surfaces": 106,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "puppeteer/puppeteer",
+   "commit": "35ea15ea0aaebaef67c3ee65dc22bac10ca0fcb5",
+   "verdict": "pass",
+   "files": 1598,
+   "seconds": 18.0,
+   "surfaces": 5,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "evanw/esbuild",
+   "commit": "f6058f8364fe7ab91ca57a83e02577ed74c9cae4",
+   "verdict": "pass",
+   "files": 351,
+   "seconds": 21.7,
+   "surfaces": 7,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "prettier/prettier",
+   "commit": "2cc4f0fd2cc44a970229a5cb025cd47c63f31b04",
+   "verdict": "pass",
+   "files": 9787,
+   "seconds": 93.4,
+   "surfaces": 0,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "psf/requests",
+   "commit": "3c7baaa05ab4aa49cc819ce3a819d260de19c157",
+   "verdict": "pass",
+   "files": 131,
+   "seconds": 2.8,
+   "surfaces": 3,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "pallets/flask",
+   "commit": "49943b5a94413a530761350f04e896f76e8d620e",
+   "verdict": "pass",
+   "files": 237,
+   "seconds": 2.6,
+   "surfaces": 4,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "fastapi/fastapi",
+   "commit": "a1b3be01aadc61c67edc09eed4f6cc1fcc3d3b8f",
+   "verdict": "pass",
+   "files": 3269,
+   "seconds": 28.8,
+   "surfaces": 16,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "pytest-dev/pytest",
+   "commit": "50234b4e670064c42a4c29cb6258115a2079ba4c",
+   "verdict": "pass",
+   "files": 646,
+   "seconds": 14.5,
+   "surfaces": 18,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "python-poetry/poetry",
+   "commit": "8c3ddc37a168c9de59448780a3585aac1861852c",
+   "verdict": "pass",
+   "files": 9284,
+   "seconds": 21.2,
+   "surfaces": 15,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "astral-sh/ruff",
+   "commit": "8a6a9492d0bc897ebb455fc1ab6916fb34e7b55a",
+   "verdict": "warn",
+   "files": 11326,
+   "seconds": 116.2,
+   "surfaces": 16,
+   "incomplete": [],
+   "top": [
+    {
+     "rule": "PAH-A001",
+     "severity": "medium",
+     "path": ".claude/settings.json",
+     "line": 20,
+     "message": "Claude Code hook (SessionStart)"
+    }
+   ]
+  },
+  {
+   "repo": "BurntSushi/ripgrep",
+   "commit": "178cc027e283fd965cb72d0a7395b219eada170c",
+   "verdict": "pass",
+   "files": 227,
+   "seconds": 6.0,
+   "surfaces": 1,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "serde-rs/serde",
+   "commit": "e306b0c7c40ad21d5bdf52bcd20da513904682ae",
+   "verdict": "pass",
+   "files": 362,
+   "seconds": 3.3,
+   "surfaces": 5,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "tokio-rs/tokio",
+   "commit": "f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+   "verdict": "pass",
+   "files": 893,
+   "seconds": 14.1,
+   "surfaces": 1,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "anthropics/claude-code",
+   "commit": "1ad046cb015cfcb6ad90293c605ee4e38326bd13",
+   "verdict": "pass",
+   "files": 1557,
+   "seconds": 15.8,
+   "surfaces": 4,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "openai/codex",
+   "commit": "5b3d2c7fce11a62d0df0105e9cc7290f50f2a0f8",
+   "verdict": "pass",
+   "files": 10400,
+   "seconds": 252.8,
+   "surfaces": 19,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "google-gemini/gemini-cli",
+   "commit": "4fa64e71b9b4e1bb65a86cc2863574f561b82340",
+   "verdict": "warn",
+   "files": 3058,
+   "seconds": 113.9,
+   "surfaces": 35,
+   "incomplete": [],
+   "top": [
+    {
+     "rule": "PAH-A016",
+     "severity": "medium",
+     "path": ".gemini/skills/agent-tui/SKILL.md",
+     "line": 68,
+     "message": "skill downloads and runs a file from a host that is not an official installer"
+    },
+    {
+     "rule": "PAH-C001",
+     "severity": "medium",
+     "path": ".gemini/skills/agent-tui/SKILL.md",
+     "line": 68,
+     "message": "pipes a download into a shell from a host that is not an official installer (in a file agents load automatically)"
+    },
+    {
+     "rule": "PAH-P004",
+     "severity": "medium",
+     "path": ".npmrc",
+     "line": 1,
+     "message": "@google:registry = https://wombat-dressing-room.appspot.com"
+    },
+    {
+     "rule": "PAH-P020",
+     "severity": "medium",
+     "path": "package.json",
+     "line": 93,
+     "message": "installs a command named gemini (the package is @google/gemini-cli)"
+    },
+    {
+     "rule": "PAH-P020",
+     "severity": "medium",
+     "path": "packages/cli/package.json",
+     "line": 13,
+     "message": "installs a command named gemini (the package is @google/gemini-cli)"
+    },
+    {
+     "rule": "PAH-C009",
+     "severity": "medium",
+     "path": "scripts/seed-test-inbox.js",
+     "line": 164,
+     "message": "writes .gemini/settings.json in your home folder"
+    }
+   ]
+  },
+  {
+   "repo": "modelcontextprotocol/servers",
+   "commit": "e1dc4b18dbb948921da37f3d4224a628730b43b0",
+   "verdict": "warn",
+   "files": 415,
+   "seconds": 10.0,
+   "surfaces": 23,
+   "incomplete": [],
+   "top": [
+    {
+     "rule": "PAH-A001",
+     "severity": "medium",
+     "path": ".claude/settings.json",
+     "line": 8,
+     "message": "Claude Code hook (SessionStart)"
+    }
+   ]
+  },
+  {
+   "repo": "anthropics/skills",
+   "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+   "verdict": "pass",
+   "files": 494,
+   "seconds": 6.4,
+   "surfaces": 20,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "affaan-m/everything-claude-code",
+   "commit": "8abdf329ecbc9315dc4e3334a5702782f70b8b02",
+   "verdict": "warn",
+   "files": 4838,
+   "seconds": 86.7,
+   "surfaces": 1134,
+   "incomplete": [],
+   "top": [
+    {
+     "rule": "PAH-A011",
+     "severity": "medium",
+     "path": ".agents/skills/deep-research/SKILL.md",
+     "line": 25,
+     "message": "points the agent at its machine-wide configuration"
+    },
+    {
+     "rule": "PAH-A019",
+     "severity": "medium",
+     "path": ".agents/skills/eval-harness/SKILL.md",
+     "line": 4,
+     "message": "allowed-tools pre-approves every shell command while it is active"
+    },
+    {
+     "rule": "PAH-A011",
+     "severity": "medium",
+     "path": ".agents/skills/exa-search/SKILL.md",
+     "line": 22,
+     "message": "points the agent at its machine-wide configuration"
+    },
+    {
+     "rule": "PAH-A011",
+     "severity": "medium",
+     "path": ".agents/skills/fal-ai-media/SKILL.md",
+     "line": 21,
+     "message": "points the agent at its machine-wide configuration"
+    },
+    {
+     "rule": "PAH-A017",
+     "severity": "medium",
+     "path": ".agents/skills/mcp-dependency-review/SKILL.md",
+     "line": 87,
+     "message": "runs ecc without a pinned version"
+    },
+    {
+     "rule": "PAH-A017",
+     "severity": "medium",
+     "path": ".agents/skills/mcp-dependency-review/SKILL.md",
+     "line": 91,
+     "message": "runs example-tool without a pinned version"
+    },
+    {
+     "rule": "PAH-A019",
+     "severity": "medium",
+     "path": ".agents/skills/mle-workflow/SKILL.md",
+     "line": 4,
+     "message": "allowed-tools pre-approves every shell command while it is active"
+    },
+    {
+     "rule": "PAH-A011",
+     "severity": "medium",
+     "path": ".agents/skills/strategic-compact/SKILL.md",
+     "line": 40,
+     "message": "points the agent at its machine-wide configuration"
+    },
+    {
+     "rule": "PAH-A017",
+     "severity": "medium",
+     "path": ".agents/skills/verification-loop/SKILL.md",
+     "line": 34,
+     "message": "runs tsc without a pinned version"
+    },
+    {
+     "rule": "PAH-A017",
+     "severity": "medium",
+     "path": ".agents/skills/video-editing/SKILL.md",
+     "line": 164,
+     "message": "runs remotion without a pinned version"
+    },
+    {
+     "rule": "PAH-A019",
+     "severity": "medium",
+     "path": ".claude/commands/add-language-rules.md",
+     "line": 4,
+     "message": "allowed-tools pre-approves every shell command while it is active"
+    },
+    {
+     "rule": "PAH-A019",
+     "severity": "medium",
+     "path": ".claude/commands/database-migration.md",
+     "line": 4,
+     "message": "allowed-tools pre-approves every shell command while it is active"
+    }
+   ]
+  },
+  {
+   "repo": "ohmyzsh/ohmyzsh",
+   "commit": "c0140703a53eb0d22be44f7bac318d0baacc927c",
+   "verdict": "pass",
+   "files": 1200,
+   "seconds": 10.0,
+   "surfaces": 1,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "nvm-sh/nvm",
+   "commit": "6f5767a530d186f013dca720c30858577e773f1d",
+   "verdict": "pass",
+   "files": 539,
+   "seconds": 4.9,
+   "surfaces": 3,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "Homebrew/install",
+   "commit": "e5b3c5834e3932c8aaa42deef4794076c9b0cbf0",
+   "verdict": "pass",
+   "files": 20,
+   "seconds": 0.4,
+   "surfaces": 0,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "cli/cli",
+   "commit": "0536d5e5288458c696ccbeac0e68d87128300069",
+   "verdict": "pass",
+   "files": 1681,
+   "seconds": 30.8,
+   "surfaces": 16,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "spring-projects/spring-petclinic",
+   "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
+   "verdict": "pass",
+   "files": 167,
+   "seconds": 1.3,
+   "surfaces": 2,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "microsoft/vscode-remote-try-node",
+   "commit": "56c12dca911e43bea1e9ac73dd2f6937bd892c56",
+   "verdict": "pass",
+   "files": 14,
+   "seconds": 0.1,
+   "surfaces": 1,
+   "incomplete": [],
+   "top": []
+  },
+  {
+   "repo": "vitejs/vite",
+   "commit": "9a8d1a98922c5e445e8a618b8c27f84c63b9fbff",
+   "verdict": "pass",
+   "files": 3008,
+   "seconds": 26.1,
+   "surfaces": 3,
+   "incomplete": [],
+   "top": []
+  }
+ ]
+}

@@ -1,5 +1,112 @@
 # Changelog
 
+## 0.5.1 (2026-11-17)
+
+**Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,
+and that masking also shortened long paths. macOS keeps its temporary folder under `/var/folders/<random>/T/`, so a
+file downloaded there and later unblocked, made executable or run was not recognized as the download (PAH-B002), and
+the Windows-style download, `Unblock-File`, `Start-Process` chain went through on macOS. CI's chain drill caught it on
+macOS, where 68 of 77 attack runs were stopped; Linux and Windows were not affected. Paths that later steps are
+compared with are now kept whole (they are local paths, and commands are still masked), and a test with a long
+temporary folder keeps it fixed. The chain drill is back to 77 of 77 on every platform.
+
+## 0.5.0 (2026-11-17)
+
+**Attack chains, judged as chains.** Each step an agent takes is now recorded per session, as a short description with
+anything token-shaped masked (no file contents, output or secret values, and nothing leaves the machine), and judged
+against the steps before it, the way endpoint products judge behavior rather than single events (CrowdStrike's
+indicators of attack, Cortex XDR's causality chains). Seven rules: credentials read, then data sent to a host that is
+not a known service (PAH-B001); a downloaded file made executable or run, a step at a time (PAH-B002); a sensitive step
+after a tool returned injected instructions (PAH-B003); persistence set up after a download (PAH-B004); the guard or an
+agent's permission checks switched off (PAH-B005); history cleared after credential access (PAH-B006); credentials
+collected from several stores or packed into one file (PAH-B007). It works in all nine agents, through each agent's own
+session id, and `pah session list | show` prints the steps behind each alert. MCP tool calls now pass the guard too.
+
+**What tools return is checked before the agent acts on it.** Web pages, search results, MCP results, issue text and
+files in projects you have not trusted are read for text aimed at the agent: overrides of its instructions, fake
+system or tool-result markers, orders to act without telling you, requests for secrets, image links built to carry
+data out, the same text hidden in invisible Unicode, and terminal sequences that write the clipboard (PAH-O001 to
+PAH-O004). The agent is told to treat the output as data, and the rest of that session's sensitive steps need your
+approval: a runtime form of keeping untrusted data away from actions (CaMeL, FIDES). Codex and Gemini CLI replace a
+high-severity output with the warning; Claude Code, Cursor and Copilot get the warning next to it. `pah install` adds
+these output hooks, and now updates an earlier version of its hook entries in place.
+
+**Model files.** Pickles (raw, in PyTorch zips, joblib, NumPy object arrays, compressed, or nested in another pickle),
+Keras archives and HDF5 files, GGUF chat templates, 7z-packed checkpoints and model repositories that run their own
+code are read without being loaded, as Protect AI's ModelScan and Trail of Bits' fickling do (PAH-M001 to PAH-M006): a
+pickle that imports `os.system` or `builtins.exec`, a Lambda layer with bytecode or a config that names arbitrary
+functions (CVE-2025-1550, CVE-2025-9906), a chat template that reaches `__globals__` (CVE-2024-34359), a stream that
+breaks right after its payload (nullifAI), and the files `auto_map` makes `trust_remote_code` import (the Load/Mine
+campaign), whose code is then judged as code that runs on its own. Files too large to read whole are judged from the
+parts that can run code. A command that loads a model (`from_pretrained`, `torch.load`, `joblib.load`, `llama-cli`)
+now has the folder scanned first, like `npm install`.
+
+**Tamper protection.** A write that turns off hooks, permission prompts or this guard in an agent's settings
+(`disableAllHooks`, `bypassPermissions`, the plugin disabled, Codex's `danger-full-access` or `approval_policy =
+"never"`) is denied rather than asked about. Doing it after untrusted content or a download is a chain (PAH-B005).
+
+**Incidents from June to November 2026.** IronWorm, the Hades PyPI wave, Agentjacking, CVE-2026-54316 (an issue that
+made Claude Code in CI leak its key), SANDWORM_MODE and Load/Mine join the catalog, now 39 incidents, each with its
+response in order.
+
+**Measured:** TrapRepo 76 of 76 malicious repositories caught, with 11 model cases added (6 malicious, 5 benign
+twins), 0 of 40 benign flagged; attack drill 1,131 decisions, 0 unexpected; chain drill (new, `bench/chains.py`) 77 of
+77 attack runs stopped across the nine agents, 51 of them only because of the steps before, and 0 of 72 ordinary runs
+given a prompt the same steps would not get on their own; fuzzer 353 of 353 rewrites caught, 0 of 12 harmless
+rewrites flagged; 30 popular repositories 26 pass, 4 warn, none blocked (67,014 files), the same verdicts as 0.4.0 at the same commits.
+
+## 0.4.0 (2026-11-17)
+
+**Real incidents, and what to do about each one.** A catalog of 33 attacks on people who use AI agents, from
+s1ngularity (August 2025) to MIDNIGHT NEPTUNE (November 2026): what happened, how it got in, which rules and trap
+repositories cover it, the files it leaves on a computer, and the response in order, each with its sources
+([docs/incidents.md](docs/incidents.md)). `pah incident list | show | check`, the MCP tool `incident` and `pah checkup`
+read it. Order is the point: ChainDrop, strutil-core and the testmetest worm wipe the home folder when their stolen
+token is revoked, so their responses remove the persistence before any token is touched. Added from August to November
+2026: ChainDrop, WFX Phantom, MIDNIGHT NEPTUNE, strutil-core, the Paperclip and Browser Use skill clones,
+@subql/common, the arrayref crates, Deadbugz, unauthorized Codex and Claude Code relays, and `.pth` typosquats of AI
+libraries.
+
+**`pah diff`: what a new version does that the old one did not.** Capabilities (network, sending data, processes,
+dynamic code, credentials, persistence, decoding, install hooks) are compared file by file, as Chainguard's malcontent
+does; code that runs on its own and gains one is reported (PAH-D001), with new dependencies and findings that are new.
+With `--source`, a published package is compared with its source at the same tag, as LastPyMile and OSS Rebuild do:
+code that runs on its own and exists only in the package blocks (PAH-D002). Folders and archives both work, and an npm
+tarball lines up with its folder.
+
+**Agent setups as a whole.** When a tool that brings in content anyone can write and a tool that sends data out both
+run without asking, the agent's access to your files completes the lethal trifecta: a repository's settings or your own
+setup (`pah checkup`) is reported (PAH-A021). Pre-approved commands that run any program through their arguments, such
+as `find -exec`, `go test -exec`, `rg --pre` and package runners, are reported too (PAH-A020), after Trail of Bits'
+argument-injection work.
+
+**New detection from the incidents.** RubyGems native extensions (`extconf.rb`, and whatever a gemspec lists under
+`extensions`) run at gem install and are now judged as install-time code. A file that install-time code starts through a
+runtime (`bun Math_Symbol.js`, `spawn(bun, ['x.js'])`) is install-time code too. Documents a skill tells the agent to
+follow before first use are read as part of the skill. A workflow that hands `toJSON(secrets)` to a repository script
+that posts them blocks. A download decoded on its way to an interpreter (`curl … | base64 -d > /tmp/t.mjs && node
+/tmp/t.mjs`) is high wherever it is written. Nine TrapRepo cases cover these and the agent-setup checks, two of them
+benign twins.
+
+**Modular.** The two largest modules were split by responsibility. `patterns.py` became the content rules plus host
+trust (`hosts.py`), where a match sits (`codectx.py`), decoding (`deobfuscate.py`), campaign shapes (`campaigns.py`) and
+the rule catalog (`content_rules.py`); `surfaces.py` became a package with one module per kind of file (agent
+configurations, instructions and skills, MCP, editors, workflows, git, environment). Benchmark, drill and fuzzer results
+were identical before and after the split. [docs/architecture.md](docs/architecture.md) maps the modules and says where
+a change goes.
+
+**Calibrated on popular repositories.** The 30-repository check, run at each project's current commit (19 had moved
+on since 0.3.0), caught five false alarms while this release was built. All were fixed and are kept as tests
+(`tests/test_calibration.py`): a shell script kept in a Rust raw string in Codex's sandbox tests (multi-line raw strings
+in test suites are now data, like Python's triple-quoted strings), a skill's link text read as an instruction to follow
+(cli/cli; the follow verb must come before the link), a reference page judged like a file the agent loads on its own
+(Anthropic's skills; documents a skill sends the agent to are read like setup documents), an attacker's phrase quoted
+in a warning (everything-claude-code), and a test file that a setup document says to run (everything-claude-code).
+
+**Measured:** TrapRepo 70 of 70 malicious repositories caught, 0 of 35 benign flagged; attack drill 1,032 decisions,
+0 unexpected; fuzzer 347 of 347 rewrites caught, 0 of 11 harmless rewrites flagged; 30 popular repositories
+26 pass, 4 warn, none blocked (67,014 files).
+
 ## 0.3.0 (2026-11-12)
 
 **Renamed to agent-white-hat.** The repository, the package, the Action and the plugin's display name are now

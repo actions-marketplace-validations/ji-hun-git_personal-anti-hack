@@ -19,7 +19,10 @@ No installation and no third-party packages are needed: Python 3.10 or newer, st
 | "Check it for viruses" | `pah audit <path>` (uses Microsoft Defender or ClamAV when installed) | explain each detection |
 | "Find security bugs or vulnerable dependencies" | `pah audit <path> --online` for dependencies | follow `skills/security-review/SKILL.md` for the code |
 | "Is this command safe to run?" | `pah check-command "<command>"` | explain the decision |
-| "Was I hacked?" / "I ran something bad" | `pah checkup` and `pah watch check` | follow `skills/incident-response/SKILL.md` |
+| "Was I hacked?" / "I ran something bad" | `pah checkup`, `pah incident check` and `pah watch check` | follow `skills/incident-response/SKILL.md`, and the incident's own order from `pah incident show <name>` |
+| "What did my agent just do?" / "Why was that blocked?" | `pah session show latest` | explain each step and the chain the alert completed |
+| "Is this model safe to load?" | `pah scan <model file or folder>` | explain what loading would import or run; suggest safetensors |
+| "Is this update safe?" / "Is this package what its source says?" | `pah diff <old> <new>`, or `pah diff --source <checkout at the tag> <package>` | explain each capability the new version gained |
 | "Protect my agents from now on" | `pah install --skills` (shows the planned changes only) | the user applies them with `--yes` |
 
 `pah scan` is the static scan alone; `pah audit` adds the local antivirus engine and next steps. Add `--format json` when you need to process the result.

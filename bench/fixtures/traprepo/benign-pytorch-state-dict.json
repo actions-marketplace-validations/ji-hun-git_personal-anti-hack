@@ -1,0 +1,25 @@
+{
+  "id": "benign-pytorch-state-dict",
+  "title": "PyTorch checkpoint holding only a state dict",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "model",
+  "technique": "data.pkl rebuilds an OrderedDict of tensors from storages with torch._utils._rebuild_tensor_v2, as torch.save writes.",
+  "trigger": "torch.load",
+  "incident": "Legitimate PyTorch checkpoint (benign twin of pytorch-model-reduce-shell)",
+  "notes": "Only torch and collections globals.",
+  "files": {
+    "README.md": "# tiny-sentiment\n\nFine-tuned sentiment classifier.\n\n```python\nimport torch\nstate = torch.load('pytorch_model.bin', weights_only=True)\n```\n",
+    "config.json": "{\n  \"architectures\": [\n    \"BertForSequenceClassification\"\n  ],\n  \"model_type\": \"bert\"\n}\n"
+  },
+  "generated": [
+    {
+      "path": "pytorch_model.bin",
+      "generator": "b64",
+      "params": {
+        "data": "UEsDBBQAAAAAAMV5cV35nBvSswAAALMAAAAQAAAAYXJjaGl2ZS9kYXRhLnBrbIACY2NvbGxlY3Rpb25zCk9yZGVyZWREaWN0CilSKFgNAAAAbGluZWFyLndlaWdodGN0b3JjaC5fdXRpbHMKX3JlYnVpbGRfdGVuc29yX3YyCigoWAcAAABzdG9yYWdlY3RvcmNoCkZsb2F0U3RvcmFnZQpYAQAAADBYAwAAAGNwdUsEdFFLAChLAksCdChLAksBdIljY29sbGVjdGlvbnMKT3JkZXJlZERpY3QKKVJ0UnUuUEsDBBQAAAAAAMV5cV2FPeMZBgAAAAYAAAARAAAAYXJjaGl2ZS9ieXRlb3JkZXJsaXR0bGVQSwMEFAAAAAAAxXlxXVVLu+wQAAAAEAAAAA4AAABhcmNoaXZlL2RhdGEvMAAAAAAAAAAAAAAAAAAAAABQSwMEFAAAAAAAxXlxXdGeZ1UCAAAAAgAAAA8AAABhcmNoaXZlL3ZlcnNpb24zClBLAQIUABQAAAAAAMV5cV35nBvSswAAALMAAAAQAAAAAAAAAAAAAACAAQAAAABhcmNoaXZlL2RhdGEucGtsUEsBAhQAFAAAAAAAxXlxXYU94xkGAAAABgAAABEAAAAAAAAAAAAAAIAB4QAAAGFyY2hpdmUvYnl0ZW9yZGVyUEsBAhQAFAAAAAAAxXlxXVVLu+wQAAAAEAAAAA4AAAAAAAAAAAAAAIABFgEAAGFyY2hpdmUvZGF0YS8wUEsBAhQAFAAAAAAAxXlxXdGeZ1UCAAAAAgAAAA8AAAAAAAAAAAAAAIABUgEAAGFyY2hpdmUvdmVyc2lvblBLBQYAAAAABAAEAPYAAACBAQAAAAA="
+      }
+    }
+  ],
+  "sources": []
+}

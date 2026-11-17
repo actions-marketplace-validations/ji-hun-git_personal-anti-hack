@@ -9,8 +9,8 @@
     {
       "name": "personal-anti-hack",
       "source": "./",
-      "description": "Scans repositories, skills, MCP servers and packages before they run, stops setup commands in repositories that fail the scan, and watches agent configuration for changes you did not make. Local and read-only.",
-      "version": "0.3.0",
+      "description": "Scans repositories, skills, MCP servers and packages before they run, stops setup commands in repositories that fail the scan, watches agent configuration for changes you did not make, and stops attack chains across an agent's steps. Local and read-only.",
+      "version": "0.5.1",
       "category": "security",
       "license": "MIT"
     }

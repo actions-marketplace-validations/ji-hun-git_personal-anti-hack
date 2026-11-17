@@ -17,18 +17,24 @@ stderr and lets the action through.
 
 | Agent | Event | File written by `pah install` | What the hook sees | Can it ask you? | Checked by |
 |---|---|---|---|---|---|
-| Claude Code | PreToolUse, PostToolUse, SessionStart | `~/.claude/settings.json` (or the plugin) | shell, file writes and reads, web fetches, new clones, session start | yes | live run with Claude Code 2.1.310, drill |
-| OpenAI Codex CLI | PreToolUse | `~/.codex/hooks.json` | shell commands and `apply_patch` (paths and added lines) | no: a question becomes a block | live run with Codex 0.167.1, drill |
-| Gemini CLI | BeforeTool | `~/.gemini/settings.json` | `run_shell_command`, `write_file`, `replace`, `read_file` | no | drill (format from geminicli.com/docs/hooks) |
+| Claude Code | PreToolUse, PostToolUse, SessionStart | `~/.claude/settings.json` (or the plugin) | shell, file writes and reads, web fetches, MCP calls, what tools return, new clones, session start | yes | live run with Claude Code 2.1.310, drill |
+| OpenAI Codex CLI | PreToolUse, PostToolUse | `~/.codex/hooks.json` | shell commands and `apply_patch` (paths and added lines); what tools return | no: a question becomes a block | live run with Codex 0.167.1, drill |
+| Gemini CLI | BeforeTool, AfterTool | `~/.gemini/settings.json` | `run_shell_command`, `write_file`, `replace`, `read_file`; what tools return | no | drill (format from geminicli.com/docs/hooks) |
 | Antigravity CLI (`agy`) | PreToolUse | `~/.gemini/config/hooks.json` | `run_command`, file writes, `view_file` | yes | drill (antigravity.google/docs/hooks) |
-| Cursor (IDE and CLI) | beforeShellExecution, preToolUse | `~/.cursor/hooks.json` | shell commands, `Write`, `Delete`, `Read` | yes, for shell commands | drill (cursor.com/docs/hooks) |
-| GitHub Copilot (CLI, VS Code) | PreToolUse | `~/.copilot/hooks/personal-anti-hack.json` | `Bash`, `Write`, `Edit`, `Read` | yes, in interactive sessions | drill (docs.github.com hooks reference) |
+| Cursor (IDE and CLI) | beforeShellExecution, preToolUse, postToolUse | `~/.cursor/hooks.json` | shell commands, `Write`, `Delete`, `Read`; what tools return | yes, for shell commands | drill (cursor.com/docs/hooks) |
+| GitHub Copilot (CLI, VS Code) | PreToolUse, PostToolUse | `~/.copilot/hooks/personal-anti-hack.json` | `Bash`, `Write`, `Edit`, `Read`; what tools return | yes, in interactive sessions | drill (docs.github.com hooks reference) |
 | Devin Desktop and CLI (formerly Windsurf) | PreToolUse | `~/.config/devin/config.json` (`%APPDATA%\devin` on Windows) | `exec`, `write`, `edit`, `apply_patch` | no | drill (docs.devin.ai) |
 | Kiro | PreToolUse | `~/.kiro/hooks/personal-anti-hack.json` | `execute_bash`, `execute_pwsh`, writes | no (exit code 2 blocks) | drill (kiro.dev/docs/hooks) |
 | Cline CLI | PreToolUse | `~/.cline/hooks/PreToolUse.py` | `execute_command`, `write_to_file`, `read_file` | no; a block cancels the whole task | drill (Cline source) |
 
 "Drill" is [`bench/drill.py`](../bench/drill.py): every TrapRepo case and a set of risky actions, sent through each
 agent's payload format to the real hook entry point. The live runs are [`bench/live_drill.py`](../bench/live_drill.py).
+
+Every hook also records the step for its session, so a step can be judged by the ones before it (`pah session show
+latest` prints them). The session comes from the agent's own id (`session_id`, Cursor's `conversation_id`,
+Copilot's `sessionId`), or from the folder when an agent sends none. Where a post-tool hook exists, what a tool
+returns is checked for instructions aimed at the agent; Codex and Gemini CLI replace such an output with the
+warning, the others add the warning to it. `PAH_BEHAVIOR=0` and `PAH_OUTPUT_SCAN=0` turn these off.
 
 Agents that cannot ask turn every "ask" into a block, with the reason, because the guard only asks about things that
 need a person's decision. To let those through instead, set `PAH_ASK_FALLBACK=allow` in the environment the agent

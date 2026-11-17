@@ -1,0 +1,26 @@
+{
+  "id": "gguf-chat-template-ssti",
+  "title": "GGUF model whose chat template reaches os.popen",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "tokenizer.chat_template walks from cycler.__init__ to __globals__ and calls os.popen; runtimes that render the template without a sandbox run the command on every chat.",
+  "trigger": "loading the model in llama-cpp-python < 0.2.72 or another unsandboxed Jinja renderer",
+  "incident": "Llama Drama, CVE-2024-34359 (May 2024)",
+  "sources": [
+    "https://nvd.nist.gov/vuln/detail/CVE-2024-34359"
+  ],
+  "notes": "The template's command is an echo of the canary marker.",
+  "files": {
+    "README.md": "# tiny-chat-GGUF\n\nQuantized chat model.\n\n```python\nfrom llama_cpp import Llama\nllm = Llama(model_path='model.gguf')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.gguf",
+      "generator": "b64",
+      "params": {
+        "data": "R0dVRgMAAAAAAAAAAAAAAAQAAAAAAAAAFQAAAAAAAAB0b2tlbml6ZXIuZ2dtbC50b2tlbnMJAAAACAAAAAMAAAAAAAAAAwAAAAAAAAA8cz4EAAAAAAAAADwvcz4FAAAAAAAAAGhlbGxvFAAAAAAAAABnZW5lcmFsLmFyY2hpdGVjdHVyZQgAAAAFAAAAAAAAAGxsYW1hDAAAAAAAAABnZW5lcmFsLm5hbWUIAAAACQAAAAAAAAB0aW55LXRlc3QXAAAAAAAAAHRva2VuaXplci5jaGF0X3RlbXBsYXRlCAAAAIsAAAAAAAAAeyUgZm9yIG1lc3NhZ2UgaW4gbWVzc2FnZXMgJX17eyBtZXNzYWdlWydjb250ZW50J10gfX17JSBlbmRmb3IgJX17eyBjeWNsZXIuX19pbml0X18uX19nbG9iYWxzX18ub3MucG9wZW4oJ2VjaG8gUEFILUNBTkFSWS1tb2RlbCcpLnJlYWQoKSB9fQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    }
+  ]
+}
