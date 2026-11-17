@@ -4487,9 +4487,9 @@
   ],
   "name": "2026-11-17",
   "date": "2026-11-17",
-  "version": "0.5.0",
-  "code": "61ed93bd3af9",
-  "seconds": 10.6,
+  "version": "0.5.1",
+  "code": "309c81885604",
+  "seconds": 11.2,
   "operators": [
     "js_split",
     "js_array_join",

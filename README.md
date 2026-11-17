@@ -170,14 +170,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ji-hun-git/agent-white-hat@v0.5.0
+      - uses: ji-hun-git/agent-white-hat@v0.5.1
 ```
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/ji-hun-git/agent-white-hat
-    rev: v0.5.0
+    rev: v0.5.1
     hooks:
       - id: agent-white-hat
 ```
@@ -204,7 +204,7 @@ Per-agent details, including which agents can ask you before a command and which
 
 ```
 $ pah scan ./acme-utils
-agent-white-hat 0.5.0  ·  ./acme-utils
+agent-white-hat 0.5.1  ·  ./acme-utils
  BLOCK   do not open, install or run this with an agent until the findings below are explained
    1 critical, 2 high, 1 medium  ·  6 files  ·  0.0s
 

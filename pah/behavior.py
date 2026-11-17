@@ -696,6 +696,9 @@ def evaluate(act: Act, history: list[dict]) -> list[tuple[str, str, str]]:
 # ------------------------------------------------------------------------------------------------ hook glue
 
 
+_PATH_TAGS = ("fetch", "arm", "run")  # local paths (and a host name), compared with later steps
+
+
 def enabled() -> bool:
     return os.environ.get("PAH_BEHAVIOR", "1") != "0"
 
@@ -716,8 +719,11 @@ def observe(agent: str, data: dict, event, decision, tool: str = ""):
     alerts = evaluate(act, history)
     for rule_id, sev, message in alerts:
         decision.stricter("deny" if rank(sev) >= rank("high") else "ask", f"agent-white-hat ({rule_id}): {message}")
+    # Paths that later steps are matched against stay whole: masking would turn a long folder name (macOS keeps the
+    # temporary folder under /var/folders/<random>/T/) into "…", and the download would never be matched to its run.
+    tags = {k: [x[:500] if k in _PATH_TAGS else mask(x, 120) for x in v] for k, v in act.plain().items()}
     append(key, {"t": round(time.time(), 3), "agent": agent, "tool": tool[:60], "kind": act.kind,
-                 "text": mask(act.text), "tags": {k: [mask(x, 120) for x in v] for k, v in act.plain().items()},
+                 "text": mask(act.text), "tags": tags,
                  "action": decision.action, "alerts": [a[0] for a in alerts], "cwd": event.cwd[:300]})
     return decision
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 (2026-11-17)
+
+**Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,
+and that masking also shortened long paths. macOS keeps its temporary folder under `/var/folders/<random>/T/`, so a
+file downloaded there and later unblocked, made executable or run was not recognized as the download (PAH-B002), and
+the Windows-style download, `Unblock-File`, `Start-Process` chain went through on macOS. CI's chain drill caught it on
+macOS, where 68 of 77 attack runs were stopped; Linux and Windows were not affected. Paths that later steps are
+compared with are now kept whole (they are local paths, and commands are still masked), and a test with a long
+temporary folder keeps it fixed. The chain drill is back to 77 of 77 on every platform.
+
 ## 0.5.0 (2026-11-17)
 
 **Attack chains, judged as chains.** Each step an agent takes is now recorded per session, as a short description with

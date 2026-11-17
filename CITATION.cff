@@ -5,7 +5,7 @@ authors:
   - family-names: Chae
     given-names: Jihun
 date-released: 2026-11-17
-version: "0.5.0"
+version: "0.5.1"
 url: "https://github.com/ji-hun-git/agent-white-hat"
 repository-code: "https://github.com/ji-hun-git/agent-white-hat"
 license: MIT

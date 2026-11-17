@@ -13,7 +13,7 @@
   "benign_chains": 8
  },
  "failures": [],
- "seconds": 3.2,
+ "seconds": 5.1,
  "rows": [
   {
    "chain": "s1ngularity-collect-send",

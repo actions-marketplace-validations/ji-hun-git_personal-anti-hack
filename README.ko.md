@@ -162,14 +162,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ji-hun-git/agent-white-hat@v0.5.0
+      - uses: ji-hun-git/agent-white-hat@v0.5.1
 ```
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/ji-hun-git/agent-white-hat
-    rev: v0.5.0
+    rev: v0.5.1
     hooks:
       - id: agent-white-hat
 ```
@@ -197,7 +197,7 @@ repos:
 
 ```
 $ pah scan ./acme-utils --lang ko
-agent-white-hat 0.5.0  ·  ./acme-utils
+agent-white-hat 0.5.1  ·  ./acme-utils
  BLOCK   아래 항목이 설명되기 전에는 에이전트로 열거나 설치하거나 실행하지 마세요
    1 critical, 2 high, 1 medium  ·  6 files  ·  0.02s
 
