@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/hero-en-dark.svg">
-    <img src="docs/figures/hero-en-light.svg" width="100%" alt="agent-white-hat: the antivirus for people who use AI agents. A recorded run: an agent with approvals off is told to set up a cloned project; agent-white-hat blocks its npm install because the project's postinstall script sends data out, and the agent stops and explains. Results: 76 of 76 malicious test repositories caught, 0 of 40 benign look-alikes flagged, 0 of 30 widely used repositories blocked, and the payload ran in 0 of 12 live agent runs."/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/hero-en-dark.png">
+    <img src="docs/figures/hero-en-light.png" width="100%" alt="agent-white-hat: the antivirus for people who use AI agents. It reads what would run before your agent runs it (hooks, skills, MCP servers, install scripts and model files) and stops the steps that add up to an attack. A recorded run: Claude Code with approvals off is told to set up a project it had just cloned; agent-white-hat blocks its npm install because the project's install script reads secrets and sends data out, and the agent stops. Tested: 76 of 76 malicious test repositories caught, 0 of 40 benign look-alikes flagged, 77 of 77 attack chains stopped in nine agents, 0 of 30 widely used repositories blocked."/>
   </picture>
 </p>
 
@@ -11,116 +11,32 @@
 
 <p align="center">
   <a href="https://github.com/ji-hun-git/agent-white-hat/actions/workflows/ci.yml"><img src="https://github.com/ji-hun-git/agent-white-hat/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-2f6fde" alt="Claude Code plugin"/>
-  <a href="docs/agent-setup.md"><img src="https://img.shields.io/badge/agents-9%20hook%20protocols-2f6fde" alt="Nine agent hook protocols"/></a>
-  <a href="docs/ci.md"><img src="https://img.shields.io/badge/GitHub%20Action-%2B%20pre--commit-2f6fde" alt="GitHub Action and pre-commit hook"/></a>
-  <img src="https://img.shields.io/badge/MCP-server-2f6fde" alt="MCP server"/>
-  <img src="https://img.shields.io/badge/python-3.10%20to%203.14-2f6fde" alt="Python 3.10 to 3.14"/>
-  <img src="https://img.shields.io/badge/dependencies-none-2f6fde" alt="No dependencies"/>
-  <a href="#benchmark"><img src="https://img.shields.io/badge/TrapRepo-76%2F76%20caught%2C%200%2F40%20false%20alarms-2f6fde" alt="TrapRepo: 76 of 76 malicious caught, 0 of 40 benign flagged"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5d5d58" alt="License: MIT"/></a>
+  <a href="https://github.com/marketplace/actions/agent-white-hat-scan"><img src="https://img.shields.io/badge/GitHub%20Marketplace-agent--white--hat-13213c" alt="GitHub Marketplace: agent-white-hat"/></a>
+  <img src="https://img.shields.io/badge/python-3.10%20to%203.14-13213c" alt="Python 3.10 to 3.14"/>
+  <img src="https://img.shields.io/badge/dependencies-none-13213c" alt="No dependencies"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-13213c" alt="License: MIT"/></a>
 </p>
 
 <p align="center">
   <a href="#install"><b>Install</b></a> &nbsp;|&nbsp;
+  <a href="#what-it-stops"><b>What it stops</b></a> &nbsp;|&nbsp;
   <a href="#what-it-does"><b>What it does</b></a> &nbsp;|&nbsp;
-  <a href="docs/agent-setup.md"><b>Agents</b></a> &nbsp;|&nbsp;
-  <a href="docs/ci.md"><b>CI</b></a> &nbsp;|&nbsp;
   <a href="#benchmark"><b>Benchmark</b></a> &nbsp;|&nbsp;
   <a href="#attack-drill"><b>Attack drill</b></a> &nbsp;|&nbsp;
-  <a href="#how-it-decides"><b>How it decides</b></a> &nbsp;|&nbsp;
+  <a href="docs/agent-setup.md"><b>Agents</b></a> &nbsp;|&nbsp;
+  <a href="docs/ci.md"><b>CI</b></a> &nbsp;|&nbsp;
   <a href="docs/rules.md"><b>Rules</b></a> &nbsp;|&nbsp;
   <a href="docs/incidents.md"><b>Incidents</b></a> &nbsp;|&nbsp;
-  <a href="docs/threat-model.md"><b>Threat model</b></a> &nbsp;|&nbsp;
-  <a href="docs/research.md"><b>Research</b></a> &nbsp;|&nbsp;
-  <a href="docs/architecture.md"><b>Architecture</b></a>
+  <a href="docs/threat-model.md"><b>Threat model</b></a>
 </p>
 
-<p align="center">
-  <b>The antivirus for people who use AI agents.</b> It scans your computer, watches what arrives in real time and
-  quarantines what it blocks, like the antivirus you would install; and it reads what that antivirus never opens:
-  repositories, skills, MCP servers, packages and agent settings, before they run. One guard for Claude Code, Codex,
-  Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline. The checks run in code, on your machine. Like a
-  white-hat hacker, it attacks its own rules first: every trap is rewritten the ways attackers hide a payload, and
-  CI fails if one rewrite gets past.
-</p>
-
-## Instead of a third-party antivirus
-
-Conventional antivirus looks for known malicious files. The attacks on people who use AI agents are mostly not
-files of that kind: a hook in `.claude/settings.json`, a sentence in `AGENTS.md`, a skill's setup step, an install
-script that reads your tokens, a workflow that posts your secrets. agent-white-hat does an antivirus's job for the
-places where those attacks land, and hands the files a signature engine is good at to the one already built into your
-operating system, so a separate antivirus product adds little.
-
-| | A conventional antivirus | agent-white-hat |
-| --- | --- | --- |
-| Full scan | Every file, against signatures | `pah sweep`: Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, editor extensions, startup items, exposed keys and known traces; binaries go to Microsoft Defender (built into Windows) or ClamAV |
-| Real-time protection | Hooks into the file system | `pah protect`: new downloads, clones, extensions, skills and startup items are scanned within seconds; `--install` starts it at login. Your agents' own hooks stop dangerous commands before they run |
-| Quarantine | Moves infected files | `pah quarantine`: moves a blocked download, extension or skill, or only the payload files of a project, and restores them on request |
-| Agent hooks, skills, MCP servers, prompt injection | Not read | 129 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
-| Behavior over time | Behavior monitoring of processes | Each step your agent takes is judged by the steps before it: a credential read, then an upload; a download, then `chmod +x`, then a run; a web page, then the guard switched off ([attack chains](#attack-chains)) |
-| AI model files | Known samples, if any | Pickles, PyTorch, Keras and GGUF files read without loading them: what loading would import or run |
-| Known malware binaries (ransomware, droppers) | Signature engine | The engine already on your computer, called locally (`pah audit`, `pah sweep`) |
-
-What it does not do: it has no kernel driver, so real-time protection notices files within seconds of arriving
-rather than blocking the write, and it does not remove malware from a running system; `pah checkup` and the
-incident-response skill tell you what to rotate and clean up.
-
-## The problem
-
-- **Agents do what a repository tells them.** Coding agents install whatever a project's setup docs list; pointing
-  the package registry somewhere else is missed almost everywhere, and a deterministic pre-install check closes most of
-  the gap ([Bagmar & Saraf, 2026](https://arxiv.org/abs/2607.15143)). A 13 KB `AGENTS.md` left in Downloads made Codex
-  install malware in over 90% of attempts; a `CLAUDE.md` got Claude Code to route its traffic to an attacker about half
-  the time. The researchers' conclusion: there is nothing for the vendors to patch, so users have to defend themselves
-  ([Help Net Security, Oct 2026](https://www.helpnetsecurity.com/2026/10/26/ai-coding-agents-malware-openai-codex/)).
-- **Malware now targets the agents themselves.** The Miasma worm spread through Claude and Gemini `SessionStart`
-  hooks, Cursor rules and folder-open tasks; 73 repositories were disabled
-  ([StepSecurity](https://www.stepsecurity.io/blog/miasma-worm-hits-microsoft-again-azure-functions-action-and-72-other-repositories-disabled-after-supply-chain-attack-targeting-ai-coding-agents)).
-  824 malicious skills reached ClawHub in two weeks ([Koi](https://koi.ai/blog/clawhavoc-341-malicious-clawedbot-skills-found-by-the-bot-they-were-targeting)).
-  WardenStealer has infected more than 130,000 machines since August and collects Claude Code and Codex tokens
-  ([SpyCloud](https://spycloud.com/blog/infostealers-now-target-ai-tokens-and-api-keys/)). Fake Claude Code install pages
-  hand out one-line commands that install stealers ([InstallFix](https://www.helpnetsecurity.com/2026/03/09/fake-claude-code-install-pages-installfix-attacks/)).
-- **Language models miss it.** Seven models detected 67.3% of malicious scripts, and 17.6% of those over 3 MB
-  ([Cloudflare, 2026](https://www.cloudflare.com/cloudforce-one/research/adversarial-deception-a-study-of-indirect-prompt-code-injection/)).
-  Trail of Bits got malicious skills past five scanners, LLM-based ones included, with blank-line padding, bytecode,
-  a script inside a DOCX and a paragraph that talked the reviewer into approving
-  ([CSA note](https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-agent-skill-scanner-bypass-20260610-csa/)).
-  In [our benchmark](#benchmark), GPT-6 Astra caught 44 of 54 malicious repositories in every run and Muse Spark 1.3
-  caught 40; Claude Opus 5.5 declined 155 of 162 reviews. All three called the payload after 100,000 blank lines safe
-  or never answered.
-- **Each existing tool guards one door.** The security winner of the Meta Global AI Developer Hackathon,
-  [Gatekeeper](https://github.com/lb2002/gatekeeper), guards `npm install <package>` very well; by its own account it
-  does not cover other package managers, a cloned repository's own `npm install`, or anything outside packages. Skill
-  scanners check once, before install; hook packs cover one agent each; nothing watched agent configuration across
-  agents.
-
-## What it does
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/pipeline-en-dark.svg">
-    <img src="docs/figures/pipeline-en-light.svg" width="100%" alt="How it works. Every command your AI agent runs passes the guard, a pre-tool hook, first. It checks each command for download-and-run, decode-and-run, credential reads, persistence, approvals turned off, look-alike packages and registry redirects; a setup command such as npm install or pip install -e . gets the whole project scanned first. The scan maps what runs on its own, reads every file in full with decoding, judges each finding by where it runs, and gives a verdict: block denies the command, warn asks you, pass leaves your agent's own rules in charge. Optional: the local antivirus engine, known vulnerabilities from OSV, and a watch on agent settings."/>
-  </picture>
-</p>
-
-| | |
-| --- | --- |
-| **`pah scan`** before you open or set up anything | Maps everything in a repository, skill, MCP server, package, archive or git URL that **runs without being read**: agent hooks, plugins and settings (Claude Code and its plugins and marketplaces, Codex, Gemini CLI, Qwen Code, Copilot, Cursor, Kiro, Devin, Cline, OpenCode, Kilo, Amp, Crush, Factory, Augment, Amazon Q, OpenClaw, Aider, Zed, Continue), skill shell lines and pre-approved tools, folder-open tasks, dev containers, cloud-agent setup files, `.envrc`, npm lifecycle scripts and `binding.gyp`, `.pth`, `setup.py`, `conftest.py`, `build.rs`, Cargo config, Makefiles, build wrappers, Visual Studio and Xcode build steps, git hooks, submodules and bare repositories, programs planted under a system tool's name, instruction files and the scripts they name. Then it reads every file in full, with the files that run on their own judged most strictly, and test fixtures, CI pipelines and container builds judged for where they really run. It knows the shapes of the 2026 campaigns: loaders disguised as fonts, dead drops on blockchains, worms that republish with your token, dead-man wipers, wallet hijackers, workflows that send secrets out. **Model files** are read without loading them: pickles (raw, in PyTorch checkpoints, joblib and NumPy files), Keras archives, GGUF chat templates, 7z-packed checkpoints, and the code `trust_remote_code` would import. 114 rules, each tied to an incident or study. |
-| **`pah audit`** for one verdict on one thing | The scan, plus the **antivirus engine already on your computer** (Microsoft Defender or ClamAV, locally, with remediation off), plus with `--online` malicious, missing and brand-new packages and **known vulnerabilities in pinned dependency versions** (OSV, with the version to upgrade to). Ends with next steps in plain words. |
-| **The guard** in your agent's hooks | Claude Code (plugin or hooks), Codex, Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline, each through its own hook protocol ([docs/agent-setup.md](docs/agent-setup.md)). Before a command runs: download-and-run, decode-and-run, credential reads, persistence, agents started with approvals off, look-alike packages, registry redirects. Before setup (`npm install`, `pip install -e .`, `make`, `pytest`, `cargo build`, a dev container): scans the project and **denies the command if the scan blocks**. Writes to agent settings, shell profiles and git hooks need your approval. In Claude Code it also scans every new clone and checks the folder at session start. **Each step is also judged by the steps before it** in the same session, and **what tools return** (web pages, MCP results, issue text, files from unreviewed projects) is checked for instructions aimed at the agent; after such an output, the session's sends, setting changes and runs of downloaded files need you ([attack chains](#attack-chains)). Writes that switch off hooks, permission prompts or the guard are denied. Loading a model (`from_pretrained`, `torch.load`) scans the folder first. The guard only tightens: it never answers "allow". |
-| **`pah session`** | What your agents did, step by step, as the hooks recorded it, and the chain behind each alert (the earlier step it completed). Records stay on your computer, with anything token-shaped masked, for a week. |
-| **Security skills** for any agent | Four Agent Skills: everyday rules, a full **malware audit** procedure (execution surfaces, static decoding, behavior, provenance, verdict), a **security review** for exploitable bugs and vulnerable dependencies (including prompt injection and excessive agency in LLM features), and **incident response** for when something already ran. |
-| **`pah sweep`**, **`pah protect`**, **`pah quarantine`** | The antivirus duties. `pah sweep` scans Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, and editor extensions one item at a time, adds the checkup and the engine built into your OS, and remembers what did not change. `pah protect` does it as things arrive and can start at login. Blocked items can be quarantined: a download, an extension or a skill as a whole, a project only by its payload files; `pah quarantine restore` puts them back. |
-| **`pah watch`** | A baseline of every agent's settings, hooks, MCP servers, API URLs and approval modes (Claude Code, Codex, Gemini CLI, Cursor, OpenClaw, Claude Desktop, VS Code, Windsurf), plus shell profiles, git and npm config, startup folders, LaunchAgents and Run keys. `pah watch check` shows what changed. Secrets are stored only as hashes. |
-| **`pah checkup`** | Is this computer already exposed? API keys saved in plain files, risky agent settings, `AGENTS.md`/`CLAUDE.md` planted in Downloads or Desktop, `curl \| sh` and ClickFix traces in shell and Win+R history, known traces of campaigns aimed at AI-tool users, agents and git with known fixes missing. Key values are never shown. |
-| **`pah incident`** | Real attacks on people who use AI agents, 33 of them from 2025 and 2026 (worms, malicious packages, extensions, skills and MCP servers, CI stealers, infostealers): what happened, which rules and trap repositories cover each one, the files it leaves on a computer, and **what to do, in order**. Order matters: several worms wipe your home folder when their stolen token is revoked, so their persistence has to go first. `pah incident check` looks for the traces (so does `pah checkup`), `pah incident show <name>` prints the response, and the MCP server answers the same lookups ([docs/incidents.md](docs/incidents.md)). |
-| **`pah diff OLD NEW`** | What a new version of a package, repository, extension or skill does that the old one did not: files added, **capabilities gained** (network, credentials, starting programs, decoding, install hooks), new dependencies and findings that are new. With `--source`, what a published package has that its source repository at the same tag does not, where release-time backdoors such as xz-utils' live. Folders and archives (.tgz, .whl, .zip, .vsix, .crate, .gem) both work. |
-| **Agent setups** (in `pah scan` and `pah checkup`) | An agent's setup as a whole, not file by file: a tool that brings in content anyone can write (issues, web pages, email) and a tool that sends data out, both pre-approved, make the *lethal trifecta* with the agent's access to your files (PAH-A021); a pre-approved `find`, `go test`, `git`, `npx` or `node` runs any program through its arguments (PAH-A020). |
-| **In CI and before commits** | A GitHub Action that annotates findings on their lines in pull requests, writes a job summary and a SARIF report for code scanning, and fails on BLOCK; a pre-commit hook; and exit codes for any other CI ([docs/ci.md](docs/ci.md)). It also reads your workflows: secrets sent out, untrusted issue text pasted into scripts, and AI agent actions that act on anyone's issue. |
-| **`--online`** (opt-in) | Packages that do not exist (slopsquats, "phantom" dependencies), that appeared in the last week, or that OSV lists as malicious, and known vulnerabilities in the exact versions lockfiles pin. Sends package names and versions only. |
-| **`--deep`** (opt-in) | A model review of the evidence the rules prepared. It can raise a verdict with claims that cite real lines, never lower one; a refusal counts as "not reviewed". |
+agent-white-hat is an antivirus for people who use AI coding agents. Before your agent sets up a project, it
+reads what would run without being read (agent hooks, skills, MCP servers, install scripts, model files) and denies the
+setup if something there would hurt you. While the agent works, it judges each step by the steps before it and checks
+what tools return for instructions aimed at the agent. It also does an antivirus's usual work: it scans your computer,
+watches what arrives and quarantines what it blocks. The checks run in code, on your machine, in Claude Code, Codex,
+Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline. Like a white-hat hacker, it attacks its own rules
+first: every trap is rewritten the ways attackers hide a payload, and CI fails if one rewrite gets past.
 
 ## Install
 
@@ -190,12 +106,104 @@ script from a stranger, what now?".
 Per-agent details, including which agents can ask you before a command and which can only block:
 [docs/agent-setup.md](docs/agent-setup.md).
 
+## What it stops
+
+Each row is an attack that has happened, and what agent-white-hat does about it. The full catalog, 39
+incidents with what to do in order, is in [docs/incidents.md](docs/incidents.md).
+
+| The attack | A real case | What agent-white-hat does |
+| --- | --- | --- |
+| A cloned project whose setup steals your keys: npm and pip install scripts, `build.rs`, Makefiles | StoatWaffle's fake job-interview repositories; ChainDrop | Scans the project before `npm install`, `pip install -e .`, `make` or `pytest`, and denies the command if the scan blocks |
+| Hooks and settings that run when an agent starts or a folder opens | The Miasma worm: `SessionStart` hooks, Cursor rules and VS Code tasks in 73 repositories | Reports them in every scan; an agent's writes to them need you |
+| Skills, instruction files and MCP servers that give the agent orders | ClawHavoc's 824 skills; postmark-mcp | Reads them as code that runs: hidden text, setup steps, unpinned packages, tool descriptions |
+| Text in a web page, an issue or a tool's result aimed at the agent | The GitHub MCP toxic flow; Agentjacking's fake Sentry errors | Checks what tools return; after a hit, the session's risky steps need you |
+| Steps that are harmless one at a time | s1ngularity's collect-and-upload; Load/Mine's download, `chmod +x`, run | Judges each step with the ones before it ([attack chains](#attack-chains)) |
+| Model files that run code when they are loaded | nullifAI on Hugging Face; Load/Mine's `trust_remote_code` | Reads pickles, PyTorch, Keras and GGUF files without loading them |
+| Malware that switches the guard off or clears its tracks | IronWorm; SANDWORM_MODE | Denies writes that turn off hooks or permission prompts, and history wipes after credential reads |
+
+## What it does
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/how-en-dark.png">
+    <img src="docs/figures/how-en-light.png" width="100%" alt="How the guard decides. Every tool call your agent makes meets four checks in this order: 1, the step on its own (download-and-run, decode-and-run, credential reads, persistence, approvals switched off, look-alike packages, registry redirects); 2, the project before setup or a model load, scanned in full; 3, the session so far, where a step is judged with the ones before it; 4, what came back from the tool, checked for instructions aimed at the agent. A high or critical finding is denied, a medium one is asked about, and anything else is left to the agent's own rules; the guard never answers allow."/>
+  </picture>
+</p>
+
+| | |
+| --- | --- |
+| **`pah scan`** before you open or set up anything | Maps everything in a repository, skill, MCP server, package, archive or git URL that **runs without being read**: agent hooks, plugins and settings (Claude Code and its plugins and marketplaces, Codex, Gemini CLI, Qwen Code, Copilot, Cursor, Kiro, Devin, Cline, OpenCode, Kilo, Amp, Crush, Factory, Augment, Amazon Q, OpenClaw, Aider, Zed, Continue), skill shell lines and pre-approved tools, folder-open tasks, dev containers, cloud-agent setup files, `.envrc`, npm lifecycle scripts and `binding.gyp`, `.pth`, `setup.py`, `conftest.py`, `build.rs`, Cargo config, Makefiles, build wrappers, Visual Studio and Xcode build steps, git hooks, submodules and bare repositories, programs planted under a system tool's name, instruction files and the scripts they name. Then it reads every file in full, with the files that run on their own judged most strictly, and test fixtures, CI pipelines and container builds judged for where they really run. It knows the shapes of the 2026 campaigns: loaders disguised as fonts, dead drops on blockchains, worms that republish with your token, dead-man wipers, wallet hijackers, workflows that send secrets out. **Model files** are read without loading them: pickles (raw, in PyTorch checkpoints, joblib and NumPy files), Keras archives, GGUF chat templates, 7z-packed checkpoints, and the code `trust_remote_code` would import. 114 rules, each tied to an incident or study. |
+| **`pah audit`** for one verdict on one thing | The scan, plus the **antivirus engine already on your computer** (Microsoft Defender or ClamAV, locally, with remediation off), plus with `--online` malicious, missing and brand-new packages and **known vulnerabilities in pinned dependency versions** (OSV, with the version to upgrade to). Ends with next steps in plain words. |
+| **The guard** in your agent's hooks | Claude Code (plugin or hooks), Codex, Gemini CLI, Antigravity, Cursor, Copilot, Devin, Kiro and Cline, each through its own hook protocol ([docs/agent-setup.md](docs/agent-setup.md)). Before a command runs: download-and-run, decode-and-run, credential reads, persistence, agents started with approvals off, look-alike packages, registry redirects. Before setup (`npm install`, `pip install -e .`, `make`, `pytest`, `cargo build`, a dev container): scans the project and **denies the command if the scan blocks**. Writes to agent settings, shell profiles and git hooks need your approval. In Claude Code it also scans every new clone and checks the folder at session start. **Each step is also judged by the steps before it** in the same session, and **what tools return** (web pages, MCP results, issue text, files from unreviewed projects) is checked for instructions aimed at the agent; after such an output, the session's sends, setting changes and runs of downloaded files need you ([attack chains](#attack-chains)). Writes that switch off hooks, permission prompts or the guard are denied. Loading a model (`from_pretrained`, `torch.load`) scans the folder first. The guard only tightens: it never answers "allow". |
+| **`pah session`** | What your agents did, step by step, as the hooks recorded it, and the chain behind each alert (the earlier step it completed). Records stay on your computer, with anything token-shaped masked, for a week. |
+| **Security skills** for any agent | Four Agent Skills: everyday rules, a full **malware audit** procedure (execution surfaces, static decoding, behavior, provenance, verdict), a **security review** for exploitable bugs and vulnerable dependencies (including prompt injection and excessive agency in LLM features), and **incident response** for when something already ran. |
+| **`pah sweep`**, **`pah protect`**, **`pah quarantine`** | The antivirus duties. `pah sweep` scans Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, and editor extensions one item at a time, adds the checkup and the engine built into your OS, and remembers what did not change. `pah protect` does it as things arrive and can start at login. Blocked items can be quarantined: a download, an extension or a skill as a whole, a project only by its payload files; `pah quarantine restore` puts them back. |
+| **`pah watch`** | A baseline of every agent's settings, hooks, MCP servers, API URLs and approval modes (Claude Code, Codex, Gemini CLI, Cursor, OpenClaw, Claude Desktop, VS Code, Windsurf), plus shell profiles, git and npm config, startup folders, LaunchAgents and Run keys. `pah watch check` shows what changed. Secrets are stored only as hashes. |
+| **`pah checkup`** | Is this computer already exposed? API keys saved in plain files, risky agent settings, `AGENTS.md`/`CLAUDE.md` planted in Downloads or Desktop, `curl \| sh` and ClickFix traces in shell and Win+R history, known traces of campaigns aimed at AI-tool users, agents and git with known fixes missing. Key values are never shown. |
+| **`pah incident`** | Real attacks on people who use AI agents, 39 of them from 2025 and 2026 (worms, malicious packages, extensions, skills and MCP servers, CI stealers, infostealers): what happened, which rules and trap repositories cover each one, the files it leaves on a computer, and **what to do, in order**. Order matters: several worms wipe your home folder when their stolen token is revoked, so their persistence has to go first. `pah incident check` looks for the traces (so does `pah checkup`), `pah incident show <name>` prints the response, and the MCP server answers the same lookups ([docs/incidents.md](docs/incidents.md)). |
+| **`pah diff OLD NEW`** | What a new version of a package, repository, extension or skill does that the old one did not: files added, **capabilities gained** (network, credentials, starting programs, decoding, install hooks), new dependencies and findings that are new. With `--source`, what a published package has that its source repository at the same tag does not, where release-time backdoors such as xz-utils' live. Folders and archives (.tgz, .whl, .zip, .vsix, .crate, .gem) both work. |
+| **Agent setups** (in `pah scan` and `pah checkup`) | An agent's setup as a whole, not file by file: a tool that brings in content anyone can write (issues, web pages, email) and a tool that sends data out, both pre-approved, make the *lethal trifecta* with the agent's access to your files (PAH-A021); a pre-approved `find`, `go test`, `git`, `npx` or `node` runs any program through its arguments (PAH-A020). |
+| **In CI and before commits** | A GitHub Action that annotates findings on their lines in pull requests, writes a job summary and a SARIF report for code scanning, and fails on BLOCK; a pre-commit hook; and exit codes for any other CI ([docs/ci.md](docs/ci.md)). It also reads your workflows: secrets sent out, untrusted issue text pasted into scripts, and AI agent actions that act on anyone's issue. |
+| **`--online`** (opt-in) | Packages that do not exist (slopsquats, "phantom" dependencies), that appeared in the last week, or that OSV lists as malicious, and known vulnerabilities in the exact versions lockfiles pin. Sends package names and versions only. |
+| **`--deep`** (opt-in) | A model review of the evidence the rules prepared. It can raise a verdict with claims that cite real lines, never lower one; a refusal counts as "not reviewed". |
+
+## Instead of a third-party antivirus
+
+Conventional antivirus looks for known malicious files. The attacks on people who use AI agents are mostly not
+files of that kind: a hook in `.claude/settings.json`, a sentence in `AGENTS.md`, a skill's setup step, an install
+script that reads your tokens, a workflow that posts your secrets. agent-white-hat does an antivirus's job for the
+places where those attacks land, and hands the files a signature engine is good at to the one already built into your
+operating system, so a separate antivirus product adds little.
+
+| | A conventional antivirus | agent-white-hat |
+| --- | --- | --- |
+| Full scan | Every file, against signatures | `pah sweep`: Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, editor extensions, startup items, exposed keys and known traces; binaries go to Microsoft Defender (built into Windows) or ClamAV |
+| Real-time protection | Hooks into the file system | `pah protect`: new downloads, clones, extensions, skills and startup items are scanned within seconds; `--install` starts it at login. Your agents' own hooks stop dangerous commands before they run |
+| Quarantine | Moves infected files | `pah quarantine`: moves a blocked download, extension or skill, or only the payload files of a project, and restores them on request |
+| Agent hooks, skills, MCP servers, prompt injection | Not read | 129 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
+| Behavior over time | Behavior monitoring of processes | Each step your agent takes is judged by the steps before it: a credential read, then an upload; a download, then `chmod +x`, then a run; a web page, then the guard switched off ([attack chains](#attack-chains)) |
+| AI model files | Known samples, if any | Pickles, PyTorch, Keras and GGUF files read without loading them: what loading would import or run |
+| Known malware binaries (ransomware, droppers) | Signature engine | The engine already on your computer, called locally (`pah audit`, `pah sweep`) |
+
+What it does not do: it has no kernel driver, so real-time protection notices files within seconds of arriving
+rather than blocking the write, and it does not remove malware from a running system; `pah checkup` and the
+incident-response skill tell you what to rotate and clean up.
+
+## The problem
+
+- **Agents do what a repository tells them.** Coding agents install whatever a project's setup docs list; pointing
+  the package registry somewhere else is missed almost everywhere, and a deterministic pre-install check closes most of
+  the gap ([Bagmar & Saraf, 2026](https://arxiv.org/abs/2607.15143)). A 13 KB `AGENTS.md` left in Downloads made Codex
+  install malware in over 90% of attempts; a `CLAUDE.md` got Claude Code to route its traffic to an attacker about half
+  the time. The researchers' conclusion: there is nothing for the vendors to patch, so users have to defend themselves
+  ([Help Net Security, Oct 2026](https://www.helpnetsecurity.com/2026/10/26/ai-coding-agents-malware-openai-codex/)).
+- **Malware now targets the agents themselves.** The Miasma worm spread through Claude and Gemini `SessionStart`
+  hooks, Cursor rules and folder-open tasks; 73 repositories were disabled
+  ([StepSecurity](https://www.stepsecurity.io/blog/miasma-worm-hits-microsoft-again-azure-functions-action-and-72-other-repositories-disabled-after-supply-chain-attack-targeting-ai-coding-agents)).
+  824 malicious skills reached ClawHub in two weeks ([Koi](https://koi.ai/blog/clawhavoc-341-malicious-clawedbot-skills-found-by-the-bot-they-were-targeting)).
+  WardenStealer has infected more than 130,000 machines since August and collects Claude Code and Codex tokens
+  ([SpyCloud](https://spycloud.com/blog/infostealers-now-target-ai-tokens-and-api-keys/)). Fake Claude Code install pages
+  hand out one-line commands that install stealers ([InstallFix](https://www.helpnetsecurity.com/2026/03/09/fake-claude-code-install-pages-installfix-attacks/)).
+- **Language models miss it.** Seven models detected 67.3% of malicious scripts, and 17.6% of those over 3 MB
+  ([Cloudflare, 2026](https://www.cloudflare.com/cloudforce-one/research/adversarial-deception-a-study-of-indirect-prompt-code-injection/)).
+  Trail of Bits got malicious skills past five scanners, LLM-based ones included, with blank-line padding, bytecode,
+  a script inside a DOCX and a paragraph that talked the reviewer into approving
+  ([CSA note](https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-agent-skill-scanner-bypass-20260610-csa/)).
+  In [our benchmark](#benchmark), GPT-6 Astra caught 44 of 54 malicious repositories in every run and Muse Spark 1.3
+  caught 40; Claude Opus 5.5 declined 155 of 162 reviews. All three called the payload after 100,000 blank lines safe
+  or never answered.
+- **Each existing tool guards one door.** The security winner of the Meta Global AI Developer Hackathon,
+  [Gatekeeper](https://github.com/lb2002/gatekeeper), guards `npm install <package>` very well; by its own account it
+  does not cover other package managers, a cloned repository's own `npm install`, or anything outside packages. Skill
+  scanners check once, before install; hook packs cover one agent each; nothing watched agent configuration across
+  agents.
+
 ## What a scan looks like
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/scan-en-dark.svg">
-    <img src="docs/figures/scan-en-light.svg" width="100%" alt="Terminal output of pah scan ./acme-utils, a TrapRepo case. Verdict BLOCK: 1 critical, 2 high, 1 medium. A Claude Code SessionStart hook in .claude/settings.json runs .claude/bootstrap.sh, which reads AWS, SSH, Claude Code and Codex credentials (critical, PAH-C004 and high, PAH-C003) and posts data to a remote host (high, PAH-C004); the hook itself is reported as medium (PAH-A001)."/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/scan-en-dark.png">
+    <img src="docs/figures/scan-en-light.png" width="100%" alt="Terminal output of pah scan ./acme-utils, a TrapRepo case. Verdict BLOCK: 1 critical, 2 high, 1 medium. A Claude Code SessionStart hook in .claude/settings.json runs .claude/bootstrap.sh, which reads AWS, SSH, Claude Code and Codex credentials (critical, PAH-C004 and high, PAH-C003) and posts data to a remote host (high, PAH-C004); the hook itself is reported as medium (PAH-A001)."/>
   </picture>
 </p>
 
@@ -252,8 +260,8 @@ saved as a font, a workflow that sends secrets out, a worm, an Ethereum dead dro
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/results-en-dark.svg">
-    <img src="docs/figures/results-en-light.svg" width="100%" alt="Malicious repositories caught, out of 54. agent-white-hat, rules only and offline: 54 caught, 0 of 27 benign repositories flagged. GPT-6 Astra reading the repository: 44 caught in every run, 3 in some runs, 7 missed in every run, 1 of 27 benign flagged. Muse Spark 1.3: 40 in every run, 9 in some, 5 missed, 1 of 27 benign flagged. Claude Opus 5.5: 1 caught in some runs, 2 missed, 51 refused in every run, 0 of 27 benign flagged."/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/results-en-dark.png">
+    <img src="docs/figures/results-en-light.png" width="100%" alt="Malicious repositories caught, out of 54. agent-white-hat, rules only and offline: 54 caught, 0 of 27 benign repositories flagged. GPT-6 Astra reading the repository: 44 caught in every run, 3 in some runs, 7 missed in every run, 1 of 27 benign flagged. Muse Spark 1.3: 40 in every run, 9 in some, 5 missed, 1 of 27 benign flagged. Claude Opus 5.5: 1 caught in some runs, 2 missed, 51 refused in every run, 0 of 27 benign flagged."/>
   </picture>
 </p>
 
@@ -304,8 +312,8 @@ characters, and one question: is it safe to let my coding agent install and run 
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.svg">
-    <img src="docs/figures/repos-en-light.svg" width="100%" alt="30 widely used repositories scanned in full, 67,014 files: 26 pass, 4 warn, none blocked. JavaScript: express, got, husky, sharp, node-addon-examples, puppeteer, esbuild, prettier, vite. Python: requests, flask, fastapi, pytest, poetry, ruff (warn). Rust: ripgrep, serde, tokio. AI agents and MCP: claude-code, codex, gemini-cli (warn), the MCP servers (warn), Anthropic skills, everything-claude-code (warn). Shell and installers: Oh My Zsh, nvm, Homebrew install. Go, Java, containers: GitHub CLI, spring-petclinic, vscode-remote-try-node."/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.png">
+    <img src="docs/figures/repos-en-light.png" width="100%" alt="30 widely used repositories scanned in full, 67,014 files: 26 pass, 4 warn, none blocked. JavaScript: express, got, husky, sharp, node-addon-examples, puppeteer, esbuild, prettier, vite. Python: requests, flask, fastapi, pytest, poetry, ruff (warn). Rust: ripgrep, serde, tokio. AI agents and MCP: claude-code, codex, gemini-cli (warn), the MCP servers (warn), Anthropic skills, everything-claude-code (warn). Shell and installers: Oh My Zsh, nvm, Homebrew install. Go, Java, containers: GitHub CLI, spring-petclinic, vscode-remote-try-node."/>
   </picture>
 </p>
 
@@ -350,6 +358,13 @@ writes to agent settings and shell profiles, an SSH key read, and harmless comma
 agents call the hook.
 
 ### Attack chains
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/chain-en-dark.png">
+    <img src="docs/figures/chain-en-light.png" width="100%" alt="Harmless one step at a time: two attacks from the chain drill, sent to Claude Code's hook. Download, make executable, run: curl -fsSLo /tmp/.cache-helper, chmod +x and running it are each allowed alone; in one session the chmod and the run are denied (PAH-B002, downloaded file made executable or run). Read ~/.aws/credentials, then an nslookup that carries data: the read is asked about either way; the lookup is allowed alone and denied in the session (PAH-B001, credentials read, then data sent out). Across nine agents, 77 of 77 attack runs stopped, 51 of them only because of the steps before; 0 of 72 ordinary runs got an extra prompt."/>
+  </picture>
+</p>
 
 Some attacks are harmless one step at a time: read `~/.aws/credentials`, then a few steps later post a file; download a
 binary, then `chmod +x` it, then start it; read a web page, then switch the guard off. **[`bench/chains.py`](bench/chains.py)**

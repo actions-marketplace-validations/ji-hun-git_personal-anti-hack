@@ -42,7 +42,8 @@ Lint the way CI does: `ruff check --select F,E9,B,UP --ignore UP007,B904 --targe
   ones.
 - Where code goes: [docs/architecture.md](docs/architecture.md).
 - Regenerate the rule list with `python -I pah_entry.py rules --markdown > docs/rules.md`, and the README figures with
-  `python scripts/make_figures.py` when headline numbers change.
+  `python scripts/make_figures.py` when headline numbers change (it renders with Chrome or Edge; the design rules are
+  in [docs/design.md](docs/design.md)).
 
 ## Pull requests
 
