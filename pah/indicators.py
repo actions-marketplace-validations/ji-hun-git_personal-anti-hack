@@ -35,3 +35,10 @@ def is_private_ip(ip: str) -> bool:
     except ValueError:
         return False
     return a in (10, 127, 0) or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31) or (a == 169 and b == 254)
+
+# Writing a file: agent configuration planted by install scripts, worms that edit workflows.
+WRITE_OP = re.compile(
+    r"writeFile|appendFile|createWriteStream|fs\.write|fs\.copyFile|\bopen\([^\n]{0,200}['\"](?:w|a|wb|ab|w\+|a\+)['\"]"
+    r"|\.write_text\s*\(|\.write\s*\(|>>?\s*[\"']?[~$%\w./\\-]*(?:\.claude|\.cursor|\.codex|\.gemini|\.mcp|AGENTS|CLAUDE|GEMINI|SOUL|openclaw|\.vscode|hooks)"
+    r"|Set-Content|Add-Content|Out-File|(?:^|[;&|(`]\s*|\$\(\s*|['\"]\s*)(?:tee|cp|copy|mv|move|ln\s+-s)\s|\bsed\s+-i"
+    r"|json\.dump\s*\(|\bgit\s+config\b|shutil\.(?:copy|move)", re.I | re.M)

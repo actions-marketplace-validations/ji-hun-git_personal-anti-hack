@@ -16,7 +16,8 @@ import time
 from pathlib import Path
 
 from .model import Report, rule
-from .patterns import COMMAND_PATTERNS, R_DOWNLOAD_EXEC, classify_host, host_of, urls
+from .hosts import classify_host, host_of, urls
+from .patterns import COMMAND_PATTERNS, R_DOWNLOAD_EXEC
 from .surfaces import load_jsonc, load_toml
 
 R_KEYS_ON_DISK = rule(
@@ -190,9 +191,43 @@ def credential_permissions(report: Report) -> None:
             report.findings.append(_finding(R_CRED_PERMS, "medium", str(p), f"mode {oct(mode & 0o777)}"))
 
 
+AGENT_NAMES = ("Claude Code", "Gemini CLI", "Codex", "Cursor", "Antigravity", "Copilot", "Kiro", "Windsurf", "Devin",
+               "OpenClaw", "VS Code")
+
+
+def _agent_setups(report: Report, label: str, path: Path, data: dict, perms: dict, setups: dict) -> None:
+    """PAH-A020 for pre-approved commands that run any program through their arguments, and the tools each agent may
+    use without asking, for PAH-A021 once every file is read."""
+    from .flows import R_ARGV_EXEC, argv_exec, tools_from_allow, tools_from_servers
+
+    tools_cfg = data.get("tools") if isinstance(data.get("tools"), dict) else {}
+    allow = [a for a in (perms.get("allow") or []) + (tools_cfg.get("allowed") or []) if isinstance(a, str)]
+    for entry in allow:
+        hit = argv_exec(entry)
+        if hit:
+            report.findings.append(_finding(R_ARGV_EXEC, "medium", str(path), f"{label}: pre-approves {entry}: {hit[1]}",
+                                            entry))
+    agent = next((a for a in AGENT_NAMES if label.startswith(a)), label)
+    everything = perms.get("defaultMode") == "bypassPermissions" or data.get("approval_policy") == "never" or \
+        bool(data.get("yolo")) or data.get("chat.tools.autoApprove") is True
+    servers = {}
+    for block in (data.get("mcpServers"), data.get("mcp_servers"), data.get("servers")):
+        if isinstance(block, dict):
+            servers.update(block)
+    setup = setups.setdefault(agent, {"allow": [], "servers": {}, "everything": False, "paths": []})
+    setup["allow"] += allow
+    setup["servers"].update(servers)
+    setup["everything"] |= everything
+    setup["paths"].append(str(path))
+    setup["tools"] = tools_from_allow(setup["allow"]) + tools_from_servers(setup["servers"], setup["allow"],
+                                                                           everything_auto=setup["everything"])
+
+
 def risky_settings(report: Report) -> None:
+    from .flows import R_TOXIC_FLOW, describe, toxic
     from .watch import locations
 
+    setups: dict = {}
     for label, path in locations():
         if not path.is_file():
             continue
@@ -201,6 +236,7 @@ def risky_settings(report: Report) -> None:
         if not isinstance(data, dict):
             continue
         perms = data.get("permissions") if isinstance(data.get("permissions"), dict) else {}
+        _agent_setups(report, label, path, data, perms, setups)
         problems = []
         if perms.get("defaultMode") == "bypassPermissions":
             problems.append("defaultMode is bypassPermissions")
@@ -224,6 +260,10 @@ def risky_settings(report: Report) -> None:
         if secrets:
             report.findings.append(_finding(R_SECRETS_IN_AGENT_CFG, "medium", str(path),
                                             f"{label}: literal keys in {', '.join(sorted(set(secrets))[:5])}"))
+    for agent, setup in setups.items():
+        flow = toxic(setup.get("tools", []))
+        if flow:
+            report.findings.append(_finding(R_TOXIC_FLOW, "medium", setup["paths"][0], f"{agent}: {describe(flow)}"))
     host_env = os.environ.get("ANTHROPIC_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
     if host_env and classify_host(host_env) != "official" and "localhost" not in host_env:
         report.findings.append(_finding(R_RISKY_SETTINGS, "high", "environment", f"API base URL set to {host_env}"))
@@ -315,71 +355,12 @@ def runmru(report: Report) -> None:
 
 
 def iocs(report: Report) -> None:
-    local = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-    temp = Path(tempfile.gettempdir())
-    checks = [
-        (local / "Microsoft" / "EdgeUpdate" / "MicrosoftEdgeUpdateCore.dll", "fake Edge Update task payload (ACRStealer/Amatera)",
-         "https://www.straiker.ai/blog/acr-stealer-claude-code-impersonation-campaign"),
-        (temp / "thinking_robot_log.txt", "PROMPTFLUX log file", "https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools"),
-        (Path("C:/ProgramData/info/info.txt"), "PROMPTSTEAL/LAMEHUG output file",
-         "https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools"),
-        (Path("/tmp/helper"), "fake Claude Code installer dropper (macOS)", "https://www.bitdefender.com/en-us/blog/labs/fake-claude-code-google-ads-malware"),
-        (Path("/tmp/osalogging.zip"), "MacSync staging archive", "https://www.huntress.com/blog/fake-claude-macsync"),
-    ]
-    home = Path.home()
-    polinrider = "https://blog.gitguardian.com/ghostaction-x-polinrider/"
-    testmetest = "https://research.jfrog.com/post/beyond-testmetest-42-hijacked-github-repos/"
-    sleepyduck = "https://pluto.security/blog/sleepyduck-malware-open-vsx-extensions/"
-    trojan_ext = "https://www.stepsecurity.io/blog/claude-code-extension-trojanized"
-    apex = "https://www.elastic.co/security-labs/threat-command/apex-accelerator-malicious-npm-packages"
-    checks += [
-        (home / ".node_modules" / ".npm-ws-runner.js", "PolinRider loader (Oct 2026)", polinrider),
-        (home / ".node_modules" / ".npm-ws.json", "PolinRider loader state", polinrider),
-        (home / ".local" / "bin" / "net-health-checker.sh", "testmetest worm persistence (Oct 2026)", testmetest),
-        (home / ".local" / "share" / "runtimes" / "sync.py", "testmetest worm persistence", testmetest),
-        (Path("/var/tmp/.fontconfig_state"), "testmetest worm state file", testmetest),
-        (local / "ScopeSmart Technologies Inc", "MALFEX payload folder (Oct 2026)",
-         "https://checkmarx.com/zero-post/malfex-npm-malware-campaign-three-payloads-and-an-adversary-that-signs-their-work/"),
-        (home / ".solidity", "SleepyDuck backdoor folder (Sep 2026)", sleepyduck),
-        (home / "Library" / "LaunchAgents" / "com.solidity.langsupport.runner.plist", "SleepyDuck LaunchAgent", sleepyduck),
-        (home / ".config" / "systemd" / "user" / "solidity-langsupport-runner.service", "SleepyDuck service", sleepyduck),
-        (home / "Library" / "LaunchAgents" / "com.apple.sysmond.plist", "LaunchAgent of the trojanized Claude Code "
-         "extension (Oct 2026; Apple's own agents live in /System)", trojan_ext),
-        (Path(os.environ.get("APPDATA") or home) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "sysmon.cmd",
-         "startup script of the trojanized Claude Code extension", trojan_ext),
-        (home / ".apex" / "agent" / "mcp.json", "Apex Accelerator MCP configuration (Oct 2026)", apex),
-        (temp / "_apex_run.ps1", "Apex Accelerator dropper script", apex),
-    ]
-    for path, what, src in checks:
-        if sys.platform != "win32" and str(path).startswith("C:"):
-            continue
-        if sys.platform == "win32" and str(path).startswith("/tmp"):
-            continue
-        if path.exists():
-            report.findings.append(_finding(R_IOC, "critical", str(path), f"{what} ({src})"))
-    try:
-        for e in os.scandir(home / ".config"):
-            if e.name.startswith(".smt"):
-                report.findings.append(_finding(R_IOC, "high", e.path, f"hidden .smt file of the trojanized Claude Code "
-                                                f"extension ({trojan_ext})"))
-                break
-    except OSError:
-        pass
-    try:
-        keys = (home / ".ssh" / "authorized_keys").read_text(encoding="utf-8", errors="replace")
-        if re.search(r"(?m)\ssvc-telemetry\s*$", keys):
-            report.findings.append(_finding(R_IOC, "critical", str(home / ".ssh" / "authorized_keys"), "SSH key with the "
-                                            f"comment svc-telemetry, planted by the trojanized Claude Code extension ({trojan_ext})"))
-    except OSError:
-        pass
-    try:
-        for e in os.scandir(temp):
-            if e.name.startswith("akg_"):
-                report.findings.append(_finding(R_IOC, "critical", e.path, "WardenStealer staging file "
-                                                "(https://spycloud.com/blog/infostealers-now-target-ai-tokens-and-api-keys/)"))
-                break
-    except OSError:
-        pass
+    """Traces of real incidents (pah/data/incidents.json), then scripts in the Windows Startup folder."""
+    from . import incidents
+
+    for inc, trace, path in incidents.found():
+        report.findings.append(_finding(R_IOC, trace.severity, str(path), f"{trace.what}: {inc.name} ({inc.when}). "
+                                        f"What to do, in order: pah incident show {inc.id}"))
     startup = Path(os.environ.get("APPDATA") or "") / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
     if sys.platform == "win32" and startup.is_dir():
         for e in os.scandir(startup):

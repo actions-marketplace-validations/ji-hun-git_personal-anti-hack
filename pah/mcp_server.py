@@ -34,6 +34,14 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}},
     {"name": "watch_check", "description": "Report changes to AI-agent and shell configuration since the user's baseline.",
      "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}},
+    {"name": "incident", "description": "Real attacks on people who use AI agents (worms, malicious packages, extensions, "
+     "skills and MCP servers, stealers): what happened, how it got in, the traces it leaves on a computer and what to do "
+     "about it, in order. With check, also looks for those traces on this computer.",
+     "inputSchema": {"type": "object", "properties": {
+         "query": {"type": "string", "description": "incident id, or words such as a campaign, package or file name; "
+                   "empty lists every incident"},
+         "check": {"type": "boolean", "description": "also look for the traces on this computer (read-only)"}}},
+     "annotations": {"readOnlyHint": True}},
 ]
 
 
@@ -66,6 +74,19 @@ def call_tool(name: str, args: dict) -> tuple[str, bool]:
         if not BASELINE.exists():
             return "No baseline yet: the user should run `pah watch init`.", False
         return json.dumps(check(), indent=1, ensure_ascii=False), False
+    if name == "incident":
+        from . import incidents
+
+        query = str(args.get("query") or "").strip()
+        one = incidents.get(query) if query else None
+        chosen = [one] if one else (incidents.search(query) if query else list(incidents.catalog()))
+        out = []
+        for inc in chosen:
+            item = inc.to_dict() if query else {"id": inc.id, "name": inc.name, "when": inc.when, "kind": inc.kind}
+            if args.get("check"):
+                item["found_on_this_computer"] = [str(p) for _, _, p in incidents.found([inc])]
+            out.append(item)
+        return json.dumps(out, indent=1, ensure_ascii=False), False
     raise RpcError(-32602, f"Unknown tool: {name}")
 
 

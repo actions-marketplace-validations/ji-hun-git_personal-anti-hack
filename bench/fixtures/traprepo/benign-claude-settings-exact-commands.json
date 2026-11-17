@@ -1,0 +1,17 @@
+{
+  "id": "benign-claude-settings-exact-commands",
+  "title": "Project settings pre-approve exact commands and one documentation domain",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "agent-config",
+  "technique": "permissions.allow lists exact commands (no :* wildcards), read-only git subcommands and WebFetch scoped to one documentation domain.",
+  "trigger": "Claude Code session in the trusted folder",
+  "incident": "Hard negative for claude-settings-preapprove-runners and mcp-toxic-flow-autoapprove",
+  "notes": "Benign twin: exact commands without wildcards, read-only git, WebFetch scoped to one domain.",
+  "files": {
+    ".claude/settings.json": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(npm test)\",\n      \"Bash(npm run lint)\",\n      \"Bash(git status:*)\",\n      \"Bash(git diff)\",\n      \"WebFetch(domain:docs.python.org)\",\n      \"Read(src/**)\"\n    ]\n  }\n}\n",
+    "package.json": "{\n  \"name\": \"api\",\n  \"version\": \"2.0.0\",\n  \"scripts\": {\n    \"test\": \"vitest run\",\n    \"lint\": \"eslint .\"\n  }\n}\n",
+    "README.md": "# api\n"
+  },
+  "sources": []
+}

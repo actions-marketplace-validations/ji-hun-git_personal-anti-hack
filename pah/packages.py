@@ -10,7 +10,8 @@ import re
 
 from .model import rule
 from .names import R_LOOKALIKE, lookalike, lookalike_severity, requirement_names
-from .patterns import OFFICIAL_REGISTRIES, USER_CONTENT_HOSTS, analyze_command, classify_host, host_of
+from .hosts import OFFICIAL_REGISTRIES, USER_CONTENT_HOSTS, classify_host, host_of
+from .patterns import analyze_command
 from .surfaces import File, State, line_of, load_jsonc, load_toml
 
 R_LIFECYCLE = rule(
@@ -428,6 +429,30 @@ def build_rs(state: State, f: File) -> None:
     state.mark_autoexec(f.rel, "build.rs runs on cargo build and in rust-analyzer")
 
 
+# --------------------------------------------------------------------------------------------- ruby/gems
+
+GEMSPEC_EXT = re.compile(r"\.extensions\s*(?:=|<<|\+=)\s*(\[[^\]]*\]|%w[\[(][^\])]*[\])]|['\"][^'\"]+['\"])")
+
+
+def extconf(state: State, f: File) -> None:
+    """A gem's native extension: gem install and bundle install run extconf.rb before any of the gem is required
+    (the strutil-core gem, Nov 2026, fetched a runtime and a payload from there)."""
+    if f.rel in state.autoexec:
+        return  # already listed by the gemspec
+    state.surface("RubyGems native extension", f.rel, "gem install / bundle install of the gem")
+    state.mark_autoexec(f.rel, "extconf.rb runs on gem install")
+
+
+def gemspec(state: State, f: File) -> None:
+    """Files a gemspec lists as extensions run at install, whatever they are called."""
+    for m in GEMSPEC_EXT.finditer(f.text or ""):
+        for ref in re.findall(r"[\w./-]+\.rb|[\w./-]*Rakefile|[\w./-]+", m.group(1)):
+            rel = posixpath.normpath(posixpath.join(f.dir, ref)) if f.dir else posixpath.normpath(ref)
+            if rel in state.files and rel not in state.autoexec:
+                state.surface("RubyGems native extension", rel, f"gem install (listed in {f.rel})")
+                state.mark_autoexec(rel, f"native extension listed in {f.rel}", f.rel)
+
+
 def cargo_toml(state: State, f: File) -> None:
     text = f.text or ""
     m = re.search(r"(?m)^\s*build\s*=\s*[\"']([^\"']+)[\"']", text)
@@ -620,6 +645,10 @@ def dispatch_packages(state: State, f: File) -> None:
         pip_conf(state, f)
     elif name == "build.rs":
         build_rs(state, f)
+    elif name == "extconf.rb":
+        extconf(state, f)
+    elif name.endswith(".gemspec"):
+        gemspec(state, f)
     elif name == "cargo.toml":
         cargo_toml(state, f)
     elif re.search(r"(?:^|/)\.cargo/config(?:\.toml)?$", low):

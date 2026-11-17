@@ -54,11 +54,11 @@
 <text x="474" y="292" font-size="11.8" font-family='ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "D2Coding", "Malgun Gothic", monospace' xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#e6edf3">hook blocked the command, and I'm not going to work around</tspan></text>
 <text x="474" y="311.6" font-size="11.8" font-family='ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "D2Coding", "Malgun Gothic", monospace' xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#e6edf3">it.</tspan></text>
 <text x="474" y="374" font-size="11" fill="#8b949e">실제 실행 기록: Claude Code 2.1.310, 승인 끔 · bench/live_drill.py</text>
-<text x="44" y="465" font-size="26" xml:space="preserve"><tspan fill="#4c8df6" font-weight="700">63</tspan><tspan fill="#6e7681" font-weight="600"> / 63</tspan></text>
+<text x="44" y="465" font-size="26" xml:space="preserve"><tspan fill="#4c8df6" font-weight="700">70</tspan><tspan fill="#6e7681" font-weight="600"> / 70</tspan></text>
 <text x="44" y="486" font-size="12.5" fill="#9198a1">악성 테스트 레포지토리</text>
 <text x="44" y="503" font-size="12.5" fill="#9198a1">탐지 (규칙만, 오프라인)</text>
 <line x1="240" y1="444" x2="240" y2="500" stroke="#3d444d"/>
-<text x="270" y="465" font-size="26" xml:space="preserve"><tspan fill="#f0f6fc" font-weight="700">0</tspan><tspan fill="#6e7681" font-weight="600"> / 33</tspan></text>
+<text x="270" y="465" font-size="26" xml:space="preserve"><tspan fill="#f0f6fc" font-weight="700">0</tspan><tspan fill="#6e7681" font-weight="600"> / 35</tspan></text>
 <text x="270" y="486" font-size="12.5" fill="#9198a1">비슷한 정상 레포지토리</text>
 <text x="270" y="503" font-size="12.5" fill="#9198a1">오탐</text>
 <line x1="480" y1="444" x2="480" y2="500" stroke="#3d444d"/>

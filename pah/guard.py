@@ -191,7 +191,8 @@ def repo_verdict(root: Path, max_seconds: float = 25.0) -> dict:
 def check_command(command: str, cwd: str = "", *, scan_repos: bool = True, max_seconds: float = 25.0) -> Decision:
     from .model import Finding
     from .names import R_LOOKALIKE, lookalike, lookalike_severity, names_in_command
-    from .patterns import ENV_DUMP, R_DOWNLOAD_EXEC, analyze_command, classify_host, urls
+    from .hosts import classify_host, urls
+    from .patterns import ENV_DUMP, R_DOWNLOAD_EXEC, analyze_command
 
     decision = Decision()
     findings = analyze_command(command, "(command)", 0, "agent")

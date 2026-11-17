@@ -10,247 +10,28 @@ A severity of None means the pattern is not reported in that context.
 """
 from __future__ import annotations
 
-import ast
-import bisect
 import re
 import time
-import warnings
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 
-from .model import Finding, bump, clip, rank, rule
-from .indicators import EXFIL_HOSTS, RAW_IP_URL, SECRET_PATHS, is_private_ip  # noqa: F401
+from .campaigns import campaign_shapes
+from .codectx import (REGEX_LIKE, after_trailing_comment, data_string, enclosing_string, first_near, has,
+                      in_other_string, line_window, named_in_string)
+from .collector import Collector
+from .content_rules import (R_AGENT_BYPASS, R_AGENT_CFG_WRITE, R_AI_ADDRESSED, R_BIDI, R_CONDITIONAL, R_DECODE_EXEC,
+                            R_DESTRUCTIVE, R_DISGUISED_RUN, R_DOWNLOAD_EXEC, R_ENV_DUMP, R_EXFIL, R_EXFIL_HOST,
+                            R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_INLINE_NET, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
+                            R_OBFUSCATED, R_PAD_LINES, R_PAD_SPACES, R_PERSIST, R_QUARANTINE, R_REGISTRY,
+                            R_REVERSE_SHELL, R_SECRETS, R_SELECTORS, R_TAGS, R_TERMINAL, R_URL_INSTALL, R_ZERO_WIDTH)
+from .deobfuscate import DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive
+from .hosts import URL, classify_host, host_kind, host_of
+from .indicators import EXFIL_HOSTS, RAW_IP_URL, SECRET_PATHS, WRITE_OP, is_private_ip  # noqa: F401
+from .model import Finding, bump, clip, rank
 from .policy import is_test_code
-from .text import Lines, decode_blobs, in_comment, in_string_literal, invisible, line_at, long_lines, padding
+from .text import decode_blobs, in_comment, in_string_literal, invisible, long_lines, padding
 
-R_DOWNLOAD_EXEC = rule(
-    "PAH-C001", "Downloads code and runs it",
-    "Piping a remote script into a shell (or iex, mshta, an interpreter) runs whatever the server sends at that "
-    "moment, with your permissions, and leaves nothing to review. It is the delivery step of InstallFix/ClickFix "
-    "campaigns and of most install-time malware.",
-    "Download the file, read it, verify its checksum or signature, then run it. Prefer the vendor's signed installer.",
-    attack=("T1105", "T1059"), owasp=("LLM05",),
-    refs=("https://www.helpnetsecurity.com/2026/03/09/fake-claude-code-install-pages-installfix-attacks/",
-          "https://www.crowdstrike.com/en-us/blog/how-clickfix-attacks-work-and-how-to-stop-them/"))
-R_DECODE_EXEC = rule(
-    "PAH-C002", "Decodes hidden data and executes it",
-    "Code that base64/zlib/marshal/char-code decodes a string and passes it to eval/exec/Function hides its real "
-    "behavior from people and from LLM reviewers; Hades (PyPI, 2026) and obfuscated npm stealers use this shape.",
-    "Treat as malicious unless you can decode the payload and explain why it must be hidden.",
-    attack=("T1027", "T1140", "T1059"),
-    refs=("https://www.stepsecurity.io/blog/the-hades-campaign-pypi-packages",))
-R_SECRETS = rule(
-    "PAH-C003", "Touches credential stores",
-    "Paths such as ~/.ssh, ~/.aws/credentials, browser login databases, crypto wallets and AI-tool tokens "
-    "(~/.claude/.credentials.json, ~/.codex/auth.json, openclaw.json) are what infostealers collect.",
-    "Code that runs at install or open time has no reason to read these. Inspect what it does with them.",
-    attack=("T1552.001", "T1555", "T1539"), owasp=("LLM02",),
-    refs=("https://spycloud.com/blog/infostealers-now-target-ai-tokens-and-api-keys/",
-          "https://research.checkpoint.com/2026/infostealer-riding-the-ai-train/"))
-R_EXFIL = rule(
-    "PAH-C004", "Reads secrets or the environment and sends data out",
-    "Reading credentials or the whole environment and making a network request in the same file is the shape of "
-    "dependency-confusion beacons and credential stealers (Shai-Hulud, s1ngularity).",
-    "Do not run it. Rotate any credential the code could have reached if it already ran.",
-    attack=("T1041", "T1552"), owasp=("LLM02",),
-    refs=("https://blog.gitguardian.com/the-nx-s1ngularity-attack-inside-the-credential-leak/",))
-R_ENV_DUMP = rule(
-    "PAH-C005", "Collects the whole environment",
-    "Serializing every environment variable collects API keys and tokens that live there.",
-    "Read only the variables the code needs.", attack=("T1082", "T1552"))
-R_NET_AUTO = rule(
-    "PAH-C006", "Makes network requests while installing or opening",
-    "Code that runs at install or open time and talks to the network can fetch a second stage that no scanner saw.",
-    "Check the destination. Prefer packages that ship what they need, or install with scripts disabled.",
-    attack=("T1105",))
-R_EXFIL_HOST = rule(
-    "PAH-C007", "Sends to a request-capture, tunnel or raw-IP endpoint",
-    "webhook.site, pipedream, interactsh/oast, ngrok, trycloudflare, Discord/Telegram webhooks and raw IP addresses "
-    "are where install-time beacons and stealers deliver data.",
-    "Find out what is sent there and why.", attack=("T1567", "T1071"))
-R_PERSIST = rule(
-    "PAH-C008", "Sets up persistence",
-    "Writing to shell profiles, LaunchAgents, scheduled tasks, Run keys, cron or the Startup folder makes code run "
-    "again on every login or shell.", "Remove the entry and find out what installed it.",
-    attack=("T1547", "T1546.004", "T1053"))
-R_AGENT_CFG_WRITE = rule(
-    "PAH-C009", "Writes AI-agent configuration",
-    "Changing an agent's settings, hooks, MCP servers or instruction files makes the change persist into every later "
-    "session; Shai-Hulud variants persisted through .claude/settings.json hooks, and a planted AGENTS.md made Codex "
-    "rewrite its own machine-wide settings.",
-    "Agent configuration should change only by your hand. Review the diff with `pah watch`.",
-    attack=("T1546", "T1098"), owasp=("ASI06",),
-    refs=("https://www.helpnetsecurity.com/2026/10/26/ai-coding-agents-malware-openai-codex/",
-          "https://socket.dev/glossary/shai-hulud"))
-R_AGENT_BYPASS = rule(
-    "PAH-C010", "Runs an AI agent with approvals switched off",
-    "Malware has driven the agents already installed on a machine with their permission prompts disabled to search "
-    "for secrets (Nx/s1ngularity, August 2025; 2,349 secrets from 1,079 machines).",
-    "Never let a script start an agent with approvals disabled.",
-    attack=("T1059", "T1552"), owasp=("ASI02", "ASI03"),
-    refs=("https://snyk.io/blog/weaponizing-ai-coding-agents-for-malware-in-the-nx-malicious-package",))
-R_AI_ADDRESSED = rule(
-    "PAH-C011", "Text addressed to AI reviewers or agents",
-    "Code has no reason to tell an AI scanner it is safe or to give an agent orders. Malicious packages now do both "
-    "(Hades, Koi's 'gaslighting' npm package); a model reading them can be talked into a clean verdict.",
-    "Treat the claim as a red flag, not as information. Review what the code does, with comments removed.",
-    attack=("T1036",), owasp=("LLM01", "ASI01"),
-    refs=("https://koi.ai/blog/two-years-17k-downloads-the-npm-malware-that-tried-to-gaslight-security-scanners",
-          "https://research.jfrog.com/post/prompt-injection-vs-scanners/"))
-R_OBFUSCATED = rule(
-    "PAH-C012", "Obfuscated code",
-    "Obfuscator-style identifiers, packers and long encoded arrays hide what code does from people and models; "
-    "LLM detection drops sharply under encryption and heavy obfuscation.",
-    "Do not run obfuscated code from a source you cannot verify.",
-    attack=("T1027",), refs=("https://arxiv.org/abs/2605.06910",))
-R_LOLBIN = rule(
-    "PAH-C013", "Uses Windows system binaries to fetch or run remote code",
-    "mshta, rundll32 over WebDAV, regsvr32 /i:http, certutil -urlcache and bitsadmin are the run-and-fetch steps of "
-    "fake Claude Code installers and ClickFix lures (Amatera, ACRStealer).",
-    "Do not run it.", attack=("T1218", "T1105"),
-    refs=("https://www.bitdefender.com/en-us/blog/labs/fake-claude-code-google-ads-malware",
-          "https://www.straiker.ai/blog/acr-stealer-claude-code-impersonation-campaign"))
-R_QUARANTINE = rule(
-    "PAH-C014", "Removes macOS quarantine or runs a dropped binary",
-    "xattr -c / removing com.apple.quarantine and running a file just written to /tmp is how fake installers get "
-    "past Gatekeeper (AMOS, MacSync).", "Install signed, notarized software from the vendor instead.",
-    attack=("T1553.001", "T1204"),
-    refs=("https://www.huntress.com/blog/fake-claude-macsync",))
-R_INLINE_NET = rule(
-    "PAH-C015", "Inline interpreter code with network access",
-    "python -c / node -e / powershell -c one-liners that open network connections hide a downloader in a command.",
-    "Move the logic into a reviewed file, or remove it.", attack=("T1059", "T1105"))
-R_CONDITIONAL = rule(
-    "PAH-C016", "Malicious-looking code runs only under certain conditions",
-    "Payloads that wait for CI, a date or one operating system stay quiet while reviewers look (NuGet logic bombs set "
-    "for 2027-28, xz-utils).", "Read the conditional branch as if the condition were true.",
-    attack=("T1480",), refs=("https://www.theregister.com/2025/11/07/cybercriminals_plant_destructive_time_bomb/",))
-R_FAKE_PROMPT = rule(
-    "PAH-C017", "Fake password prompt",
-    "AppleScript dialogs asking for your password with hidden answers are how macOS stealers (AMOS) get your login "
-    "password and keychain.", "Never type your password into a dialog a script opened.",
-    attack=("T1056.002",))
-R_REGISTRY = rule(
-    "PAH-C018", "Points a package manager at a non-default registry or index",
-    "Changing where packages come from is missed by almost every coding agent (Bagmar & Saraf, 2026), and lets an "
-    "attacker serve any code under familiar names.",
-    "Install from the default registry unless you know and trust the alternative.",
-    attack=("T1195.001",), owasp=("LLM03", "ASI04"),
-    refs=("https://arxiv.org/abs/2607.15143",))
-R_URL_INSTALL = rule(
-    "PAH-C019", "Installs from a URL, git repo or tarball",
-    "Packages from a URL or git have no registry metadata, no integrity record and can change at any time "
-    "(PhantomRaven hid its payloads this way).", "Install a published, pinned version instead.",
-    attack=("T1195.001",), refs=("https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies",))
-R_DESTRUCTIVE = rule(
-    "PAH-C020", "Destructive command",
-    "Deleting home directories, whole drives or disks is what wiper payloads do (Amazon Q v1.84.0 shipped a prompt "
-    "asking the agent to do it).", "Do not run it.", attack=("T1485",),
-    refs=("https://www.theregister.com/2025/07/24/amazon_q_ai_prompt/",))
-R_REVERSE_SHELL = rule(
-    "PAH-C021", "Reverse shell", "Connecting a shell to a remote host gives an attacker interactive control.",
-    "Do not run it.", attack=("T1059.004", "T1071"))
 
-R_TAGS = rule(
-    "PAH-T001", "Hidden text in Unicode tag characters",
-    "Tag characters (U+E0000-E007F) render as nothing but models read them: ASCII smuggling and the rules-file "
-    "backdoor hid text that coding agents follow this way.", "Delete the characters; read the decoded text shown here.",
-    attack=("T1027",), owasp=("LLM01",),
-    refs=("https://pillar.security/blog/new-vulnerability-in-github-copilot-and-cursor-how-hackers-can-weaponize-code-agents",))
-R_SELECTORS = rule(
-    "PAH-T002", "Data hidden in Unicode variation selectors",
-    "Runs of variation selectors encode bytes that editors do not show; GlassWorm decoded them into eval() in 151+ "
-    "GitHub repositories in March 2026.", "Treat as malicious; the decoded bytes are shown in the evidence.",
-    attack=("T1027",), refs=("https://www.aikido.dev/blog/glassworm-returns-unicode-attack-github-npm-vscode",))
-R_BIDI = rule(
-    "PAH-T003", "Bidirectional control characters in code",
-    "Bidi controls make code display in a different order from how it runs (Trojan Source); invisible and bidi "
-    "characters dropped GPT-4o's code comprehension from 100% to 0-2.3%.",
-    "Remove them from code; they belong only in localized text.",
-    attack=("T1027",), refs=("https://arxiv.org/html/2412.08098v3",))
-R_ZERO_WIDTH = rule(
-    "PAH-T004", "Zero-width or filler characters",
-    "Zero-width and Hangul filler characters create look-alike identifiers and hide content.",
-    "Remove them unless the file is localized text that needs them.", attack=("T1027",))
-R_PAD_LINES = rule(
-    "PAH-T005", "Content hidden after a long run of blank lines",
-    "Trail of Bits got malicious skills past five scanners by putting ~100,000 newlines before the payload, because "
-    "the scanners truncated large files.", "Read the end of the file; it is shown in the evidence.",
-    attack=("T1027.001",),
-    refs=("https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-agent-skill-scanner-bypass-20260610-csa/",))
-R_PAD_SPACES = rule(
-    "PAH-T006", "Code pushed off-screen with spaces",
-    "Hundreds of spaces before code put it beyond the right edge of editors, diffs and approval prompts "
-    "(Gemini CLI approval-prompt bypass, 2025).", "Scroll right or view the file with whitespace shown.",
-    attack=("T1027.001",), refs=("https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack",))
-R_LONG_LINE = rule(
-    "PAH-T007", "Very long line",
-    "A single multi-megabyte line defeats reading and many LLM scanners (Miasma's payload was one 4.6 MB line; "
-    "Cloudflare measured 17.6% LLM detection on files over 3 MB).", "Inspect it with a formatter before trusting it.",
-    attack=("T1027",), refs=("https://www.cloudflare.com/cloudforce-one/research/adversarial-deception-a-study-of-indirect-prompt-code-injection/",))
-R_HIDDEN_COMMENT = rule(
-    "PAH-T008", "Instructions hidden in an HTML comment",
-    "Markdown comments do not render, so a person reviewing the page does not see what an agent reads.",
-    "Read the comment; remove instructions you did not write.", attack=("T1027",), owasp=("LLM01",))
-R_TERMINAL = rule(
-    "PAH-T009", "Terminal escape codes that hide text",
-    "Escape sequences can conceal text, erase a line or move the cursor back over it, so a terminal shows a person "
-    "something other than what an agent reads. Trail of Bits hid instructions in MCP tool descriptions this way.",
-    "View the file with escape codes shown (cat -v) and remove what you did not write.", attack=("T1027", "T1036"),
-    owasp=("LLM01",), refs=("https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-codes-in-mcp/",))
 TERMINAL_HIDE = re.compile("\x1b\\[(?:8m|[0-2]?K|\\d*[AF]|2J)")
-R_DISGUISED_RUN = rule(
-    "PAH-C022", "Runs a file disguised as a font, image or media file",
-    "An interpreter has no reason to run a .ttf, .woff2, .png or .mp4. PolinRider (Oct 2026) amended and force-pushed "
-    "commits in 188 GitHub repositories; their folder-open task ran a loader saved as fa-solid-300.ttf.",
-    "Do not run it. A real font or image starts with its format's signature; open it in a hex viewer.",
-    attack=("T1036.008", "T1059"), refs=("https://blog.gitguardian.com/ghostaction-x-polinrider/",))
-R_DEAD_DROP = rule(
-    "PAH-C023", "Gets its instructions from a dead drop and runs them",
-    "Reading a blockchain transaction, a JSON-storage site, a calendar invite or a GitHub search result and executing "
-    "what comes back lets an attacker swap the payload or the server address without publishing anything new. "
-    "PolinRider took its server from an Ethereum transaction (Nov 2026); GlassWorm and SleepyDuck used contracts and "
-    "Solana memos; Contagious Interview used JSON-storage sites.",
-    "Treat it as malicious: legitimate code does not execute what it reads from a blockchain or a paste site.",
-    attack=("T1102.001", "T1059"),
-    refs=("https://www.sonatype.com/blog/polinrider-loader-reappears-in-hijacked-npm-packages",
-          "https://blog.nviso.eu/2025/11/13/contagious-interview-actors-now-utilize-json-storage-services-for-malware-delivery/"))
-R_WORM = rule(
-    "PAH-C024", "Publishes packages with your credentials",
-    "Code that reads your npm or PyPI token, finds the packages you maintain and publishes new versions of them is how "
-    "Shai-Hulud spread to hundreds of packages within hours.",
-    "Do not install it. If it ran, revoke your registry tokens and check the latest versions of your packages.",
-    attack=("T1195.002", "T1078"), refs=("https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/",))
-R_CI_BACKDOOR = rule(
-    "PAH-C025", "Plants a CI backdoor",
-    "Writing a workflow into .github/workflows or registering a self-hosted GitHub runner from code that runs on your "
-    "machine gives the attacker a foothold in every repository your credentials reach (Shai-Hulud; Miasma).",
-    "Do not run it; look for workflows and runners you did not add.", attack=("T1053", "T1098"),
-    refs=("https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/",))
-R_DEADMAN = rule(
-    "PAH-C026", "Wipes your files when its token stops working",
-    "A loop that checks a stolen GitHub or npm token and deletes your home folder once the check fails punishes "
-    "rotating credentials (gh-token-monitor in Mini Shai-Hulud and Miasma; the testmetest worm, Oct 2026).",
-    "Remove its persistence first, then revoke the tokens.", attack=("T1485",),
-    refs=("https://research.jfrog.com/post/beyond-testmetest-42-hijacked-github-repos/",))
-R_WALLET = rule(
-    "PAH-C027", "Swaps crypto wallet addresses",
-    "Replacing fetch, XMLHttpRequest or the wallet's request function and matching wallet-address formats is how the "
-    "September 2025 chalk/debug compromise redirected payments in every page that bundled those packages.",
-    "Do not ship or install it.", attack=("T1565.002",),
-    refs=("https://cycode.com/blog/npm-debug-chalk-supply-chain-attack-the-complete-guide/",))
-R_HIDDEN_PROC = rule(
-    "PAH-C028", "Starts a hidden process while installing or opening",
-    "A detached child with its output discarded, a process with no window, or `node -i` fed through a pipe keeps "
-    "running after the install has finished and shows nothing (MALFEX and PolinRider, Oct to Nov 2026).",
-    "Find out what the process runs before installing.", attack=("T1564.003", "T1059"),
-    refs=("https://checkmarx.com/zero-post/malfex-npm-malware-campaign-three-payloads-and-an-adversary-that-signs-their-work/",))
-R_SWEEP = rule(
-    "PAH-C029", "Hunts for secrets while installing or opening",
-    "Running TruffleHog or Gitleaks over your files, asking the cloud metadata service for credentials or listing a "
-    "secrets manager from an install script is credential harvesting (Shai-Hulud ran TruffleHog on the home folder).",
-    "Do not install it; rotate cloud and CI credentials if it ran.", attack=("T1552", "T1552.005"),
-    refs=("https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/",))
 
 
 @dataclass
@@ -289,8 +70,22 @@ COMMAND_PATTERNS = [
     _p(R_DOWNLOAD_EXEC, rf"\b(?:iex|Invoke-Expression)\b\s*\(?\s*(?:\(\s*)*{PS_FETCH}",
        S("critical", "high", "doc", "high"), "Invoke-Expression on a download"),
     _p(R_DOWNLOAD_EXEC, rf"\b{FETCH}\b[^\n;&|]{{0,300}}\s(?:-o|-O|--output|--output-document)\s*\S+[^\n]{{0,80}}?(?:&&|;|&)\s*"
-       r"(?:sudo\s+)?(?:chmod\s+\+x|\./|/tmp/|start\b|call\b|\S+\.(?:exe|bat|cmd|ps1|vbs|hta|msi)\b|(?:ba|z)?sh\s)",
+       r"(?:sudo\s+)?(?:chmod\s+\+x|\./|/tmp/|start\b|call\b|\S+\.(?:exe|bat|cmd|ps1|vbs|hta|msi)\b|(?:ba|z)?sh\s"
+       r"|(?:node|bun|deno|python[0-9.]*|perl|ruby|php)\s+\S)",
        S("critical", "high", "doc", "high"), "downloads a file and runs it"),
+    # Through a decoder on the way (the Paperclip skill clones, Aug 2026: curl -k ... | base64 -d > /tmp/t.mjs && node
+    # /tmp/t.mjs), or written with a redirect instead of -o.
+    # No installer decodes what it downloads before running it: these are high wherever they are written.
+    _p(R_DOWNLOAD_EXEC, rf"\b{FETCH}\b[^\n;&]{{0,400}}?\|\s*(?:base64|gunzip|gzip|zcat|xxd|openssl|bzip2|xz|tr|rev)\b"
+       rf"[^\n;&]{{0,120}}\|\s*(?:sudo\s+)?(?:{SHELLS}|python[0-9.]*|node|bun|deno|perl|ruby|php|pwsh|powershell)\b",
+       S("critical", "high", "high", "high"), "pipes a decoded download into a shell or interpreter"),
+    _p(R_DOWNLOAD_EXEC, rf"\b{FETCH}\b[^\n;&]{{0,400}}?\|\s*(?:base64|gunzip|gzip|zcat|xxd|openssl|bzip2|xz|tr|rev)\b"
+       rf"[^\n;&]{{0,120}}?>\s*['\"]?(\S+?)['\"]?\s*(?:&&|;)\s*(?:sudo\s+)?(?:chmod\s+\+x\s+\S+\s*(?:&&|;)\s*)?"
+       rf"(?:node|bun|deno|python[0-9.]*|perl|ruby|php|{SHELLS}|pwsh|powershell)\s+['\"]?\1\b",
+       S("critical", "high", "high", "high"), "decodes a download into a file and runs it"),
+    _p(R_DOWNLOAD_EXEC, rf"\b{FETCH}\b[^\n;&]{{0,400}}?>\s*['\"]?(\S+?)['\"]?\s*(?:&&|;)\s*(?:sudo\s+)?(?:chmod\s+\+x\s+\S+\s*(?:&&|;)\s*)?"
+       rf"(?:node|bun|deno|python[0-9.]*|perl|ruby|php|{SHELLS}|pwsh|powershell)\s+['\"]?\1\b",
+       S("critical", "high", "doc", "high"), "downloads to a file and runs it"),
     _p(R_DOWNLOAD_EXEC, r"\bexec\s*\(\s*(?:urllib\.request\.)?urlopen\s*\(|\bexec\s*\(\s*requests\.get\s*\(",
        S("critical", "high", "high", "high"), "executes a downloaded Python payload"),
     _p(R_DOWNLOAD_EXEC, r"(?s)(?:Command::new|subprocess\.(?:run|call|Popen|check_call|check_output)|spawnSync|execFileSync|"
@@ -385,6 +180,8 @@ _NEEDS = {
     "runs the output of a download": ("curl", "wget"), "sources a download": ("curl", "wget"),
     "pipes a download into Invoke-Expression": ("iex", "invoke-expression"),
     "Invoke-Expression on a download": ("iex", "invoke-expression"), "downloads a file and runs it": ("curl", "wget"),
+    "pipes a decoded download into a shell or interpreter": ("curl", "wget"),
+    "decodes a download into a file and runs it": ("curl", "wget"), "downloads to a file and runs it": ("curl", "wget"),
     "executes a downloaded Python payload": ("exec",), "spawns a downloader, then a shell or interpreter": ("curl", "wget"),
     "evaluates decoded data": ("eval",), "builds a function from decoded data": ("function",),
     "executes decoded Python": ("exec", "eval"), "executes a compiled string": ("compile",),
@@ -408,115 +205,9 @@ _NEEDS = {
                                                              "pwsh", "powershell", "wscript", "cscript"),
 }
 
-# Shapes of 2025-2026 campaigns that need two pieces of evidence near each other in one file.
-DEAD_DROP = re.compile(
-    r"\beth_(?:call|getTransactionByHash|getTransactionReceipt|getStorageAt|getLogs)\b|\bgetSignaturesForAddress\b"
-    r"|\bgetConfirmedSignaturesForAddress2\b|api\.trongrid\.io|bsc-dataseed|\b(?:etherscan|bscscan|polygonscan|arbiscan)\."
-    r"(?:io|com)/api|api\.mainnet-beta\.solana\.com|\bjsonkeeper\.com|\bjsonsilo\.com|\bapi\.npoint\.io|\bapi\.jsonbin\.io"
-    r"|\bcalendar\.app\.google|api\.github\.com/search/(?:commits|issues|code)", re.I)
-DEAD_DROP_NEED = ("eth_", "getsignatures", "getconfirmedsignatures", "trongrid", "bsc-dataseed", "scan.io/api",
-                  "scan.com/api", "solana.com", "jsonkeeper", "jsonsilo", "npoint", "jsonbin", "calendar.app.google",
-                  "api.github.com/search")
-CODE_SINK = re.compile(r"(?<![.\w$])(?:exec|eval)\s*\(\s*(?!['\"`)])|\bnew\s+Function\s*\((?!\s*['\"]return this)"
-                       r"|\bvm\.run\w*\s*\(|\bexec\s*\(\s*compile\s*\(")
-PROCESS_SINK = re.compile(r"\bchild_process\b|\bexecSync\s*\(|\bspawn(?:Sync)?\s*\(|\bsubprocess\.\w+\s*\(|\bos\.system\s*\(")
-PUBLISH = re.compile(r"\b(?:npm|pnpm|yarn)\s+publish\b|\btwine\s+upload\b|upload\.pypi\.org/legacy", re.I)
-REGISTRY_TOKEN = re.compile(r"_authToken|\bNPM_TOKEN\b|\bNODE_AUTH_TOKEN\b|\.npmrc\b|\.pypirc\b|\bPYPI_TOKEN\b|\bTWINE_PASSWORD\b", re.I)
-WORM_EXTRA = re.compile(r"/-/whoami\b|/-/v1/search\?text=maintainer|\bmaintainer:\$?\{?[\w.]|/-/user/|\bnpm\s+owner\s+ls\b"
-                        r"|\bnpm\s+access\s+(?:ls-packages|list\s+packages)\b", re.I)
-WORKFLOW_PATH = re.compile(r"\.github[\\/]workflows[\\/][^\s\"'`]*\.ya?ml", re.I)
-RUNNER_SETUP = re.compile(r"\bconfig\.(?:sh|cmd)\b[^\n]{0,200}--url\s+\S*github\.com[^\n]{0,200}--token\b|\bRUNNER_ALLOW_RUNASROOT\b"
-                          r"|actions-runner-(?:linux|osx|win)-[\w.-]+\.(?:tar\.gz|zip)", re.I)
-TOKEN_CHECK = re.compile(r"api\.github\.com/user\b|/-/whoami\b|\bgh\s+auth\s+status\b", re.I)
-WIPE_HOME = re.compile(r"\brm\s+-[a-z]*[rR][a-z]*\s+(?:-[a-z]+\s+)*[\"']?(?:~|\$HOME|\$\{HOME\})|rmSync\([^)]{0,80}(?:homedir|HOME)"
-                       r"|\b(?:shutil\.)?rmtree\([^)]{0,80}(?:home|expanduser)|\bshred\s+-|\bcipher(?:\.exe)?\s+/w\b"
-                       r"|Remove-Item[^\n]{0,80}(?:\$HOME|USERPROFILE)[^\n]{0,80}-Recurse|\bfs\.(?:promises\.)?rm\([^)]{0,80}(?:homedir|HOME)", re.I)
-TOKEN_FAILED = re.compile(r"\b40[13]\b|status(?:Code)?\s*!==?\s*200|!\s*[\w.]+\.ok\b|\.ok\s*===?\s*false|\bnot\s+[\w.]+\.ok\b", re.I)
-FETCH_HOOK = re.compile(r"\b(?:window|globalThis|self)\.fetch\s*=(?!=)|XMLHttpRequest\.prototype\.(?:open|send)\s*=(?!=)"
-                        r"|\bethereum\.request\s*=(?!=)", re.I)
-WALLET_FORMAT = re.compile(r"0x\[(?:a-fA-F0-9|0-9a-fA-F|a-f0-9|0-9a-f)\]\{40\}|\bbc1\[|\[13\]\[a-km-zA-HJ-NP-Z1-9\]|T\[A-Za-z1-9\]\{33\}")
-WALLET_LITERAL = re.compile(r"['\"]0x[a-fA-F0-9]{40}['\"]")
-HIDDEN_PROCESS = re.compile(
-    r"detached\s*:\s*true[\s\S]{0,200}?stdio\s*:\s*['\"]ignore['\"]|stdio\s*:\s*['\"]ignore['\"][\s\S]{0,200}?detached\s*:\s*true"
-    r"|windowsHide\s*:\s*true[\s\S]{0,200}?detached\s*:\s*true|detached\s*:\s*true[\s\S]{0,200}?windowsHide\s*:\s*true"
-    r"|creationflags\s*=\s*[^\n]{0,80}(?:CREATE_NO_WINDOW|DETACHED_PROCESS|0x0*8000000\b)"
-    r"|start_new_session\s*=\s*True[\s\S]{0,200}?DEVNULL|DEVNULL[\s\S]{0,200}?start_new_session\s*=\s*True"
-    r"|\bnohup\b[^\n]{0,200}>\s*/dev/null\s+2>&1\s*&|\bspawn\(\s*(?:['\"]node['\"]|process\.execPath)\s*,\s*\[\s*['\"]-i['\"]"
-    r"|Start-Process[^\n]{0,200}-WindowStyle\s+Hidden", re.I)
-SECRET_SWEEP = re.compile(r"\btrufflehog\b|\bgitleaks\b|169\.254\.169\.254|169\.254\.170\.2|metadata\.google\.internal"
-                          r"|\bListSecrets\b|\bGetSecretValue\b|secretmanager\.googleapis\.com|vault\.azure\.net", re.I)
-PIXEL_READ = re.compile(r"\bJimp\.read\b|\bgetPixelColou?r\b|\bsharp\([^)]*\)[\s\S]{0,80}?\.raw\(|\bPNG\.sync\.read\b"
-                        r"|\bImage\.open\([^)]*\)[\s\S]{0,80}?\.getdata\(|\.getpixel\(", re.I)
-RUNTIME_BOOTSTRAP = re.compile(r"bun\.sh/install|oven-sh/bun/releases|deno\.land/(?:x/)?install|denoland/deno/releases", re.I)
 
-
-def _campaign_shapes(col: Collector, text: str, context: str, low: str, live, nets: list[int]) -> None:
-    """Dead drops, worms, CI backdoors, dead-man switches, wallet hijackers, hidden processes and secret sweeps."""
-    auto = context == "autoexec"
-    if has(low, DEAD_DROP_NEED):
-        drops = [m.start() for m in live(DEAD_DROP.finditer(text), 20)]
-        sinks = [m.start() for m in live(CODE_SINK.finditer(text), 50)]
-        if auto:
-            sinks += [m.start() for m in live(PROCESS_SINK.finditer(text), 50)]
-        hit = _close(drops, sinks, 3000) if drops and sinks else None
-        if hit is not None:
-            col.add(R_DEAD_DROP, "critical" if auto else "high", hit, "reads a blockchain, paste-site or search result "
-                    "and executes code next to it", context)
-    if has(low, ("publish", "twine", "upload.pypi")):
-        pub = next(iter(live(PUBLISH.finditer(text), 1)), None)
-        token = next(iter(live(REGISTRY_TOKEN.finditer(text), 1)), None) if pub else None
-        extra = next(iter(live(WORM_EXTRA.finditer(text), 1)), None) if token else None
-        if pub and token and (auto or extra):
-            col.add(R_WORM, "critical" if auto and extra else "high", pub.start(), "publishes packages with the registry "
-                    "token it finds" + (" after listing the packages you maintain" if extra else ""), context)
-    if auto and has(low, (".github", "runner")):
-        for m in live(WORKFLOW_PATH.finditer(text), 20):
-            start = text.rfind("\n", 0, text.rfind("\n", 0, m.start())) + 1
-            stop = text.find("\n", text.find("\n", m.end()) + 1)
-            if WRITE_OP.search(text[start:stop if stop >= 0 else len(text)]):
-                col.add(R_CI_BACKDOOR, "high", m.start(), "writes a GitHub Actions workflow", context)
-                break
-        runner = next(iter(live(RUNNER_SETUP.finditer(text), 1)), None)
-        if runner:
-            col.add(R_CI_BACKDOOR, "critical", runner.start(), "registers a self-hosted GitHub Actions runner", context)
-    if has(low, ("whoami", "api.github.com/user", "gh auth")):
-        checks = [m.start() for m in live(TOKEN_CHECK.finditer(text), 20)]
-        wipes = [m.start() for m in live(WIPE_HOME.finditer(text), 20)] if checks else []
-        fails = [m.start() for m in TOKEN_FAILED.finditer(text)] if wipes else []
-        hit = _close(wipes, checks, 2000) if wipes else None
-        if hit is not None and _close([hit], fails, 1500) is not None:
-            col.add(R_DEADMAN, "critical", hit, "deletes the home folder when a token check fails", context)
-    if has(low, ("fetch", "xmlhttprequest", "ethereum")):
-        hook = next(iter(live(FETCH_HOOK.finditer(text), 1)), None)
-        if hook and (WALLET_FORMAT.search(text) or len(WALLET_LITERAL.findall(text)) >= 10):
-            col.add(R_WALLET, "critical" if auto else "high", hook.start(), "replaces the page's network or wallet calls "
-                    "and matches wallet addresses", context)
-    if auto:
-        hidden = next(iter(live(HIDDEN_PROCESS.finditer(text), 1)), None)
-        if hidden:
-            col.add(R_HIDDEN_PROC, "high" if nets else "medium", hidden.start(), "starts a hidden or detached process"
-                    + (" and the file talks to the network" if nets else ""), context)
-        sweep = next(iter(live(SECRET_SWEEP.finditer(text), 1)), None)
-        if sweep:
-            col.add(R_SWEEP, "high", sweep.start(), f"uses {sweep.group()} while installing or opening", context)
-        boot = next(iter(live(RUNTIME_BOOTSTRAP.finditer(text), 1)), None)
-        if boot:
-            col.add(R_NET_AUTO, "medium", boot.start(), "installs another JavaScript runtime while installing (Shai-Hulud "
-                    "2.0 brought Bun along to run its payload)", context)
-    if has(low, ("jimp", "pixel", "sharp(", "png.sync", "getdata", "getpixel")):
-        pixels = [m.start() for m in live(PIXEL_READ.finditer(text), 20)]
-        sinks = [m.start() for m in live(CODE_SINK.finditer(text), 50)] + \
-            ([m.start() for m in live(PROCESS_SINK.finditer(text), 50)] if auto else [])
-        hit = _close(pixels, sinks, 2000) if pixels and sinks else None
-        if hit is not None:
-            col.add(R_DECODE_EXEC, "critical" if auto else "high", hit, "reads code out of an image's pixels and runs it",
-                    context)
 for _pat in COMMAND_PATTERNS:
     _pat.need = _NEEDS[_pat.message]
-
-
-def has(low: str, words: tuple[str, ...]) -> bool:
-    return not words or any(w in low for w in words)
 
 
 SECRET_NEED = (".ssh", "id_rsa", "id_ed25519", "id_ecdsa", ".aws", "gcloud", "application_default", ".azure", ".kube",
@@ -590,11 +281,6 @@ AGENT_CONFIG = re.compile(
     r"|\.cursorrules\b|\.codex[\\/](?:config\.toml|AGENTS\.md)|\.gemini[\\/]settings\.json|\.mcp\.json\b|openclaw\.json\b|\bSOUL\.md\b"
     r"|\.vscode[\\/](?:settings|tasks|mcp)\.json|claude_desktop_config\.json|\.windsurfrules\b|\.clinerules\b"
     r"|copilot-instructions\.md|\.git[\\/]hooks\b|core\.hooksPath", re.I)
-WRITE_OP = re.compile(
-    r"writeFile|appendFile|createWriteStream|fs\.write|fs\.copyFile|\bopen\([^\n]{0,200}['\"](?:w|a|wb|ab|w\+|a\+)['\"]"
-    r"|\.write_text\s*\(|\.write\s*\(|>>?\s*[\"']?[~$%\w./\\-]*(?:\.claude|\.cursor|\.codex|\.gemini|\.mcp|AGENTS|CLAUDE|GEMINI|SOUL|openclaw|\.vscode|hooks)"
-    r"|Set-Content|Add-Content|Out-File|(?:^|[;&|(`]\s*|\$\(\s*|['\"]\s*)(?:tee|cp|copy|mv|move|ln\s+-s)\s|\bsed\s+-i"
-    r"|json\.dump\s*\(|\bgit\s+config\b|shutil\.(?:copy|move)", re.I | re.M)
 GLOBAL_HINT = re.compile(r"~[\\/]|\$HOME\b|\$\{HOME\}|%USERPROFILE%|%APPDATA%|homedir\(\)|expanduser\(|Path\.home\(\)"
                          r"|\bUSERPROFILE\b|\bAPPDATA\b|XDG_CONFIG_HOME|getenv\(\s*['\"]HOME", re.I)
 INSTRUCTION_FILE = re.compile(r"(?:CLAUDE(?:\.local)?|AGENTS(?:\.override)?|GEMINI|SOUL)\.md$|\.cursorrules$|\.windsurfrules$"
@@ -661,166 +347,12 @@ HIDDEN_HTML = re.compile(r"<!--(.{0,4000}?)-->", re.S)
 
 # ------------------------------------------------------------------------------------------------ hosts
 
-OFFICIAL_INSTALLERS = {
-    "sh.rustup.rs", "static.rust-lang.org", "astral.sh", "bun.sh", "deno.land", "install.python-poetry.org",
-    "get.docker.com", "claude.ai", "downloads.claude.ai", "sdk.cloud.google.com", "ollama.com", "get.pnpm.io",
-    "fnm.vercel.app", "starship.rs", "pyenv.run", "install.determinate.systems", "nixos.org", "get.volta.sh",
-    "tailscale.com", "get.k3s.io", "bootstrap.pypa.io", "cli.github.com", "foundry.paradigm.xyz", "sh.flox.dev",
-    "opencode.ai", "cursor.com", "app.warp.dev", "mise.run", "pkgx.sh", "install.duckdb.org", "get.helm.sh",
-    "dot.net", "dotnet.microsoft.com", "aka.ms", "community.chocolatey.org", "get.scoop.sh", "chocolatey.org",
-    "getcomposer.org", "install.ohmyz.sh", "get.sdkman.io", "get.rvm.io", "deno.com", "bun.com", "deb.nodesource.com",
-    "cpanmin.us", "install.perlbrew.pl", "get.haskellstack.org", "get-ghcup.haskell.org",
-    "rpm.nodesource.com", "packages.microsoft.com", "download.docker.com", "apt.releases.hashicorp.com", "dl.google.com",
-    "install.julialang.org", "sh.vector.dev", "get.jetify.com", "install.lunarvim.org", "repo.yarnpkg.com", "yarnpkg.com",
-    "nodejs.org", "go.dev", "golang.org", "www.python.org", "rustup.rs", "brew.sh",
-}
-# Hosts that appear in license headers, schemas and documentation links. They are not destinations for data and not
-# sources of install scripts anyone pipes into a shell, so they neither raise nor lower a finding.
-REFERENCE_HOSTS = {
-    "apache.org", "opensource.org", "gnu.org", "fsf.org", "creativecommons.org", "w3.org", "json-schema.org",
-    "schema.org", "spdx.org", "ietf.org", "rfc-editor.org", "unicode.org", "semver.org", "keepachangelog.com",
-    "conventionalcommits.org", "wikipedia.org", "shields.io", "example.com", "example.org", "example.net",
-    "readthedocs.io", "readthedocs.org", "mit-license.org", "choosealicense.com", "contributor-covenant.org",
-    "editorconfig.org", "jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com", "stackoverflow.com", "mozilla.org",
-    "osv.dev", "deps.dev", "nvd.nist.gov", "cve.org", "mitre.org", "owasp.org", "first.org", "sigstore.dev",
-}
-OFFICIAL_RAW_PREFIXES = ("/Homebrew/", "/nvm-sh/nvm/", "/ohmyzsh/ohmyzsh/", "/pyenv/pyenv-installer/",
-                         "/rbenv/rbenv-installer/", "/creationix/nvm/", "/helm/helm/", "/golangci/golangci-lint/",
-                         "/cli/cli/", "/oven-sh/bun/", "/denoland/", "/astral-sh/", "/nodejs/", "/python/", "/rust-lang/",
-                         "/golang/", "/microsoft/", "/anthropics/", "/openai/", "/google-gemini/", "/docker/",
-                         "/kubernetes/", "/hashicorp/", "/aws/", "/Azure/", "/github/", "/actions/", "/pnpm/", "/yarnpkg/",
-                         "/npm/", "/pypa/", "/volta-cli/", "/Schniz/fnm/", "/jdx/mise/", "/starship/starship/")
-OFFICIAL_REGISTRIES = {
-    "registry.npmjs.org", "registry.yarnpkg.com", "registry.npmmirror.com", "npm.pkg.github.com", "pypi.org",
-    "files.pythonhosted.org", "pypi.python.org", "upload.pypi.org", "download.pytorch.org", "pypi.nvidia.com",
-    "crates.io", "index.crates.io", "static.crates.io", "rubygems.org", "proxy.golang.org", "repo.maven.apache.org",
-    "repo1.maven.org", "plugins.gradle.org", "services.gradle.org", "nuget.org", "api.nuget.org", "jsr.io",
-}
-BRANDS = ("claude", "anthropic", "openai", "chatgpt", "codex", "cursor", "gemini", "copilot", "github", "ollama", "npmjs",
-          "pypi", "python", "rustup", "docker", "homebrew", "nodejs", "microsoft", "apple", "deepseek", "llama", "huggingface",
-          "windsurf", "openclaw", "vscode")
-BRAND_DOMAINS = {
-    "claude.ai", "claude.com", "anthropic.com", "openai.com", "chatgpt.com", "cursor.com", "cursor.sh", "google.com",
-    "googleapis.com", "github.com", "githubusercontent.com", "githubassets.com", "ollama.com", "ollama.ai", "npmjs.org",
-    "npmjs.com", "pypi.org", "pythonhosted.org", "python.org", "rust-lang.org", "rustup.rs", "docker.com", "docker.io",
-    "brew.sh", "nodejs.org", "microsoft.com", "visualstudio.com", "apple.com", "deepseek.com", "llama.com", "meta.com",
-    "huggingface.co", "windsurf.com", "codeium.com", "openclaw.ai", "x.ai", "mozilla.org", "gemini.google.com",
-    "meta.ai", "groq.com", "mistral.ai", "openrouter.ai", "cohere.com", "together.ai", "perplexity.ai",
-}
-_URL = re.compile(r"\b(?:https?|ftp)://[^\s\"'<>`)\]}|]+", re.I)
-
-
-def registrable(host: str) -> str:
-    parts = host.lower().strip(".").split(".")
-    if len(parts) >= 3 and parts[-2] in ("co", "com", "org", "net", "ac", "go") and len(parts[-1]) == 2:
-        return ".".join(parts[-3:])
-    return ".".join(parts[-2:])
-
-
-def urls(text: str) -> list[str]:
-    return _URL.findall(text)
-
-
-def host_of(url: str) -> str:
-    try:
-        return (urlsplit(url).hostname or "").lower()
-    except ValueError:
-        return ""
-
-
-
-
-BRAND_TLDS = (".google", ".microsoft", ".apple", ".aws", ".amazon", ".azure", ".android", ".chrome", ".youtube",
-              ".gle", ".goog", ".bing", ".xbox", ".windows", ".office")
-USER_CONTENT_HOSTS = {"github.com", "raw.githubusercontent.com", "gist.github.com", "gist.githubusercontent.com",
-                      "objects.githubusercontent.com", "codeload.github.com", "gitlab.com", "bitbucket.org", "codeberg.org"}
-
-
-def classify_host(url: str) -> str:
-    """official | reference | lookalike | raw-ip | plain-http | unknown
-
-    Anyone can publish under github.com/<user> or raw.githubusercontent.com, so those count as official only under
-    the vendors' own paths (Homebrew/install, nvm-sh/nvm, ...)."""
-    host = host_of(url)
-    if not host:
-        return "unknown"
-    if re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host):
-        return "official" if is_private_ip(host) and host.startswith("127.") else "raw-ip"
-    if re.fullmatch(r"(?:0x[0-9a-f]+|\d+)(?:\.(?:0x[0-9a-f]+|\d+)){0,3}", host, re.I):
-        return "raw-ip"  # an IPv4 address written as one number or in hex or octal: only used to disguise it
-    if host in ("localhost", "::1") or host.endswith(".localhost"):
-        return "official"
-    path = urlsplit(url).path
-    if host in OFFICIAL_INSTALLERS or host in OFFICIAL_REGISTRIES:
-        return "official"
-    if host in USER_CONTENT_HOSTS:
-        return "official" if path.startswith(OFFICIAL_RAW_PREFIXES) else "unknown"
-    reg = registrable(host)
-    if reg in REFERENCE_HOSTS or host in REFERENCE_HOSTS:
-        return "reference"
-    if host.endswith(BRAND_TLDS):
-        return "official"  # top-level domains that only their owner can register under (antigravity.google)
-    if reg in BRAND_DOMAINS or host in BRAND_DOMAINS:
-        return "official" if not host.endswith("github.io") else "unknown"
-    if any(b in host for b in BRANDS):
-        return "lookalike"
-    if url.lower().startswith("http://"):
-        return "plain-http"
-    return "unknown"
-
-
-def host_kind(window: str) -> str:
-    """none | official | unknown | plain-http | risky, for the URLs in a command or line."""
-    found = urls(window)
-    if not found:
-        return "none"
-    kinds = {classify_host(u) for u in found}
-    if kinds & {"lookalike", "raw-ip"} or EXFIL_HOSTS.search(window):
-        return "risky"
-    if "plain-http" in kinds:
-        return "plain-http"
-    if kinds <= {"official", "reference"}:
-        return "official"
-    return "unknown"
-
 
 # --------------------------------------------------------------------------------------------- scanning
 
 
-class Collector:
-    """Findings for one file, deduplicated by rule and line, capped per rule."""
-
-    def __init__(self, path: str, text: str, lines: Lines | None = None, line_offset: int = 0, note: str = "",
-                 command: bool = False):
-        self.path, self.text, self.lines = path, text, lines or Lines(text)
-        self.offset, self.note = line_offset, note
-        self.command = command  # a single command line: no comments or test strings to account for
-        self.items: list[Finding] = []
-        self._seen: set[tuple[str, int]] = set()
-        self._per_rule: dict[str, int] = {}
-
-    def add(self, rule_id: str, severity: str | None, pos: int, message: str, context: str, evidence: str | None = None,
-            line: int | None = None) -> None:
-        if not severity:
-            return
-        ln = line if line is not None else self.offset + self.lines.line(pos)
-        key = (rule_id, ln)
-        if key in self._seen:
-            return
-        count = self._per_rule.get(rule_id, 0)
-        if count >= 6:
-            return
-        self._per_rule[rule_id] = count + 1
-        self._seen.add(key)
-        ev = evidence if evidence is not None else line_at(self.text, pos)
-        self.items.append(Finding(rule_id, severity, self.path, ln, (self.note + message) if self.note else message,
-                                  clip(ev), context))
-
-    def has(self, *rule_ids: str) -> bool:
-        return any(f.rule in rule_ids for f in self.items)
-
-
 # Download-and-run severity by where the script comes from. "none" means no URL is visible (a variable).
+DECODED_DOWNLOADS = ("pipes a decoded download into a shell or interpreter", "decodes a download into a file and runs it")
 DOWNLOAD_SEVERITY = {
     "autoexec": {"none": "high", "official": "medium", "unknown": "high", "plain-http": "high", "risky": "critical"},
     "code": {"none": "medium", "official": "low", "unknown": "medium", "plain-http": "low", "risky": "high"},
@@ -841,137 +373,12 @@ SECRET_HUNT = re.compile(r"\b(?:api[_ -]?keys?|tokens?|secrets?|credentials?|pas
 INLINE_PROGRAM = re.compile(r"[ \t]+(?:-[\w-]+[ \t]+)*?(?:-[a-zA-Z]*[eEp][a-zA-Z]*|-c|-r|--eval|--print|-Command)[ \t]+['\"]")
 
 
-def _line_window(text: str, start: int, end: int, extra: int = 200) -> str:
-    stop = text.find("\n", end)
-    stop = len(text) if stop < 0 else stop
-    return text[start:min(stop, end + extra)]
-
-
 def _doc_download_severity(match_text: str) -> tuple[str | None, str]:
     kind = host_kind(match_text)
     return DOWNLOAD_SEVERITY["doc"][kind], HOST_NOTE[kind]
 
 
-EXEC_ON_LINE = re.compile(r"\b(?:exec(?:Sync|File(?:Sync)?|a)?|spawn(?:Sync)?|system|popen|Popen|check_output|check_call|"
-                          r"subprocess\.\w+|shell_exec|passthru|Command::new|ProcessBuilder|Start-Process|Invoke-Expression|"
-                          r"iex|eval|Function|run_command|sh|bash)\s*[(`]", re.I)
-
-
-_STRING = re.compile(r"\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\\n]|\\.)*`")
-_REGEX_LIKE = re.compile(r"\(\?[:!=<iIsmx]|\\[bsdwBSDW]|\[\^|\\[.(|)\[]|\{\d+,\d*\}|\[[^\]\s]{1,30}\][*+?]"
-                         r"|(?:[\w.-]+\|){3,}[\w.-]+")
-
-
-LONG_LINE = 4000  # minified or generated lines: string boundaries there are guesswork, and costly to compute
-
-
-def _enclosing_string(text: str, pos: int) -> str | None:
-    """The single-line string literal around pos, or None (also for very long lines, which keep their findings)."""
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    end = len(text) if end < 0 else end
-    if end - start > LONG_LINE:
-        return None
-    line = text[start:end]
-    for m in _STRING.finditer(line):
-        if m.start() <= pos - start < m.end():
-            return m.group()
-    return None
-
-
-def _code_part(text: str, pos: int) -> str:
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    end = len(text) if end < 0 else end
-    if end - start > LONG_LINE:
-        return text[max(start, pos - 300):min(end, pos + 300)]
-    return _STRING.sub('""', text[start:end])
-
-
-_TRIPLE = re.compile(r'"""|\'\'\'')
-_TRIPLE_CACHE: dict = {}
-
-
-def _triple_quoted(text: str, pos: int) -> str | None:
-    """The triple-quoted string (a Python docstring, a prompt template) around pos, or None."""
-    key = (id(text), len(text), text[:32])
-    spans = _TRIPLE_CACHE.get(key)
-    if spans is None:
-        spans, opened, quote = [], None, ""
-        for m in _TRIPLE.finditer(text):
-            if opened is None:
-                opened, quote = m.end(), m.group()
-            elif m.group() == quote:
-                spans.append((opened, m.start()))
-                opened = None
-        if len(_TRIPLE_CACHE) > 32:
-            _TRIPLE_CACHE.clear()
-        _TRIPLE_CACHE[key] = spans
-    i = bisect.bisect_right([a for a, _ in spans], pos) - 1
-    if i >= 0 and spans[i][0] <= pos < spans[i][1] and spans[i][1] - spans[i][0] <= 20_000:
-        return text[spans[i][0]:spans[i][1]]
-    return None
-
-
-_REGEX_LITERAL = re.compile(r"(?:^|[=(,:;!&|?{}\[]|\breturn)\s*/(?![/*\s])((?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n\[])+)/"
-                            r"[dgimsuyv]*(?=\s*(?:[,;)\]}.]|$))", re.M)
 _TEMPLATE_HOST = re.compile(r"[a-z][a-z0-9+.-]*://(?:\$\{|\{\{|\{[\w.]+\}|<|%\()", re.I)
-JS_SUFFIXES = (".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx")
-
-
-_RULE_ENTRY = re.compile(r"\b(?:re|regex|regexp|pattern|rx|match|test|detect)\s*:\s*/(?![/*\s])")
-
-
-def _line_has_regex(text: str, pos: int) -> bool:
-    """A detection-table entry ({ re: /.../, label: '...' }): its strings describe the pattern."""
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    end = len(text) if end < 0 else end
-    return end - start <= LONG_LINE and _RULE_ENTRY.search(text[start:end]) is not None
-
-
-def _in_regex_literal(text: str, pos: int) -> bool:
-    """pos sits inside a JavaScript regular-expression literal: /curl[^|]*\\|\\s*sh/ in a detection rule."""
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    end = len(text) if end < 0 else end
-    if end - start > LONG_LINE:
-        return False
-    return any(m.start(1) <= pos - start < m.end(1) for m in _REGEX_LITERAL.finditer(text[start:end]))
-
-
-def data_string(text: str, pos: int, path: str, context: str) -> bool:
-    """A match that is data rather than behavior: inside a regular expression, inside a sentence of prose, or inside
-    a string in a test file, on a line whose code does not hand strings to a shell, eval or exec. Detection tools,
-    linters and test suites are full of these; a payload passed to exec() is not."""
-    literal = _enclosing_string(text, pos)
-    if path.lower().endswith(JS_SUFFIXES) and (_in_regex_literal(text, pos) or (literal is not None and _line_has_regex(text, pos))):
-        # a detection table: { re: /curl[^|]*\|\s*sh/, label: 'pipe-to-shell (curl|sh)' }
-        return not EXEC_ON_LINE.search(_code_part(text, pos))
-    if literal is None and path.lower().endswith((".py", ".pyw")):
-        literal = _triple_quoted(text, pos)
-    if literal is None or EXEC_ON_LINE.search(_code_part(text, pos)):
-        return False
-    if _REGEX_LIKE.search(literal):
-        return True
-    words = re.findall(r"[A-Za-z]{3,}", literal)
-    if len(words) >= (8 if context == "autoexec" else 6) and literal.count(" ") >= 5 and not re.search(r"https?://", literal):
-        return True  # a sentence: rule descriptions, log messages, help text
-    return context == "code" and is_test_code(path)
-
-
-_COMMAND_STRING = re.compile(r"\s*(?:sudo\s+)?(?:curl|wget|nslookup|dig|nc|ncat|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|"
-                             r"powershell|pwsh|bash|sh)(?:\.exe)?\s+\S", re.I)
-
-
-def _named_in_string(text: str, pos: int) -> bool:
-    """A network API or tool named inside a string that is not itself a command line: "fetch", "nslookup " in a
-    keyword list, an API name in a message. A string like "curl -d @file https://..." still counts, since that is how
-    scripts run commands."""
-    literal = _enclosing_string(text, pos)
-    if literal is None:
-        return False
-    return not _COMMAND_STRING.match(literal[1:-1]) and not EXEC_ON_LINE.search(_code_part(text, pos))
 
 
 def _test_data(col: Collector, pos: int) -> bool:
@@ -1014,17 +421,19 @@ def _apply(patterns, col: Collector, text: str, context: str, low: str | None = 
             if pat.message == "pipes a download into an interpreter" and INLINE_PROGRAM.match(text, m.end()):
                 continue  # `curl page | perl -ne '...'`: the download is input to a program written on the line
             if pat.rule == R_DOWNLOAD_EXEC:  # the risk depends on where the script comes from
-                kind = host_kind(_line_window(text, m.start(), m.end()))
+                kind = host_kind(line_window(text, m.start(), m.end()))
                 severity = DOWNLOAD_SEVERITY["doc" if (sev == "doc" or commented) else ctx][kind]
+                if pat.message in DECODED_DOWNLOADS and kind != "none" and not commented:
+                    severity = max(severity or "low", sev, key=rank)  # decoding first is never an installer's habit
                 message += HOST_NOTE[kind] + (" (in a comment)" if commented else "")
             elif pat.rule == R_EXFIL and pat.message == "sends data to a remote host":
-                if host_kind(_line_window(text, m.start(), m.end())) == "official":
+                if host_kind(line_window(text, m.start(), m.end())) == "official":
                     severity = "low"
-            elif pat.rule == R_INLINE_NET and (host_kind(_line_window(text, m.start(), m.end())) == "official"
-                                               or _LOCAL_ONLY.search(_line_window(text, m.start(), m.end()))):
+            elif pat.rule == R_INLINE_NET and (host_kind(line_window(text, m.start(), m.end())) == "official"
+                                               or _LOCAL_ONLY.search(line_window(text, m.start(), m.end()))):
                 # `powershell -c "irm https://astral.sh/... | iex"`: the vendor's own one-liner, judged like a download
                 severity = None if ctx == "doc" else "low" if ctx != "autoexec" else "medium"
-            elif pat.rule == R_AGENT_BYPASS and ctx == "code" and SECRET_HUNT.search(_line_window(text, m.start(), m.end(), 400)):
+            elif pat.rule == R_AGENT_BYPASS and ctx == "code" and SECRET_HUNT.search(line_window(text, m.start(), m.end(), 400)):
                 severity, message = "high", message + " and sends it after secrets"
             elif commented and rank(severity) > rank("low"):
                 severity, message = "low", message + " (in a comment)"
@@ -1140,227 +549,9 @@ def _secret_kinds(matches) -> set[str]:
     return kinds
 
 
-def _close(anchors: list[int], others: list[int], limit: int) -> int | None:
-    """The first anchor with one of the other positions within limit characters, or None."""
-    others = sorted(others)
-    for a in anchors:
-        i = bisect.bisect_left(others, a)
-        if any(0 <= j < len(others) and abs(others[j] - a) <= limit for j in (i - 1, i)):
-            return a
-    return None
-
-
-_LIT = r"(?:'(?:[^'\\\n]|\\.){0,200}'|\"(?:[^\"\\\n]|\\.){0,200}\")"
-SPLIT_STRINGS = re.compile(
-    rf"\[[ \t]*{_LIT}(?:[ \t]*,[ \t]*{_LIT})+[ \t]*,?[ \t]*\][ \t]*\.[ \t]*join\([ \t]*(?:''|\"\")[ \t]*\)"  # a list of quoted pieces joined with ''
-    rf"|(?:''|\"\")[ \t]*\.[ \t]*join\([ \t]*[\[(][ \t]*{_LIT}(?:[ \t]*,[ \t]*{_LIT})+[ \t]*,?[ \t]*[\])][ \t]*\)"  # Python's ''.join over quoted pieces
-    rf"|{_LIT}(?:[ \t]*\+[ \t]*{_LIT})+")  # quoted pieces added together
-SPLIT_HINT = re.compile(r"['\"][ \t]*\+[ \t]*['\"]|\][ \t]*\.[ \t]*join\([ \t]*(?:''|\"\")|(?:''|\"\")[ \t]*\.[ \t]*join\(")
-SENSITIVE_NAMES = {"eval", "function", "constructor", "child_process", "exec", "execsync", "execfile", "execfilesync",
-                   "spawn", "spawnsync", "fork", "http", "https", "net", "dns", "tls", "dgram", "env", "process", "require",
-                   "atob", "fromcharcode", "writefilesync", "appendfilesync", "system", "popen", "subprocess",
-                   "__import__", "__builtins__", "builtins", "getattr", "compile", "b64decode", "urlopen", "urllib",
-                   "socket", "powershell", "invoke-expression", "iex", "curl", "wget", "globalthis", "xmlhttprequest",
-                   "sendbeacon", "websocket", "importscripts", "settimeout", "setinterval"}
 FUNCTION_ALIAS = re.compile(r"\.constructor\s*\.\s*constructor\b(?!\s*\(\s*['\"]return this)"
                             r"|\.constructor\s*\[\s*['\"]constructor['\"]\s*\]|\bFunction\.prototype\.constructor\b"
                             r"|\bReflect\.construct\s*\(\s*Function\b")
-FOLD_LIMIT = 2_000_000
-
-
-HASH_COMMENT = (".py", ".pyw", ".sh", ".bash", ".zsh", ".rb", ".pl", ".r", ".yml", ".yaml", ".toml", ".ps1")
-SLASH_COMMENT = JS_SUFFIXES + (".go", ".rs", ".java", ".c", ".cc", ".cpp", ".h", ".cs", ".kt", ".swift", ".php", ".dart")
-
-
-def _after_trailing_comment(text: str, pos: int, path: str) -> bool:
-    """pos follows a # or // comment marker on its own line, outside every string. Quotes are tracked, so code cannot
-    hide behind a quote the way it could if any # counted."""
-    low = path.lower()
-    marker = "#" if low.endswith(HASH_COMMENT) else "//" if low.endswith(SLASH_COMMENT) else None
-    if marker is None:
-        return False
-    i, quote = text.rfind("\n", 0, pos) + 1, None
-    while i < pos:
-        ch = text[i]
-        if quote:
-            if ch == "\\":
-                i += 2
-                continue
-            if ch == quote:
-                quote = None
-        elif ch in "'\"`":
-            quote = ch
-        elif text.startswith(marker, i):
-            return True
-        i += 1
-    return False
-
-
-def _in_other_string(text: str, pos: int, path: str) -> bool:
-    """pos sits inside a string that began earlier: an example in a docstring or a message, not code."""
-    if path.lower().endswith((".py", ".pyw")) and _triple_quoted(text, pos) is not None:
-        return True
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    end = len(text) if end < 0 else end
-    if end - start > LONG_LINE:
-        return False
-    col = pos - start
-    return any(m.start() < col < m.end() for m in _STRING.finditer(text[start:end]))
-
-
-def _literal(lit: str) -> str:
-    """The value of a quoted literal. JavaScript escapes Python does not know (\\[) would print a SyntaxWarning."""
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            value = ast.literal_eval(lit)
-        return value if isinstance(value, str) else lit[1:-1]
-    except (ValueError, SyntaxError):
-        return lit[1:-1]
-
-
-def fold_strings(text: str) -> tuple[str, list[tuple[int, str]]]:
-    """Join string literals that code splits apart (quoted pieces added together, or joined from a list). Returns the text with the
-    pieces joined, every line kept in place, and (position in the original, joined value) for each join."""
-    joins: list[tuple[int, str]] = []
-
-    def joined(m: re.Match) -> str:
-        value = "".join(_literal(p) for p in re.findall(_LIT, m.group()))
-        joins.append((m.start(), value))
-        return repr(value.replace("\n", " "))
-
-    return SPLIT_STRINGS.sub(joined, text), joins
-
-
-CHAR_CODES = re.compile(r"String\.fromCharCode\(\s*((?:\d{1,6}\s*,\s*){1,400}\d{1,6})\s*\)"
-                        r"|''\.join\(\s*map\(\s*chr\s*,\s*[\[(]\s*((?:\d{1,6}\s*,\s*){1,400}\d{1,6})\s*,?\s*[\])]\s*\)\s*\)"
-                        r"|\bbytes\(\s*\[\s*((?:\d{1,3}\s*,\s*){1,400}\d{1,3})\s*\]\s*\)\.decode\([^)]{0,20}\)")
-ESCAPED = re.compile(r"(['\"])((?:[^'\"\\\n]|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}){0,400}?\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})"
-                     r"(?:[^'\"\\\n]|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}){0,400})\1")
-ESCAPE = re.compile(r"\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})")
-ROT13_PY = re.compile(r"(?:__import__\(\s*['\"]codecs['\"]\s*\)|\bcodecs)\.decode\(\s*(['\"])([^'\"\\\n]{1,400})\1\s*,\s*"
-                      r"['\"]rot[_-]?13['\"]\s*\)")
-ROT13_JS_FN = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^\n;]{0,200}?charCodeAt\(\s*0?\s*\)\s*\+\s*13\b"
-                         r"|\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[^}]{0,240}?charCodeAt\(\s*0?\s*\)\s*\+\s*13\b")
-JS_BRACKET = re.compile(r"(?<=[\w$)\]])\[\s*(['\"])([A-Za-z_$][\w$]*)\1\s*\]")
-PY_GETATTR = re.compile(r"\bgetattr\(\s*([A-Za-z_][\w.]*)\s*,\s*(['\"])([A-Za-z_]\w*)\2\s*\)")
-SH_ASSIGN = re.compile(r"(?:^|(?<=[;&|\n]))[ \t]*([A-Za-z_]\w*)=('[^'\n]*'|\"[^\"$`\n]*\"|[^\s;&|'\"$`()]*)(?=[ \t]*(?:[;&|\n]|$))")
-SH_VAR = re.compile(r"\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)")
-SHELL_FILES = (".sh", ".bash", ".zsh", ".ksh")
-SHELL_TOOLS = re.compile(r"(?<![\w./-])(?:curl|wget|bash|sh|zsh|nc|ncat|python3?|node|base64|powershell|pwsh|eval)(?![\w.-])")
-DEOBF_HINT = re.compile(r"fromCharCode|map\(\s*chr|bytes\(\s*\[|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}|rot[_-]?13|\+\s*13\b"
-                        r"|getattr\(|\[\s*['\"][A-Za-z_$]|\$\{?[A-Za-z_]")
-SENSITIVE_TEXT = re.compile(r"\b(?:curl|wget)\b|\|\s*(?:ba|z)?sh\b|\bnpm\s+publish\b|/-/whoami|\.npmrc\b|\.pypirc\b|\bid_rsa\b"
-                            r"|\bchild_process\b|\beval\s*\(|\bexec\s*\(", re.I)
-
-
-def _rot13(s: str) -> str:
-    return s.translate(str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-                                     "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm"))
-
-
-def _quoted(s: str) -> str:
-    return "'" + s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n") + "'"
-
-
-def _from_codes(m: re.Match) -> str:
-    try:
-        return "".join(chr(int(n)) for n in re.findall(r"\d+", next(g for g in m.groups() if g)))
-    except (ValueError, OverflowError):
-        return ""
-
-
-def _unescape(body: str) -> str:
-    """Decode the escapes that stand for printable characters. Control characters, quotes and backslashes stay
-    escaped, so the literal stays well formed and a control character added as padding cannot stop the decoding."""
-    def one(m: re.Match) -> str:
-        c = chr(int(m.group(1) or m.group(2), 16))
-        return c if c.isprintable() and c not in "'\"\\" else m.group()
-    return ESCAPE.sub(one, body)
-
-
-def _spells_text(body: str) -> bool:
-    """Whether some escape stands for a letter or digit, which nothing needs to escape: the escapes are hiding text
-    ("http" written as \\x68\\x74\\x74\\x70). Escapes for control characters, as in terminal sequences around a plain
-    URL, hide nothing."""
-    return any((c := chr(int(m.group(1) or m.group(2), 16))).isascii() and c.isalnum() for m in ESCAPE.finditer(body))
-
-
-def _printable(s: str) -> bool:
-    return bool(s) and all(c.isprintable() or c in "\t\n" for c in s)
-
-
-def _rot13_functions(text: str) -> list[str]:
-    return [m.group(1) or m.group(2) for m in ROT13_JS_FN.finditer(text)]
-
-
-def _shell_values(text: str) -> dict[str, str]:
-    values = {}
-    for m in SH_ASSIGN.finditer(text):
-        raw = m.group(2)
-        values[m.group(1)] = raw[1:-1] if raw[:1] in ("'", '"') else raw
-    return values
-
-
-def _expand_shell(text: str, values: dict[str, str]) -> str:
-    for _ in range(3):  # a=cu; b=${a}rl; $b
-        new = SH_VAR.sub(lambda m: values.get(m.group(1) or m.group(2), m.group()), text)
-        if new == text:
-            break
-        text = new
-    return text
-
-
-def _sensitive(value: str) -> bool:
-    v = value.strip()
-    return v.lower() in SENSITIVE_NAMES or "://" in v or bool(SECRET_PATHS.search(v)) or bool(SENSITIVE_TEXT.search(v))
-
-
-def decoded_items(text: str, path: str) -> list[tuple[int, str, str]]:
-    """(position, decoded value, how) for every value the code spells in a disguise: pieces, character codes,
-    escapes, ROT13, or a shell command assembled from variables."""
-    items = [(pos, value, "builds out of pieces") for pos, value in fold_strings(text)[1]] if SPLIT_HINT.search(text) else []
-    items += [(m.start(), _from_codes(m), "decodes from character codes") for m in CHAR_CODES.finditer(text)]
-    items += [(m.start(), _unescape(m.group(2)), "decodes from escape sequences") for m in ESCAPED.finditer(text)
-              if _spells_text(m.group(2))]
-    items += [(m.start(), _rot13(m.group(2)), "decodes with ROT13") for m in ROT13_PY.finditer(text)]
-    for name in _rot13_functions(text):
-        items += [(m.start(), _rot13(m.group(2)), "decodes with ROT13")
-                  for m in re.finditer(rf"(?<![\w$.]){re.escape(name)}\(\s*(['\"])([^'\"\\\n]{{1,400}})\1\s*\)", text)]
-    if path.lower().endswith(SHELL_FILES):
-        values = _shell_values(text)
-        if values:
-            whole = {v.strip().split(" ")[0] for v in values.values()}  # CURL=curl names the tool in one piece
-            for m in re.finditer(r"[^\n]*\$\{?[A-Za-z_][^\n]*", text):
-                expanded = _expand_shell(m.group(), values)
-                tools = set(SHELL_TOOLS.findall(expanded)) - set(SHELL_TOOLS.findall(m.group())) - whole
-                if tools:
-                    items.append((m.start(), " ".join(sorted(tools)) + ": " + expanded.strip()[:120],
-                                  "assembles a command from shell variables"))
-    return items
-
-
-def deobfuscate(text: str, path: str) -> str:
-    """The text with what the code hides spelled out, every line in place: pieces joined, character codes and escapes
-    decoded, ROT13 undone where the file carries a decoder, members reached through brackets or getattr written
-    plainly, and shell variables expanded."""
-    if SPLIT_HINT.search(text):
-        text = fold_strings(text)[0]
-    text = CHAR_CODES.sub(lambda m: _quoted(_from_codes(m)) if _printable(_from_codes(m)) else m.group(), text)
-    text = ESCAPED.sub(lambda m: m.group(1) + _unescape(m.group(2)) + m.group(1), text)
-    text = ROT13_PY.sub(lambda m: _quoted(_rot13(m.group(2))), text)
-    for name in _rot13_functions(text):
-        text = re.sub(rf"(?<![\w$.]){re.escape(name)}\(\s*(['\"])([^'\"\\\n]{{1,400}})\1\s*\)",
-                      lambda m: _quoted(_rot13(m.group(2))), text)
-    text = PY_GETATTR.sub(lambda m: f"{m.group(1)}.{m.group(3)}", text)
-    if path.lower().endswith(JS_SUFFIXES):
-        text = JS_BRACKET.sub(lambda m: "." + m.group(2), text)
-    if path.lower().endswith(SHELL_FILES):
-        values = _shell_values(text)
-        if values:
-            text = _expand_shell(text, values)
-    return text
 
 
 def scan_text(text: str, path: str, context: str, *, decode: bool = True, structural: bool = True,
@@ -1404,19 +595,19 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
         col.add(R_ENV_DUMP, ENV_SEV.get(context), env.start(), "serializes the environment", context)
     nets: list[int] = []
     if (is_code or context == "config") and has(low, NET_NEED):
-        nets = [m.start() for m in live(NETWORK.finditer(text)) if not _named_in_string(text, m.start())]
+        nets = [m.start() for m in live(NETWORK.finditer(text)) if not named_in_string(text, m.start())]
     if not nets and is_code and has(low, ("http", "net.", "dns.")):
-        nets = [m.start() for m in live(_NET_FALLBACK.finditer(text)) if not _named_in_string(text, m.start())]
+        nets = [m.start() for m in live(_NET_FALLBACK.finditer(text)) if not named_in_string(text, m.start())]
     sends = live(SEND_DATA.finditer(text), 50) if nets and context == "autoexec" else []
     if nets and context == "autoexec":
-        url_matches = live(_URL.finditer(text), 2000)
+        url_matches = live(URL.finditer(text), 2000)
         foreign = [m for m in url_matches if classify_host(m.group()) not in ("official", "reference")]
         # `http://${HOST}:${port}`: the destination is decided at run time, often a server the script started itself
         templated = [m for m in foreign if _TEMPLATE_HOST.match(m.group())]
         foreign = [m for m in foreign if not _TEMPLATE_HOST.match(m.group())]
         # The request and its destination sit together in a beacon; a reference link elsewhere in the file is not one.
-        near = _close([m.start() for m in sends], [m.start() for m in foreign], 3000)
-        near_template = _close([m.start() for m in sends], [m.start() for m in templated], 3000)
+        near = first_near([m.start() for m in sends], [m.start() for m in foreign], 3000)
+        near_template = first_near([m.start() for m in sends], [m.start() for m in templated], 3000)
         if near is not None:
             host = host_of(min(foreign, key=lambda m: abs(m.start() - near)).group())
             col.add(R_EXFIL, "high", near, f"sends data out while installing or opening (to {host})", context)
@@ -1455,7 +646,7 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
         anchors = [m.start() for m in secrets] + ([env.start()] if env else [])
         # Install-time code has no reason to touch credentials at all; elsewhere the read and the send have to be
         # near each other, as they are in a stealer, rather than a keyword list and an HTTP client in one module.
-        anchor = _close(anchors, nets, len(text) if context == "autoexec" and len(text) <= 100_000 else 4000)
+        anchor = first_near(anchors, nets, len(text) if context == "autoexec" and len(text) <= 100_000 else 4000)
         if anchor is not None:
             dest = bool((has(low, EXFIL_NEED) and live(EXFIL_HOSTS.finditer(text), 1))
                         or any(not is_private_ip(m.group(1)) for m in live(RAW_IP_URL.finditer(text), 50)))
@@ -1473,7 +664,7 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
     for m in live(PERSIST.finditer(text), 1) if has(low, PERSIST_NEED) else ():
         col.add(R_PERSIST, PERSIST_SEV.get(context), m.start(), "sets up persistence", context)
     if is_code:
-        _campaign_shapes(col, text, context, low, live, nets)
+        campaign_shapes(col, text, context, low, live, nets)
     for m in live(AGENT_CONFIG.finditer(text), 50) if is_code and has(low, AGENT_NEED) else ():
         # the write and the path belong to the same statement: this line and its neighbours
         start = text.rfind("\n", 0, text.rfind("\n", 0, m.start())) + 1
@@ -1499,8 +690,8 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
     for m in AI_ADDRESSED.finditer(text) if has(low, AI_NEED) else ():
         if context == "code" and not in_comment(text, m.start(), path):
             continue
-        literal = _enclosing_string(text, m.start()) if is_code else None
-        if literal is not None and (_REGEX_LIKE.search(literal) or (context == "code" and is_test_code(path))):
+        literal = enclosing_string(text, m.start()) if is_code else None
+        if literal is not None and (REGEX_LIKE.search(literal) or (context == "code" and is_test_code(path))):
             continue  # a detection pattern or a test input, not a message to a reviewer
         if _quoted_mention(text, m.start(), m.end()):
             continue  # an example being warned about: 'if a page says "ignore all previous instructions", do not'
@@ -1537,9 +728,9 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
         # else, and a sensitive name or URL that needed decoding is a sign of its own: legitimate code writes
         # 'https' and 'eval' plainly.
         normal = deobfuscate(text, path)
-        flagged = [(pos, value, how) for pos, value, how in decoded_items(text, path) if _sensitive(value)
-                   and not in_comment(text, pos, path) and not _after_trailing_comment(text, pos, path)
-                   and not _in_other_string(text, pos, path) and not (context == "code" and is_test_code(path))]
+        flagged = [(pos, value, how) for pos, value, how in decoded_items(text, path) if is_sensitive(value)
+                   and not in_comment(text, pos, path) and not after_trailing_comment(text, pos, path)
+                   and not in_other_string(text, pos, path) and not (context == "code" and is_test_code(path))]
         if flagged:
             pos, value, how = flagged[0]
             col.add(R_OBFUSCATED, "critical" if context == "autoexec" else "high", pos,
@@ -1556,7 +747,7 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
                     same.severity, same.message = f.severity, f.message + " (after decoding what the code hides)"
     if is_code:
         alias = next((m for m in live(FUNCTION_ALIAS.finditer(text), 20)
-                      if not _after_trailing_comment(text, m.start(), path)), None)
+                      if not after_trailing_comment(text, m.start(), path)), None)
         if alias:
             col.add(R_OBFUSCATED, "critical" if context == "autoexec" else "high", alias.start(),
                     "reaches the Function constructor through an alias (runs code without writing eval)", context)

@@ -1,5 +1,5 @@
-"""Command line: pah scan | audit | sweep | protect | quarantine | check-command | hook | watch | checkup | install |
-mcp | rules."""
+"""Command line: pah scan | audit | diff | sweep | protect | quarantine | check-command | hook | watch | checkup |
+incident | install | mcp | rules."""
 from __future__ import annotations
 
 import argparse
@@ -57,6 +57,27 @@ def cmd_scan(args) -> int:
         github(rep, prefix=prefix)
     if getattr(args, "sarif_out", None):
         Path(args.sarif_out).write_text(render.sarif(rep, base=prefix or "") + "\n", encoding="utf-8")
+    verdict = rep.verdict
+    if args.fail_on:
+        return EXIT_CODES[verdict] if FAIL_ORDER[verdict] >= FAIL_ORDER[args.fail_on] else 0
+    return EXIT_CODES[verdict]
+
+
+def cmd_diff(args) -> int:
+    from . import report as render
+    from .diff import diff, summary
+
+    rep = diff(args.old, args.new, source=args.source, max_seconds=args.max_seconds)
+    if args.format == "json":
+        out = render.as_json(rep)
+    elif args.format == "sarif":
+        out = render.sarif(rep)
+    else:
+        out = render.text(rep, lang=args.lang, verbose=args.verbose) + "\n\n" + summary(rep)
+    if args.output:
+        Path(args.output).write_text(out + "\n", encoding="utf-8")
+    else:
+        print(out)
     verdict = rep.verdict
     if args.fail_on:
         return EXIT_CODES[verdict] if FAIL_ORDER[verdict] >= FAIL_ORDER[args.fail_on] else 0
@@ -291,7 +312,7 @@ def cmd_mcp(args) -> int:
 
 
 def cmd_rules(args) -> int:
-    from . import av, checkup, guard, intel, packages, review, scan, surfaces, watch  # noqa: F401  (registers every rule)
+    from . import av, checkup, diff, guard, intel, packages, review, scan, surfaces, watch  # noqa: F401  (registers every rule)
     from .model import RULES
     from .report import rules_markdown
 
@@ -301,6 +322,53 @@ def cmd_rules(args) -> int:
         for rid in sorted(RULES):
             print(f"{rid}  {RULES[rid].title}")
     return 0
+
+
+def _incidents_for(arg: str | None):
+    from . import incidents
+
+    if not arg:
+        return list(incidents.catalog())
+    one = incidents.get(arg)
+    return [one] if one else incidents.search(arg)
+
+
+def cmd_incident(args) -> int:
+    from . import av, checkup, diff, guard, incidents, intel, packages, review, scan, surfaces, watch  # noqa: F401  (rule titles)
+
+    if args.action == "list":
+        if args.markdown:
+            print(incidents.markdown(), end="")
+        elif args.json:
+            print(json.dumps([i.to_dict() for i in incidents.catalog()], indent=1, ensure_ascii=False))
+        else:
+            print(incidents.table())
+            print("\npah incident show <id> for what happened and what to do; pah incident check looks for their traces.")
+        return 0
+    chosen = _incidents_for(args.id)
+    if not chosen:
+        print(f"pah: no incident matches {args.id!r}; pah incident list shows them all", file=sys.stderr)
+        return 64
+    if args.action == "show":
+        if args.json:
+            print(json.dumps([i.to_dict() for i in chosen], indent=1, ensure_ascii=False))
+        else:
+            print("\n\n".join(incidents.text(i) for i in chosen))
+        return 0
+    hits = incidents.found(chosen)  # check
+    if args.json:
+        print(json.dumps([{"incident": i.id, "path": str(p), "what": t.what, "severity": t.severity} for i, t, p in hits],
+                         indent=1, ensure_ascii=False))
+        return 2 if hits else 0
+    if not hits:
+        traced = sum(1 for i in chosen if i.traces)
+        print(f"No traces of {traced} incident(s) on this computer. This covers only the files they are known to leave; "
+              "pah checkup and pah sweep look further.")
+        return 0
+    for inc in [i for i in chosen if any(h[0] is i for h in hits)]:
+        print(incidents.text(inc, located=[(t, p) for i, t, p in hits if i is inc]))
+        print()
+    return 2
 
 
 def _ci_options(p: argparse.ArgumentParser) -> None:
@@ -355,6 +423,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-v", "--verbose", action="store_true")
     _ci_options(p)
     p.set_defaults(func=cmd_scan, av=True, audit=True)
+
+    p = sub.add_parser("diff", help="what a new version of a package, repository, extension or skill does that the old "
+                       "one did not; with --source, what a published package has that its source does not")
+    p.add_argument("old", help="folder or archive: the version you have, or with --source the source checkout")
+    p.add_argument("new", help="folder or archive: the update, or with --source the published package")
+    p.add_argument("--source", action="store_true", help="OLD is the source at the release's tag and NEW the package "
+                   "built from it: code that runs on its own and is only in the package blocks")
+    p.add_argument("--format", choices=("text", "json", "sarif"), default="text")
+    p.add_argument("--json", dest="format", action="store_const", const="json")
+    p.add_argument("-o", "--output", help="write the report to a file")
+    p.add_argument("--fail-on", choices=("block", "warn", "incomplete"))
+    p.add_argument("--max-seconds", type=float, default=None)
+    p.add_argument("--lang", choices=("en", "ko"), default=os.environ.get("PAH_LANG", "en"))
+    p.add_argument("-v", "--verbose", action="store_true")
+    p.set_defaults(func=cmd_diff)
 
     p = sub.add_parser("check-command", help="judge a shell command an agent (or you) is about to run")
     p.add_argument("command")
@@ -427,7 +510,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--yes", action="store_true", help="write the changes (default: only show them)")
     p.set_defaults(func=cmd_install)
 
-    p = sub.add_parser("mcp", help="run as an MCP server over stdio (scan, check_command, checkup, watch_check)")
+    p = sub.add_parser("incident", help="real incidents: what happened, the traces they leave and what to do, in order")
+    p.add_argument("action", nargs="?", choices=("list", "show", "check"), default="list")
+    p.add_argument("id", nargs="?", help="incident id or words to search for (check: all incidents when omitted)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--markdown", action="store_true", help="list: write docs/incidents.md")
+    p.set_defaults(func=cmd_incident)
+
+    p = sub.add_parser("mcp", help="run as an MCP server over stdio (scan, check_command, checkup, watch_check, incident)")
     p.set_defaults(func=cmd_mcp)
 
     p = sub.add_parser("rules", help="list every rule")

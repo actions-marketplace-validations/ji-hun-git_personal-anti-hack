@@ -21,7 +21,7 @@ from .model import Report, rule
 from .packages import dispatch_packages
 from .patterns import scan_text
 from .policy import adjust
-from .surfaces import AUTO_LOADED, File, State, dispatch
+from .surfaces import AUTO_LOADED, File, State, dispatch, toxic_flows
 from .text import decode_bytes
 
 R_SYMLINK = rule(
@@ -364,6 +364,12 @@ def _walk_git(git: Path, prefix: str, state: State) -> None:
 _JS_IMPORT = re.compile(r"""(?:require\s*\(\s*|import\s*\(\s*|\bfrom\s+|\bimport\s+)['"](\.{1,2}/[^'"]+)['"]""")
 _PY_IMPORT = re.compile(r"(?m)^\s*(?:from\s+(\.?[\w.]*)\s+import\s+([\w, ]+)|import\s+([\w.]+))")
 _JS_EXTS = ("", ".js", ".cjs", ".mjs", ".ts", ".json", "/index.js", "/index.cjs", "/index.ts")
+# A runtime started on a file of the repository: `bun Math_Symbol.js` from a preinstall script (ChainDrop), `system('bun
+# index.js')` from a gem's extconf.rb (strutil-core). What install-time code launches runs at install too.
+_LAUNCH = re.compile(r"(?<![\w.-])(?:node|bun|deno(?:\s+run)?|tsx|ts-node|python3?|py|ruby|sh|bash|zsh|pwsh|powershell)"
+                     r"(?:\.exe)?(?:\s+-[\w-]+)*\s+['\"]?((?:\.{1,2}/)?[\w.-]+(?:/[\w.-]+)*\.(?:m?js|cjs|ts|mts|py|rb|sh|ps1))\b"
+                     r"|\b(?:spawn|spawnSync|execFile|execFileSync|fork)\s*\([^)]{0,200}?['\"]((?:\.{1,2}/)?[\w.-]+(?:/[\w.-]+)*"
+                     r"\.(?:m?js|cjs|ts|mts|py|sh))['\"]")
 
 
 def _local_imports(state: State, f: File) -> list[str]:
@@ -387,6 +393,12 @@ def _local_imports(state: State, f: File) -> list[str]:
                 for cand in (path + ".py", path + "/__init__.py"):
                     if name and cand in state.files:
                         out.append(cand)
+    for m in _LAUNCH.finditer(text):
+        launched = m.group(1) or m.group(2)
+        for cand in (posixpath.normpath(posixpath.join(base, launched)), posixpath.normpath(launched)):
+            if cand in state.files and cand != f.rel:  # relative to the script, or to the package root it runs in
+                out.append(cand)
+                break
     return out
 
 
@@ -440,9 +452,24 @@ def scan(target: str | os.PathLike, *, max_seconds: float | None = None, online:
     target_str = str(target)
     if re.match(r"^(?:https?://|git@|ssh://)", target_str):
         return _scan_url(target_str, max_seconds=max_seconds, online=online, av=av)
-    path = Path(target_str).expanduser()
+    state = collect(target_str, started=started, max_seconds=max_seconds)
+    report = _analyze(state, target_str, started, max_seconds, online)
+    if av:
+        from . import av as antivirus
+
+        found, used, problems = antivirus.scan(Path(target_str).expanduser().resolve())
+        report.findings.extend(found)
+        report.stats["antivirus"] = {"engines": used, "problems": problems, "detections": len(found)}
+    return report
+
+
+def collect(target: str | os.PathLike, *, started: float | None = None, max_seconds: float | None = None) -> State:
+    """Read a local folder, file or archive the way scan does: every file, and the members of archives opened up to
+    three levels deep. Nothing is executed. scan and diff both start here."""
+    started = time.monotonic() if started is None else started
+    path = Path(str(target)).expanduser()
     if not path.exists():
-        raise FileNotFoundError(target_str)
+        raise FileNotFoundError(str(target))
     if path.is_dir():
         state = State(root=path.resolve())
         _walk(state.root, state, started, max_seconds)
@@ -450,17 +477,6 @@ def scan(target: str | os.PathLike, *, max_seconds: float | None = None, online:
         state = State(root=path.resolve().parent)
         data = path.read_bytes()
         state.files[path.name] = File(path.name, len(data), data, decode_bytes(data))
-    report = _analyze(state, target_str, started, max_seconds, online)
-    if av:
-        from . import av as antivirus
-
-        found, used, problems = antivirus.scan(path.resolve())
-        report.findings.extend(found)
-        report.stats["antivirus"] = {"engines": used, "problems": problems, "detections": len(found)}
-    return report
-
-
-def _analyze(state: State, target: str, started: float, max_seconds: float | None, online: bool = False) -> Report:
     archives = [f for f in list(state.files.values()) if _is_archive(f)]
     for f in archives:
         for member in _archive_members(state, f, 1):
@@ -468,6 +484,11 @@ def _analyze(state: State, target: str, started: float, max_seconds: float | Non
             if _is_archive(member):
                 for inner in _archive_members(state, member, 2):
                     state.files[inner.rel] = inner
+    state.archives_opened = len(archives)
+    return state
+
+
+def _analyze(state: State, target: str, started: float, max_seconds: float | None, online: bool = False) -> Report:
     for f in list(state.files.values()):
         if _skipped_dir(f.rel) and f.name.lower() not in ("package.json", "binding.gyp") and not f.name.endswith(".pth"):
             continue
@@ -481,6 +502,7 @@ def _analyze(state: State, target: str, started: float, max_seconds: float | Non
             _binary_checks(state, f)
         else:
             _disguised_text(state, f)
+    toxic_flows(state)
     _propagate(state)
     scanned = 0
     for f in state.files.values():
@@ -511,7 +533,7 @@ def _analyze(state: State, target: str, started: float, max_seconds: float | Non
     report = Report(target=target, findings=_dedupe(state.findings), surfaces=state.surfaces, incomplete=state.incomplete)
     report.stats = {
         "files": len(state.files), "text_files_scanned": scanned,
-        "bytes": sum(f.size for f in state.files.values()), "archives_opened": len(archives),
+        "bytes": sum(f.size for f in state.files.values()), "archives_opened": state.archives_opened,
         "autoexec_files": dict(sorted(state.autoexec.items())), "seconds": round(time.monotonic() - started, 2),
         **state.extra,
     }

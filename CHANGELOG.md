@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.4.0 (2026-11-17)
+
+**Real incidents, and what to do about each one.** A catalog of 33 attacks on people who use AI agents, from
+s1ngularity (August 2025) to MIDNIGHT NEPTUNE (November 2026): what happened, how it got in, which rules and trap
+repositories cover it, the files it leaves on a computer, and the response in order, each with its sources
+([docs/incidents.md](docs/incidents.md)). `pah incident list | show | check`, the MCP tool `incident` and `pah checkup`
+read it. Order is the point: ChainDrop, strutil-core and the testmetest worm wipe the home folder when their stolen
+token is revoked, so their responses remove the persistence before any token is touched. Added from August to November
+2026: ChainDrop, WFX Phantom, MIDNIGHT NEPTUNE, strutil-core, the Paperclip and Browser Use skill clones,
+@subql/common, the arrayref crates, Deadbugz, unauthorized Codex and Claude Code relays, and `.pth` typosquats of AI
+libraries.
+
+**`pah diff`: what a new version does that the old one did not.** Capabilities (network, sending data, processes,
+dynamic code, credentials, persistence, decoding, install hooks) are compared file by file, as Chainguard's malcontent
+does; code that runs on its own and gains one is reported (PAH-D001), with new dependencies and findings that are new.
+With `--source`, a published package is compared with its source at the same tag, as LastPyMile and OSS Rebuild do:
+code that runs on its own and exists only in the package blocks (PAH-D002). Folders and archives both work, and an npm
+tarball lines up with its folder.
+
+**Agent setups as a whole.** When a tool that brings in content anyone can write and a tool that sends data out both
+run without asking, the agent's access to your files completes the lethal trifecta: a repository's settings or your own
+setup (`pah checkup`) is reported (PAH-A021). Pre-approved commands that run any program through their arguments, such
+as `find -exec`, `go test -exec`, `rg --pre` and package runners, are reported too (PAH-A020), after Trail of Bits'
+argument-injection work.
+
+**New detection from the incidents.** RubyGems native extensions (`extconf.rb`, and whatever a gemspec lists under
+`extensions`) run at gem install and are now judged as install-time code. A file that install-time code starts through a
+runtime (`bun Math_Symbol.js`, `spawn(bun, ['x.js'])`) is install-time code too. Documents a skill tells the agent to
+follow before first use are read as part of the skill. A workflow that hands `toJSON(secrets)` to a repository script
+that posts them blocks. A download decoded on its way to an interpreter (`curl … | base64 -d > /tmp/t.mjs && node
+/tmp/t.mjs`) is high wherever it is written. Nine TrapRepo cases cover these and the agent-setup checks, two of them
+benign twins.
+
+**Modular.** The two largest modules were split by responsibility. `patterns.py` became the content rules plus host
+trust (`hosts.py`), where a match sits (`codectx.py`), decoding (`deobfuscate.py`), campaign shapes (`campaigns.py`) and
+the rule catalog (`content_rules.py`); `surfaces.py` became a package with one module per kind of file (agent
+configurations, instructions and skills, MCP, editors, workflows, git, environment). Benchmark, drill and fuzzer results
+were identical before and after the split. [docs/architecture.md](docs/architecture.md) maps the modules and says where
+a change goes.
+
+**Calibrated on popular repositories.** The 30-repository check, run at each project's current commit (19 had moved
+on since 0.3.0), caught five false alarms while this release was built. All were fixed and are kept as tests
+(`tests/test_calibration.py`): a shell script kept in a Rust raw string in Codex's sandbox tests (multi-line raw strings
+in test suites are now data, like Python's triple-quoted strings), a skill's link text read as an instruction to follow
+(cli/cli; the follow verb must come before the link), a reference page judged like a file the agent loads on its own
+(Anthropic's skills; documents a skill sends the agent to are read like setup documents), an attacker's phrase quoted
+in a warning (everything-claude-code), and a test file that a setup document says to run (everything-claude-code).
+
+**Measured:** TrapRepo 70 of 70 malicious repositories caught, 0 of 35 benign flagged; attack drill 1,032 decisions,
+0 unexpected; fuzzer 347 of 347 rewrites caught, 0 of 11 harmless rewrites flagged; 30 popular repositories
+26 pass, 4 warn, none blocked (67,014 files).
+
 ## 0.3.0 (2026-11-12)
 
 **Renamed to agent-white-hat.** The repository, the package, the Action and the plugin's display name are now

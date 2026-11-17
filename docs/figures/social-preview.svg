@@ -9,9 +9,9 @@
 <text x="96" y="300" font-size="76" font-weight="800" fill="#f0f6fc" letter-spacing="-1.5">agent-white-hat</text>
 <text x="96" y="368" font-size="38" font-weight="500" fill="#c9d6ee">The antivirus for people</text>
 <text x="96" y="416" font-size="38" font-weight="500" fill="#9fb8e6">who use AI agents.</text>
-<text x="96" y="534" font-size="40" font-weight="700" fill="#f0f6fc">63/63</text>
+<text x="96" y="534" font-size="40" font-weight="700" fill="#f0f6fc">70/70</text>
 <text x="96" y="566" font-size="20" fill="#8b949e">malicious repos caught</text>
-<text x="372.7" y="534" font-size="40" font-weight="700" fill="#f0f6fc">0/33</text>
+<text x="372.7" y="534" font-size="40" font-weight="700" fill="#f0f6fc">0/35</text>
 <text x="372.7" y="566" font-size="20" fill="#8b949e">false alarms</text>
 <text x="548.8" y="534" font-size="40" font-weight="700" fill="#f0f6fc">0/30</text>
 <text x="548.8" y="566" font-size="20" fill="#8b949e">popular repos blocked</text>
