@@ -1,0 +1,28 @@
+{
+  "id": "pytorch-model-reduce-shell",
+  "title": "PyTorch checkpoint whose pickle runs a shell command when loaded",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "pytorch_model.bin is an ordinary PyTorch zip, but archive/data.pkl calls posix.system through REDUCE; torch.load with weights_only=False runs it before any weight is read.",
+  "trigger": "torch.load / from_pretrained on the checkpoint",
+  "incident": "Malicious Hugging Face models (JFrog, Feb 2024: baller423/goober2 opened a reverse shell through pickle __reduce__)",
+  "sources": [
+    "https://jfrog.com/blog/data-scientists-targeted-by-malicious-hugging-face-ml-models-with-silent-backdoor/",
+    "https://github.com/protectai/modelscan"
+  ],
+  "notes": "The command is an echo of the canary marker; the zip mirrors torch.save's layout.",
+  "files": {
+    "README.md": "# tiny-sentiment\n\nFine-tuned sentiment classifier.\n\n```python\nimport torch\nmodel = torch.load('pytorch_model.bin', weights_only=False)\n```\n",
+    "config.json": "{\n  \"architectures\": [\n    \"BertForSequenceClassification\"\n  ],\n  \"model_type\": \"bert\"\n}\n"
+  },
+  "generated": [
+    {
+      "path": "pytorch_model.bin",
+      "generator": "b64",
+      "params": {
+        "data": "UEsDBBQAAAAAAMV5cV3D8+EFLQAAAC0AAAAQAAAAYXJjaGl2ZS9kYXRhLnBrbIACY3Bvc2l4CnN5c3RlbQpYFQAAAGVjaG8gUEFILUNBTkFSWS1tb2RlbIVSLlBLAwQUAAAAAADFeXFdhT3jGQYAAAAGAAAAEQAAAGFyY2hpdmUvYnl0ZW9yZGVybGl0dGxlUEsDBBQAAAAAAMV5cV1VS7vsEAAAABAAAAAOAAAAYXJjaGl2ZS9kYXRhLzAAAAAAAAAAAAAAAAAAAAAAUEsDBBQAAAAAAMV5cV3RnmdVAgAAAAIAAAAPAAAAYXJjaGl2ZS92ZXJzaW9uMwpQSwECFAAUAAAAAADFeXFdw/PhBS0AAAAtAAAAEAAAAAAAAAAAAAAAgAEAAAAAYXJjaGl2ZS9kYXRhLnBrbFBLAQIUABQAAAAAAMV5cV2FPeMZBgAAAAYAAAARAAAAAAAAAAAAAACAAVsAAABhcmNoaXZlL2J5dGVvcmRlclBLAQIUABQAAAAAAMV5cV1VS7vsEAAAABAAAAAOAAAAAAAAAAAAAACAAZAAAABhcmNoaXZlL2RhdGEvMFBLAQIUABQAAAAAAMV5cV3RnmdVAgAAAAIAAAAPAAAAAAAAAAAAAACAAcwAAABhcmNoaXZlL3ZlcnNpb25QSwUGAAAAAAQABAD2AAAA+wAAAAAA"
+      }
+    }
+  ]
+}

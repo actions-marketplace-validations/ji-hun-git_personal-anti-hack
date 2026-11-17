@@ -19,7 +19,7 @@ from pathlib import Path
 
 DATA = Path(__file__).resolve().parent / "data" / "incidents.json"
 KINDS = ("repository", "package", "extension", "skill", "mcp", "ci", "install-page", "instruction-file", "agent-flaw",
-         "stealer", "malware")
+         "stealer", "malware", "model")
 SEVERITIES = ("critical", "high", "medium")
 
 

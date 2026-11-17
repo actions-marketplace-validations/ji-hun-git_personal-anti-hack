@@ -2,20 +2,20 @@
  "name": "2026-11-17-rules",
  "date": "2026-11-17",
  "platform": "win32",
- "code": "7ca4896a8d55",
+ "code": "61ed93bd3af9",
  "budget_chars": 100000,
  "trials": 1,
- "cases": 105,
+ "cases": 116,
  "skipped": {
   "symlink-to-ssh-key": "could not create symlink docs/keys.txt on this system"
  },
  "summaries": [
   {
    "tool": "agent-white-hat (rules)",
-   "malicious": 70,
-   "benign": 35,
-   "detected": 70,
-   "blocked": 65,
+   "malicious": 76,
+   "benign": 40,
+   "detected": 76,
+   "blocked": 71,
    "false_block": 0,
    "false_warn": 0,
    "missed": [],
@@ -29,7 +29,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-C010"
    ],
@@ -43,7 +43,7 @@
    "expected": "block",
    "category": "instruction-file",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.032,
    "pah_rules": [
     "PAH-A011"
    ],
@@ -57,7 +57,7 @@
    "expected": "pass",
    "category": "instruction-file",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -69,7 +69,7 @@
    "expected": "pass",
    "category": "rust",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -81,7 +81,7 @@
    "expected": "pass",
    "category": "rust",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -93,7 +93,7 @@
    "expected": "pass",
    "category": "instruction-file",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -105,7 +105,7 @@
    "expected": "pass",
    "category": "agent-config",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -117,7 +117,7 @@
    "expected": "pass",
    "category": "agent-config",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -129,7 +129,7 @@
    "expected": "pass",
    "category": "agent-config",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -141,7 +141,7 @@
    "expected": "pass",
    "category": "agent-config",
    "pah": "pass",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -153,7 +153,7 @@
    "expected": "pass",
    "category": "instruction-file",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -165,7 +165,7 @@
    "expected": "pass",
    "category": "ide",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.031,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -177,7 +177,7 @@
    "expected": "pass",
    "category": "content-obfuscation",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -188,6 +188,18 @@
    "kind": "benign",
    "expected": "pass",
    "category": "build",
+   "pah": "pass",
+   "pah_seconds": 0.016,
+   "pah_rules": [],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "category": "model",
    "pah": "pass",
    "pah_seconds": 0.0,
    "pah_rules": [],
@@ -201,7 +213,7 @@
    "expected": "pass",
    "category": "build",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -213,7 +225,7 @@
    "expected": "pass",
    "category": "git",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -225,7 +237,19 @@
    "expected": "pass",
    "category": "build",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
+   "pah_rules": [],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "category": "model",
+   "pah": "pass",
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -237,7 +261,19 @@
    "expected": "pass",
    "category": "git",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
+   "pah_rules": [],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "category": "model",
+   "pah": "pass",
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -249,7 +285,7 @@
    "expected": "pass",
    "category": "build",
    "pah": "pass",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -261,7 +297,7 @@
    "expected": "pass",
    "category": "agent-config",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -273,7 +309,7 @@
    "expected": "pass",
    "category": "mcp",
    "pah": "pass",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -285,7 +321,7 @@
    "expected": "pass",
    "category": "content-obfuscation",
    "pah": "pass",
-   "pah_seconds": 0.109,
+   "pah_seconds": 0.125,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -297,7 +333,7 @@
    "expected": "pass",
    "category": "package-install",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.031,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -321,7 +357,7 @@
    "expected": "pass",
    "category": "package-install",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -332,6 +368,18 @@
    "kind": "benign",
    "expected": "pass",
    "category": "python",
+   "pah": "pass",
+   "pah_seconds": 0.016,
+   "pah_rules": [],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "category": "model",
    "pah": "pass",
    "pah_seconds": 0.015,
    "pah_rules": [],
@@ -345,7 +393,7 @@
    "expected": "pass",
    "category": "instruction-file",
    "pah": "pass",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.031,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -369,7 +417,7 @@
    "expected": "pass",
    "category": "python",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -381,7 +429,7 @@
    "expected": "pass",
    "category": "package-install",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -393,7 +441,7 @@
    "expected": "pass",
    "category": "rust",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -417,7 +465,7 @@
    "expected": "pass",
    "category": "skill",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -428,6 +476,18 @@
    "kind": "benign",
    "expected": "pass",
    "category": "skill",
+   "pah": "pass",
+   "pah_seconds": 0.016,
+   "pah_rules": [],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "category": "model",
    "pah": "pass",
    "pah_seconds": 0.0,
    "pah_rules": [],
@@ -441,7 +501,7 @@
    "expected": "pass",
    "category": "ide",
    "pah": "pass",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [],
    "skipped": null,
    "models": {},
@@ -477,7 +537,7 @@
    "expected": "warn",
    "category": "binary",
    "pah": "block",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-F002"
    ],
@@ -491,7 +551,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C004"
    ],
@@ -505,7 +565,7 @@
    "expected": "block",
    "category": "rust",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.0,
    "pah_rules": [
     "PAH-C004",
     "PAH-P011"
@@ -520,7 +580,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A002",
     "PAH-C004"
@@ -549,7 +609,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004"
@@ -564,7 +624,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-A003"
    ],
@@ -578,7 +638,7 @@
    "expected": "warn",
    "category": "agent-config",
    "pah": "warn",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A020"
    ],
@@ -592,7 +652,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.032,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004"
@@ -607,7 +667,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-A001",
     "PAH-C003",
@@ -623,7 +683,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C004"
    ],
@@ -637,7 +697,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-A008",
     "PAH-C004"
@@ -652,7 +712,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A001",
     "PAH-C004"
@@ -667,7 +727,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-A007",
     "PAH-C003",
@@ -683,7 +743,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C004"
    ],
@@ -711,7 +771,7 @@
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C016"
    ],
@@ -741,7 +801,7 @@
    "expected": "block",
    "category": "docs",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A011",
     "PAH-F005"
@@ -756,7 +816,7 @@
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.032,
    "pah_rules": [
     "PAH-C001",
     "PAH-C002",
@@ -772,11 +832,25 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A001",
     "PAH-C003",
     "PAH-C004"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.016,
+   "pah_rules": [
+    "PAH-M004"
    ],
    "skipped": null,
    "models": {},
@@ -788,7 +862,7 @@
    "expected": "block",
    "category": "git",
    "pah": "block",
-   "pah_seconds": 0.032,
+   "pah_seconds": 0.047,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004",
@@ -805,7 +879,7 @@
    "expected": "block",
    "category": "binary",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-F006"
    ],
@@ -833,7 +907,7 @@
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-T002"
    ],
@@ -856,12 +930,26 @@
    "deep": {}
   },
   {
+   "id": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.016,
+   "pah_rules": [
+    "PAH-C001"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
    "id": "husky-precommit-payload",
    "kind": "malicious",
    "expected": "block",
    "category": "git",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004"
@@ -876,7 +964,7 @@
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 0.078,
+   "pah_seconds": 0.094,
    "pah_rules": [
     "PAH-C002",
     "PAH-T005"
@@ -891,7 +979,7 @@
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 1.203,
+   "pah_seconds": 1.343,
    "pah_rules": [
     "PAH-C002",
     "PAH-T007"
@@ -916,12 +1004,26 @@
    "deep": {}
   },
   {
+   "id": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.0,
+   "pah_rules": [
+    "PAH-M003"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
    "id": "lookalike-dep-separator-confusion",
    "kind": "malicious",
    "expected": "warn",
    "category": "package-install",
    "pah": "warn",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-P007"
    ],
@@ -935,7 +1037,7 @@
    "expected": "block",
    "category": "build",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C004"
    ],
@@ -949,7 +1051,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-A006",
     "PAH-C004"
@@ -964,7 +1066,7 @@
    "expected": "block",
    "category": "mcp",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C003"
    ],
@@ -978,7 +1080,7 @@
    "expected": "block",
    "category": "mcp",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C003"
    ],
@@ -992,7 +1094,7 @@
    "expected": "warn",
    "category": "mcp",
    "pah": "warn",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-A021"
    ],
@@ -1020,7 +1122,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004",
@@ -1037,7 +1139,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C004"
    ],
@@ -1051,7 +1153,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-P002"
    ],
@@ -1065,7 +1167,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.015,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C018",
     "PAH-C024"
@@ -1080,7 +1182,7 @@
    "expected": "warn",
    "category": "package-install",
    "pah": "warn",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-P019"
    ],
@@ -1103,12 +1205,27 @@
    "deep": {}
   },
   {
+   "id": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.015,
+   "pah_rules": [
+    "PAH-M001",
+    "PAH-M005"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
    "id": "obfuscatorio-js-loader",
    "kind": "malicious",
    "expected": "block",
    "category": "content-obfuscation",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.032,
    "pah_rules": [
     "PAH-C012"
    ],
@@ -1122,7 +1239,7 @@
    "expected": "block",
    "category": "agent-config",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-A010",
     "PAH-C004"
@@ -1140,6 +1257,20 @@
    "pah_seconds": 0.0,
    "pah_rules": [
     "PAH-P003"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.016,
+   "pah_rules": [
+    "PAH-M001"
    ],
    "skipped": null,
    "models": {},
@@ -1166,7 +1297,7 @@
    "expected": "block",
    "category": "binary",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C004",
     "PAH-F003"
@@ -1181,7 +1312,7 @@
    "expected": "block",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004"
@@ -1196,7 +1327,7 @@
    "expected": "block",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C002"
    ],
@@ -1210,7 +1341,7 @@
    "expected": "block",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C002"
    ],
@@ -1224,7 +1355,7 @@
    "expected": "block",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-P008"
    ],
@@ -1238,7 +1369,7 @@
    "expected": "warn",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-P004"
    ],
@@ -1252,10 +1383,24 @@
    "expected": "block",
    "category": "python",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C001",
     "PAH-C002"
+   ],
+   "skipped": null,
+   "models": {},
+   "deep": {}
+  },
+  {
+   "id": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "category": "model",
+   "pah": "block",
+   "pah_seconds": 0.016,
+   "pah_rules": [
+    "PAH-M001"
    ],
    "skipped": null,
    "models": {},
@@ -1282,7 +1427,7 @@
    "expected": "warn",
    "category": "instruction-file",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C018"
    ],
@@ -1296,7 +1441,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004",
@@ -1312,7 +1457,7 @@
    "expected": "block",
    "category": "rust",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C001"
    ],
@@ -1368,7 +1513,7 @@
    "expected": "block",
    "category": "skill",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-A019",
     "PAH-C003",
@@ -1384,7 +1529,7 @@
    "expected": "block",
    "category": "ide",
    "pah": "block",
-   "pah_seconds": 0.016,
+   "pah_seconds": 0.031,
    "pah_rules": [
     "PAH-C004",
     "PAH-C022",
@@ -1401,7 +1546,7 @@
    "expected": "block",
    "category": "ide",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.015,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004",
@@ -1418,7 +1563,7 @@
    "expected": "block",
    "category": "ide",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C003",
     "PAH-C004",
@@ -1448,7 +1593,7 @@
    "expected": "block",
    "category": "ci",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C004",
     "PAH-I010"
@@ -1463,7 +1608,7 @@
    "expected": "block",
    "category": "package-install",
    "pah": "block",
-   "pah_seconds": 0.0,
+   "pah_seconds": 0.016,
    "pah_rules": [
     "PAH-C004",
     "PAH-P006"

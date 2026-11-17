@@ -17,6 +17,7 @@ import time
 import zipfile
 from pathlib import Path
 
+from . import models
 from .model import Report, rule
 from .packages import dispatch_packages
 from .patterns import scan_text
@@ -324,7 +325,8 @@ def _walk(root: Path, state: State, started: float, max_seconds: float | None) -
             except OSError:
                 continue
             if size > MAX_FILE:
-                state.incomplete.append(f"{rel}: {size / 1e6:.0f} MB file not scanned")
+                if not models.check_large(state, rel, entry.path):  # model files: only the parts that run code
+                    state.incomplete.append(f"{rel}: {size / 1e6:.0f} MB file not scanned")
                 continue
             total += size
             if total > MAX_TOTAL:
@@ -475,6 +477,8 @@ def collect(target: str | os.PathLike, *, started: float | None = None, max_seco
         _walk(state.root, state, started, max_seconds)
     else:
         state = State(root=path.resolve().parent)
+        if path.stat().st_size > MAX_FILE and models.check_large(state, path.name, str(path)):
+            return state  # a large model file: judged from the parts that can run code
         data = path.read_bytes()
         state.files[path.name] = File(path.name, len(data), data, decode_bytes(data))
     archives = [f for f in list(state.files.values()) if _is_archive(f)]
@@ -494,6 +498,7 @@ def _analyze(state: State, target: str, started: float, max_seconds: float | Non
             continue
         dispatch(state, f)
         dispatch_packages(state, f)
+        models.check(state, f)
         if "/" not in f.rel and PLANTED_TOOL.fullmatch(f.name):
             state.add(R_PLANTED, "critical", f.rel, 0, f"{f.name} in the project folder runs in place of the real "
                       f"{f.name.split('.')[0]} in tools that start it from there", f.rel, "code")

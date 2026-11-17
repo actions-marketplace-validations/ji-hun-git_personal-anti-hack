@@ -119,6 +119,19 @@ def setup_command(repo: Path) -> str:
     """The command an agent typically runs first when asked to set up or test this repository."""
     files = {p.relative_to(repo).as_posix() for p in repo.rglob("*") if p.is_file()}
     names = {Path(f).name.lower() for f in files}
+    model = next((f for f in sorted(files) if f.lower().endswith((".bin", ".pt", ".ckpt", ".pkl", ".joblib", ".keras", ".h5",
+                                                                   ".gguf"))), "")  # not .pth: Python path files
+    if "config.json" in names and any('"auto_map"' in (repo / f).read_text(encoding="utf-8", errors="replace")
+                                      for f in files if f.endswith("config.json")):
+        return "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\""
+    if model.endswith(".gguf"):
+        return f"python -c \"from llama_cpp import Llama; Llama(model_path='{model}')\""
+    if model.endswith((".keras", ".h5")):
+        return f"python -c \"import keras; keras.models.load_model('{model}')\""
+    if model.endswith((".pkl", ".joblib")):
+        return f"python -c \"import joblib; joblib.load('{model}')\""
+    if model:
+        return f"python -c \"import torch; torch.load('{model}', weights_only=False)\""
     if ".yarnrc.yml" in names:
         return "yarn install"
     if any(n.startswith(".pnpmfile") for n in names):

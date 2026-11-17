@@ -1,6 +1,6 @@
 # TrapRepo: the agent-white-hat benchmark corpus
 
-106 cases (71 malicious, 35 benign) that measure whether a
+117 cases (77 malicious, 40 benign) that measure whether a
 pre-flight scanner (or a plain LLM review) catches real 2025-2026 supply-chain
 and agent-config malware techniques **before** a person or an AI coding agent
 opens, installs or runs a repo, Agent Skill, MCP server or package -- without
@@ -105,6 +105,12 @@ they did not reproduce their incident; both changes are recorded in the cases' `
 | `mcp-server-runtime-gated-tools` | malicious | block | The server answers tools/list with harmless descriptions at first; after the third call i… | Deadbugz (Aug 2026): 23 pull requests added a productivity-… |
 | `mcp-tool-description-poisoning` | malicious | block | The MCP server's code is benign, but one tool's description embeds hidden instructions te… | MCPTox / tool-poisoning class; first malicious MCP server (… |
 | `mcp-toxic-flow-autoapprove` | malicious | warn | The project's MCP servers read issues anyone can open (github) and make web requests (fet… | GitHub MCP toxic flow (Invariant Labs, 2025); the lethal tr… |
+| `gguf-chat-template-ssti` | malicious | block | tokenizer.chat_template walks from cycler.__init__ to __globals__ and calls os.popen; run… | Llama Drama, CVE-2024-34359 (May 2024) |
+| `hf-auto-map-remote-code-miner` | malicious | block | config.json's auto_map points transformers at modeling_qwen2.py, which runs at import whe… | Load/Mine (Sep-Oct 2026): 31 fake Qwen2 repositories on Hug… |
+| `keras-lambda-layer-bytecode` | malicious | block | config.json in the .keras archive holds a Lambda layer whose function is marshalled bytec… | Keras code execution on load: CVE-2024-3660 and the 2025 sa… |
+| `nullifai-7z-and-broken-pickle` | malicious | block | The checkpoint is packed with 7z instead of zip and the scaler's pickle stream turns to g… | nullifAI (ReversingLabs, Feb 2025): malicious models on Hug… |
+| `pickle-model-stack-global-exec` | malicious | block | Protocol 4 names the function with two strings and STACK_GLOBAL instead of a GLOBAL line,… | Pickle scanner evasions catalogued by fickling and ModelSca… |
+| `pytorch-model-reduce-shell` | malicious | block | pytorch_model.bin is an ordinary PyTorch zip, but archive/data.pkl calls posix.system thr… | Malicious Hugging Face models (JFrog, Feb 2024: baller423/g… |
 | `agent-cli-yolo-secret-hunt` | malicious | block | A script run during install invokes a coding agent already on the machine with its guardr… | Nx / s1ngularity (Aug 2025): used Claude Code, Gemini CLI a… |
 | `binding-gyp-command-expansion` | malicious | block | A native addon's binding.gyp embeds a <!(...) command-expansion token, which node-gyp exe… | Phantom Gyp: 57 npm packages ran code through binding.gyp c… |
 | `lookalike-dep-separator-confusion` | malicious | warn | requirements.txt depends on 'azurecore', a separator-dropped look-alike of the real PyPI … | Bagmar & Saraf: near-miss names (azurecore for azure-core) … |
@@ -154,6 +160,11 @@ they did not reproduce their incident; both changes are recorded in the cases' `
 | `benign-cursor-style-rules` | benign | pass | A .cursor/rules/*.mdc with plain, visible style guidance and no hidden Unicode and no alw… | Legitimate Cursor rules (mirrors cursor-rules-mdc-tagchars … |
 | `benign-readme-official-installers` | benign | pass | The README's setup references the real official installers (rustup, uv, bun) over https; … | Legitimate install docs (mirrors readme-curl-bash-lookalike… |
 | `benign-mcp-server-normal` | benign | pass | An MCP server whose tool descriptions plainly describe their function and whose code does… | Legitimate MCP server (mirrors mcp-tool-description-poisoni… |
+| `benign-gguf-chatml` | benign | pass | The chat template loops over messages and adds the ChatML markers, as most instruct model… | Legitimate GGUF model (benign twin of gguf-chat-template-ss… |
+| `benign-hf-auto-map-model-code` | benign | pass | auto_map points at modeling_tiny.py, which only defines layers with torch.nn; trust_remot… | Legitimate custom architecture (benign twin of hf-auto-map-… |
+| `benign-keras-dense` | benign | pass | config.json describes two Dense layers from keras.layers; no Lambda, no other module. | Legitimate Keras model (benign twin of keras-lambda-layer-b… |
+| `benign-pytorch-state-dict` | benign | pass | data.pkl rebuilds an OrderedDict of tensors from storages with torch._utils._rebuild_tens… | Legitimate PyTorch checkpoint (benign twin of pytorch-model… |
+| `benign-sklearn-joblib` | benign | pass | The pickle rebuilds a LogisticRegression with copy_reg._reconstructor and numpy arrays. | Legitimate scikit-learn model (benign twin of pickle-model-… |
 | `benign-native-addon-binding-gyp` | benign | pass | A normal N-API addon: binding.gyp lists sources only (no command expansion), built with n… | Legitimate node-gyp native addon (mirrors binding-gyp-comma… |
 | `benign-npmrc-save-exact` | benign | pass | A repo .npmrc that sets save-exact and engine-strict and keeps the default public registr… | Legitimate .npmrc (mirrors npmrc-registry-redirect without … |
 | `benign-package-lock-registry` | benign | pass | A normal lockfile whose resolved URLs and integrity hashes point at registry.npmjs.org. | Legitimate lockfile (mirrors package-lock-offregistry-resol… |

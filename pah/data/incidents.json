@@ -423,6 +423,35 @@
       ]
     },
     {
+      "id": "load-mine",
+      "name": "Load/Mine: fake Qwen2 model repositories",
+      "when": "2026-10",
+      "kind": "model",
+      "summary": "31 fake Qwen2 repositories on Hugging Face used auto_map in config.json, so loading them with trust_remote_code=True imported their own Python files. Those files installed a cryptocurrency miner, added SSH keys and opened reverse shells. About 30,000 downloads; Hugging Face's scanners did not flag them (September 21 to October 28).",
+      "entry": [
+        "Loading a model with trust_remote_code=True (transformers' from_pretrained) from a repository that ships its own modeling code."
+      ],
+      "rules": [
+        "PAH-M006",
+        "PAH-C001"
+      ],
+      "cases": [
+        "hf-auto-map-remote-code-miner"
+      ],
+      "respond": [
+        "@contain",
+        "Look for a miner (a process using all CPU), keys you did not add in ~/.ssh/authorized_keys, and new cron jobs, services or scheduled tasks. Remove them before rotating anything.",
+        "Delete the model from the Hugging Face cache (~/.cache/huggingface/hub) and from wherever it was copied.",
+        "@remove-persistence",
+        "@rotate-ai",
+        "@rotate-cloud",
+        "Load models only from organizations you know, pin the revision, prefer safetensors, and leave trust_remote_code off unless you have read the code (pah scan <model folder>)."
+      ],
+      "refs": [
+        "https://pluto.security/blog/hugging-face-malware-campaign-load-mine/"
+      ]
+    },
+    {
       "id": "sleepyduck",
       "name": "SleepyDuck",
       "when": "2026-09",
@@ -687,6 +716,40 @@
       ]
     },
     {
+      "id": "sandworm-mode",
+      "name": "SANDWORM_MODE: rogue MCP servers and global git hooks",
+      "when": "2026-07",
+      "kind": "package",
+      "summary": "A supply-chain worm that adds a rogue MCP server to Claude Desktop, Cursor, VS Code and Windsurf configurations. The server's instructions tell assistants to collect SSH, AWS and npm secrets. It also installs global git hooks. In CrowdStrike's analysis only 2 of its 14 behaviors were alert-worthy on their own: the attack shows in the sequence.",
+      "entry": [
+        "Installing an infected package; its install script edits agent MCP configurations and git's hooks."
+      ],
+      "rules": [
+        "PAH-P001",
+        "PAH-A005",
+        "PAH-A014",
+        "PAH-G002"
+      ],
+      "cases": [
+        "npm-postinstall-beacon",
+        "mcp-tool-description-poisoning",
+        "git-dir-hookspath-fsmonitor"
+      ],
+      "respond": [
+        "@contain",
+        "Remove MCP servers you did not add from Claude Desktop, Cursor, VS Code and Windsurf (pah checkup lists them), and check `git config --global core.hooksPath` and ~/.gitconfig for hooks you did not install.",
+        "@check-agents",
+        "@remove-persistence",
+        "@rotate-registry",
+        "@rotate-cloud",
+        "@rotate-github",
+        "pah session list: look for agent sessions that read credentials and then sent data out."
+      ],
+      "refs": [
+        "https://www.crowdstrike.com/en-us/blog/denying-the-worm-sandworm-mode-and-ai-toolchain-supply-chain-attacks/"
+      ]
+    },
+    {
       "id": "planted-programs",
       "name": "Planted programs and relocated agent configuration",
       "when": "2026-06",
@@ -745,6 +808,115 @@
       "refs": [
         "https://www.stepsecurity.io/blog/miasma-worm-hits-microsoft-again-azure-functions-action-and-72-other-repositories-disabled-after-supply-chain-attack-targeting-ai-coding-agents",
         "https://labs.cloudsecurityalliance.org/research/csa-research-note-agent-instruction-file-poisoning-20261027/"
+      ]
+    },
+    {
+      "id": "claude-code-ci-key-leak",
+      "name": "CVE-2026-54316: an issue that made Claude Code in CI leak its key",
+      "when": "2026-06",
+      "kind": "agent-flaw",
+      "summary": "A prompt-injected GitHub issue made Claude Code running in CI send its API key out through download counters on huggingface.co, a host its configuration pre-approved. Fixed in Claude Code 2.1.163 (advisory in June; presented at Black Hat in August).",
+      "entry": [
+        "Issue or pull request text read by an agent in CI that may fetch pre-approved hosts without asking."
+      ],
+      "rules": [
+        "PAH-A021",
+        "PAH-O001",
+        "PAH-B003"
+      ],
+      "cases": [
+        "mcp-toxic-flow-autoapprove"
+      ],
+      "respond": [
+        "Update Claude Code to 2.1.163 or later.",
+        "@rotate-ai",
+        "In CI, give the agent only the secrets the job needs and pre-approve only the hosts it needs; a host anyone can publish to (a model hub, a paste site) is a way out.",
+        "Read the job logs for requests to hosts you did not expect."
+      ],
+      "refs": [
+        "https://advisories.gitlab.com/npm/@anthropic-ai/claude-code/CVE-2026-54316/",
+        "https://novee.security/blog/critical-flaws-in-anthropic-google-and-openais-coding-agents/"
+      ]
+    },
+    {
+      "id": "agentjacking",
+      "name": "Agentjacking: fake error reports that run npx",
+      "when": "2026-06",
+      "kind": "mcp",
+      "summary": "Researchers planted error events in Sentry; returned through the Sentry MCP server, the \"fix\" in them made Claude Code, Cursor and Codex run an attacker's npx command about 85% of the time. A demonstration, not a campaign, of how tool output steers an agent.",
+      "entry": [
+        "An agent reading an error report through an MCP server and following the command in it."
+      ],
+      "rules": [
+        "PAH-O001",
+        "PAH-B003"
+      ],
+      "cases": [],
+      "respond": [
+        "Treat what MCP tools return as data: read a suggested command before letting an agent run it.",
+        "Keep agent-white-hat's output hook on, so such output is flagged and the next package install in that session needs your approval (pah install adds it for Claude Code, Codex, Gemini CLI, Cursor and Copilot).",
+        "If the package already ran: @contain",
+        "@rotate-registry"
+      ],
+      "refs": [
+        "https://tenetsecurity.ai/blog/agentjacking-coding-agents-with-fake-sentry-errors/"
+      ]
+    },
+    {
+      "id": "hades-pypi",
+      "name": "Hades: PyPI wheels that talk to AI scanners",
+      "when": "2026-06",
+      "kind": "package",
+      "summary": "37 wheels on PyPI carried text telling LLM-based security scanners to report the package as clean, next to code that stole credentials.",
+      "entry": [
+        "pip install of one of the wheels; the payload ran on import."
+      ],
+      "rules": [
+        "PAH-C011",
+        "PAH-C002",
+        "PAH-C004"
+      ],
+      "cases": [
+        "python-exec-loader-ai-reviewer-comment"
+      ],
+      "respond": [
+        "@contain",
+        "Uninstall the packages and scan the environments they were installed in (pah scan <venv>).",
+        "@rotate-cloud",
+        "@rotate-registry",
+        "Do not take an AI reviewer's verdict on code that addresses the reviewer: that text is the attack."
+      ],
+      "refs": [
+        "https://www.zscaler.com/blogs/security-research/shai-hulud-campaign-evolution-miasma-hades-and-ai-scanner-evasion"
+      ]
+    },
+    {
+      "id": "ironworm",
+      "name": "IronWorm: an npm worm that hides with a rootkit",
+      "when": "2026-06",
+      "kind": "package",
+      "summary": "An npm worm that hides from ps and top with an eBPF rootkit, steals Claude, Codex and Gemini credential files and AI API keys, and commits to the repositories it reaches under the name \"claude\".",
+      "entry": [
+        "npm install of an infected package (an install script)."
+      ],
+      "rules": [
+        "PAH-P001",
+        "PAH-C004"
+      ],
+      "cases": [
+        "npm-postinstall-beacon"
+      ],
+      "respond": [
+        "@contain",
+        "A rootkit hides processes from ps and top: check the machine from a clean boot or another system, and reinstall if in doubt.",
+        "@reinstall",
+        "@rotate-ai",
+        "@rotate-registry",
+        "@rotate-github",
+        "Look for commits authored as \"claude\" that you did not make, in every repository you can push to."
+      ],
+      "refs": [
+        "https://research.jfrog.com/post/iron-worm-shai-hulud-rustier-cousin/"
       ]
     },
     {

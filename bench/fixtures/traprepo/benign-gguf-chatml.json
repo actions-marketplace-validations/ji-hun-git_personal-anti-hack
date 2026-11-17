@@ -1,0 +1,24 @@
+{
+  "id": "benign-gguf-chatml",
+  "title": "GGUF model with an ordinary ChatML template",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "model",
+  "technique": "The chat template loops over messages and adds the ChatML markers, as most instruct models do.",
+  "trigger": "loading the model in llama.cpp",
+  "incident": "Legitimate GGUF model (benign twin of gguf-chat-template-ssti)",
+  "notes": "Template text matches common Qwen/ChatML templates.",
+  "files": {
+    "README.md": "# tiny-chat-GGUF\n\nQuantized chat model.\n\n```python\nfrom llama_cpp import Llama\nllm = Llama(model_path='model.gguf')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.gguf",
+      "generator": "b64",
+      "params": {
+        "data": "R0dVRgMAAAAAAAAAAAAAAAQAAAAAAAAAFQAAAAAAAAB0b2tlbml6ZXIuZ2dtbC50b2tlbnMJAAAACAAAAAMAAAAAAAAAAwAAAAAAAAA8cz4EAAAAAAAAADwvcz4FAAAAAAAAAGhlbGxvFAAAAAAAAABnZW5lcmFsLmFyY2hpdGVjdHVyZQgAAAAFAAAAAAAAAGxsYW1hDAAAAAAAAABnZW5lcmFsLm5hbWUIAAAACQAAAAAAAAB0aW55LXRlc3QXAAAAAAAAAHRva2VuaXplci5jaGF0X3RlbXBsYXRlCAAAAMcAAAAAAAAAeyUgZm9yIG1lc3NhZ2UgaW4gbWVzc2FnZXMgJX17eyc8fGltX3N0YXJ0fD4nICsgbWVzc2FnZVsncm9sZSddICsgJ1xuJyArIG1lc3NhZ2VbJ2NvbnRlbnQnXSArICc8fGltX2VuZHw+JyArICdcbid9fXslIGVuZGZvciAlfXslIGlmIGFkZF9nZW5lcmF0aW9uX3Byb21wdCAlfXt7ICc8fGltX3N0YXJ0fD5hc3Npc3RhbnRcbicgfX17JSBlbmRpZiAlfQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    }
+  ],
+  "sources": []
+}

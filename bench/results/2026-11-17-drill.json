@@ -2,86 +2,86 @@
  "date": "2026-11-17",
  "platform": "win32",
  "mode": "in-process",
- "seconds": 5.4,
+ "seconds": 8.3,
  "summary": {
   "claude": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 65,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 71,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   },
   "codex": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 70,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 76,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 9,
    "generic": 9
   },
   "gemini": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 70,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 76,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   },
   "antigravity": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 65,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 71,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   },
   "cursor": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 65,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 71,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   },
   "copilot": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 65,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 71,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   },
   "devin": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 70,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 76,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 9,
    "generic": 9
   },
   "kiro": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 70,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 76,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 9,
    "generic": 9
   },
   "cline": {
-   "malicious_stopped": 70,
-   "malicious": 70,
-   "malicious_denied": 70,
-   "benign_untouched": 35,
-   "benign": 35,
+   "malicious_stopped": 76,
+   "malicious": 76,
+   "malicious_denied": 76,
+   "benign_untouched": 40,
+   "benign": 40,
    "generic_ok": 10,
    "generic": 10
   }
@@ -1103,6 +1103,78 @@
    "decision": "allow"
   },
   {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "claude",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "codex",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "gemini",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "antigravity",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cursor",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "copilot",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "devin",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "kiro",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-gguf-chatml",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cline",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "allow"
+  },
+  {
    "case": "benign-github-actions-pull-request",
    "kind": "benign",
    "expected": "pass",
@@ -1319,6 +1391,78 @@
    "decision": "allow"
   },
   {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "claude",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "codex",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "gemini",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "antigravity",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cursor",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "copilot",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "devin",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "kiro",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-hf-auto-map-model-code",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cline",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "allow"
+  },
+  {
    "case": "benign-husky-lint-staged",
    "kind": "benign",
    "expected": "pass",
@@ -1388,6 +1532,78 @@
    "expected": "pass",
    "agent": "cline",
    "action": "npm install",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "claude",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "codex",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "gemini",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "antigravity",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cursor",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "copilot",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "devin",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "kiro",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-keras-dense",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cline",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
    "decision": "allow"
   },
   {
@@ -1967,6 +2183,78 @@
    "decision": "allow"
   },
   {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "claude",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "codex",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "gemini",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "antigravity",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cursor",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "copilot",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "devin",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "kiro",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-pytorch-state-dict",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cline",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "allow"
+  },
+  {
    "case": "benign-readme-official-installers",
    "kind": "benign",
    "expected": "pass",
@@ -2540,6 +2828,78 @@
    "expected": "pass",
    "agent": "cline",
    "action": "npm test",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "claude",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "codex",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "gemini",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "antigravity",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cursor",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "copilot",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "devin",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "kiro",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
+   "decision": "allow"
+  },
+  {
+   "case": "benign-sklearn-joblib",
+   "kind": "benign",
+   "expected": "pass",
+   "agent": "cline",
+   "action": "python -c \"import joblib; joblib.load('model.joblib')\"",
    "decision": "allow"
   },
   {
@@ -4271,6 +4631,78 @@
    "decision": "deny"
   },
   {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "gguf-chat-template-ssti",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"from llama_cpp import Llama; Llama(model_path='model.gguf')\"",
+   "decision": "deny"
+  },
+  {
    "case": "git-dir-hookspath-fsmonitor",
    "kind": "malicious",
    "expected": "block",
@@ -4631,6 +5063,78 @@
    "decision": "deny"
   },
   {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "hf-auto-map-remote-code-miner",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)\"",
+   "decision": "deny"
+  },
+  {
    "case": "husky-precommit-payload",
    "kind": "malicious",
    "expected": "block",
@@ -4916,6 +5420,78 @@
    "expected": "block",
    "agent": "cline",
    "action": "npm test",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "keras-lambda-layer-bytecode",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"import keras; keras.models.load_model('model.keras')\"",
    "decision": "deny"
   },
   {
@@ -5855,6 +6431,78 @@
    "decision": "deny"
   },
   {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "nullifai-7z-and-broken-pickle",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
    "case": "obfuscatorio-js-loader",
    "kind": "malicious",
    "expected": "block",
@@ -6068,6 +6716,78 @@
    "expected": "warn",
    "agent": "cline",
    "action": "npm install",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pickle-model-stack-global-exec",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"import joblib; joblib.load('model.pkl')\"",
    "decision": "deny"
   },
   {
@@ -6644,6 +7364,78 @@
    "expected": "block",
    "agent": "cline",
    "action": "pip install -e .",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "claude",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "codex",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "gemini",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "antigravity",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cursor",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "copilot",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "devin",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "kiro",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
+   "decision": "deny"
+  },
+  {
+   "case": "pytorch-model-reduce-shell",
+   "kind": "malicious",
+   "expected": "block",
+   "agent": "cline",
+   "action": "python -c \"import torch; torch.load('pytorch_model.bin', weights_only=False)\"",
    "decision": "deny"
   },
   {

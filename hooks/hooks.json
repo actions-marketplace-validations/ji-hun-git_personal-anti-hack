@@ -1,9 +1,9 @@
 {
-  "description": "agent-white-hat guard: judges commands, file writes, credential reads and fetches before they run, scans new clones, and checks the project and agent configuration at session start.",
+  "description": "agent-white-hat guard: judges commands, file writes, credential reads, fetches and MCP calls before they run, and each step against the steps before it in the session; checks what tools return for instructions aimed at the agent; scans new clones; and checks the project and agent configuration at session start.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch",
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch|mcp__.*",
         "hooks": [
           {
             "type": "command",
@@ -15,7 +15,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|Read|WebFetch|WebSearch|Grep|mcp__.*",
         "hooks": [
           {
             "type": "command",

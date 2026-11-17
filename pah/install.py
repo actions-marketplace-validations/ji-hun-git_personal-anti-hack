@@ -7,11 +7,11 @@ never shadow the guard's modules, and a Microsoft Store "python" stub on Windows
 Supported agents and where their settings live:
 
   claude-code   ~/.claude/settings.json            PreToolUse, PostToolUse, SessionStart (or install the plugin)
-  codex         ~/.codex/hooks.json                PreToolUse (Bash, apply_patch); approve it once in Codex's /hooks
-  gemini        ~/.gemini/settings.json            BeforeTool
+  codex         ~/.codex/hooks.json                PreToolUse (Bash, apply_patch), PostToolUse; approve them once in /hooks
+  gemini        ~/.gemini/settings.json            BeforeTool, AfterTool
   antigravity   ~/.gemini/config/hooks.json        PreToolUse
-  cursor        ~/.cursor/hooks.json               beforeShellExecution, preToolUse
-  copilot       ~/.copilot/hooks/personal-anti-hack.json   PreToolUse (CLI and VS Code)
+  cursor        ~/.cursor/hooks.json               beforeShellExecution, preToolUse, postToolUse
+  copilot       ~/.copilot/hooks/personal-anti-hack.json   PreToolUse, PostToolUse (CLI and VS Code)
   devin         ~/.config/devin/config.json        PreToolUse (Devin Desktop and CLI; %APPDATA%\\devin on Windows)
   kiro          ~/.kiro/hooks/personal-anti-hack.json      PreToolUse
   cline         ~/.cline/hooks/PreToolUse.py       PreToolUse (Cline CLI; the extension: see docs/agent-setup.md)
@@ -138,8 +138,11 @@ def _merge_json(plan: Plan, path: Path, mutate, summary: str) -> None:
 
 def _append_event(container: dict, event: str, entry: dict) -> None:
     entries = container.setdefault(event, [])
-    if not _has_mark(entries):
+    ours = [i for i, e in enumerate(entries) if _has_mark(e)]
+    if not ours:
         entries.append(entry)
+    elif entries[ours[0]] != entry:
+        entries[ours[0]] = entry  # an earlier version of this hook: bring its matcher and command up to date
 
 
 # -------------------------------------------------------------------------------------------- per agent
@@ -151,10 +154,10 @@ def plan_claude(plan: Plan, home: Path) -> None:
 
     def mutate(data: dict) -> None:
         hooks = data.setdefault("hooks", {})
-        _append_event(hooks, "PreToolUse", {"matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch",
+        _append_event(hooks, "PreToolUse", {"matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch|mcp__.*",
                                             "hooks": [{"type": "command", "command": cmd["pre"], "timeout": 60}]})
-        _append_event(hooks, "PostToolUse", {"matcher": "Bash|PowerShell", "hooks": [{"type": "command", "command": cmd["post"],
-                                                                         "timeout": 120}]})
+        _append_event(hooks, "PostToolUse", {"matcher": "Bash|PowerShell|Read|WebFetch|WebSearch|Grep|mcp__.*",
+                                             "hooks": [{"type": "command", "command": cmd["post"], "timeout": 120}]})
         _append_event(hooks, "SessionStart", {"hooks": [{"type": "command", "command": cmd["session-start"], "timeout": 60}]})
 
     _merge_json(plan, path, mutate, "PreToolUse, PostToolUse and SessionStart hooks")
@@ -167,8 +170,16 @@ def plan_codex(plan: Plan, home: Path) -> None:
     entry = {"matcher": "^(Bash|apply_patch)$", "hooks": [{"type": "command", "command": hook_command("codex", shell="posix"),
                                                            "commandWindows": hook_command("codex", shell="windows"),
                                                            "timeout": 60, "statusMessage": "agent-white-hat check"}]}
-    _merge_json(plan, base / "hooks.json", lambda d: _append_event(d.setdefault("hooks", {}), "PreToolUse", entry),
-                "PreToolUse hook for shell commands and patches")
+    post = {"matcher": ".*", "hooks": [{"type": "command", "command": hook_command("codex", "post", "posix"),
+                                        "commandWindows": hook_command("codex", "post", "windows"), "timeout": 60,
+                                        "statusMessage": "agent-white-hat output check"}]}
+
+    def mutate(d: dict) -> None:
+        _append_event(d.setdefault("hooks", {}), "PreToolUse", entry)
+        _append_event(d["hooks"], "PostToolUse", post)
+
+    _merge_json(plan, base / "hooks.json", mutate,
+                "PreToolUse hook for shell commands and patches; PostToolUse hook that checks what tools return")
     plan.notes.append("Codex runs a new hook only after you approve it: start Codex and open /hooks once. Codex hooks "
                       "cannot ask, so anything agent-white-hat would ask about is blocked with the reason.")
 
@@ -176,8 +187,14 @@ def plan_codex(plan: Plan, home: Path) -> None:
 def plan_gemini(plan: Plan, home: Path) -> None:
     entry = {"matcher": "run_shell_command|write_file|replace|read_file",
              "hooks": [{"name": MARK, "type": "command", "command": hook_command("gemini"), "timeout": 60000}]}
-    _merge_json(plan, home / ".gemini" / "settings.json",
-                lambda d: _append_event(d.setdefault("hooks", {}), "BeforeTool", entry), "BeforeTool hook")
+    after = {"matcher": ".*", "hooks": [{"name": MARK, "type": "command", "command": hook_command("gemini", "post"),
+                                         "timeout": 60000}]}
+
+    def mutate(d: dict) -> None:
+        _append_event(d.setdefault("hooks", {}), "BeforeTool", entry)
+        _append_event(d["hooks"], "AfterTool", after)
+
+    _merge_json(plan, home / ".gemini" / "settings.json", mutate, "BeforeTool hook; AfterTool hook that checks what tools return")
     plan.notes.append("Gemini CLI hooks cannot ask; anything agent-white-hat would ask about is blocked with the reason.")
 
 
@@ -200,8 +217,9 @@ def plan_cursor(plan: Plan, home: Path) -> None:
         hooks = data.setdefault("hooks", {})
         _append_event(hooks, "beforeShellExecution", {"command": cmd, "timeout": 60})
         _append_event(hooks, "preToolUse", {"command": cmd, "matcher": "Write|Delete|Read", "timeout": 60})
+        _append_event(hooks, "postToolUse", {"command": hook_command("cursor", "post"), "timeout": 60})
 
-    _merge_json(plan, home / ".cursor" / "hooks.json", mutate, "beforeShellExecution and preToolUse hooks")
+    _merge_json(plan, home / ".cursor" / "hooks.json", mutate, "beforeShellExecution, preToolUse and postToolUse hooks")
     plan.notes.append("Cursor also runs Claude Code hooks from ~/.claude/settings.json; if both are installed, each "
                       "command is checked twice (same result).")
 
@@ -211,11 +229,15 @@ def plan_copilot(plan: Plan, home: Path) -> None:
     path = base / "hooks" / f"{MARK}.json"
     data = {"version": 1, "hooks": {"PreToolUse": [{"type": "command", "bash": hook_command("copilot", shell="posix"),
                                                     "powershell": hook_command("copilot", shell="windows"),
-                                                    "timeoutSec": 60}]}}
+                                                    "timeoutSec": 60}],
+                                    "PostToolUse": [{"type": "command", "bash": hook_command("copilot", "post", "posix"),
+                                                     "powershell": hook_command("copilot", "post", "windows"),
+                                                     "timeoutSec": 60}]}}
     if path.exists():
         plan.skipped.append(f"{path}: already installed")
     else:
-        plan.changes.append(Change(path, json.dumps(data, indent=2) + "\n", "PreToolUse hook (CLI and VS Code)", True))
+        plan.changes.append(Change(path, json.dumps(data, indent=2) + "\n",
+                                   "PreToolUse and PostToolUse hooks (CLI and VS Code)", True))
 
 
 def plan_devin(plan: Plan, home: Path) -> None:

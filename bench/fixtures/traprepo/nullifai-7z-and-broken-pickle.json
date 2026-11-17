@@ -1,0 +1,33 @@
+{
+  "id": "nullifai-7z-and-broken-pickle",
+  "title": "7z-packed PyTorch file and a pickle that breaks right after its payload",
+  "kind": "malicious",
+  "expected": "block",
+  "category": "model",
+  "technique": "The checkpoint is packed with 7z instead of zip and the scaler's pickle stream turns to garbage after calling os.system: the loader has already run the call, while scanners that stop at the error report nothing.",
+  "trigger": "joblib.load / torch.load",
+  "incident": "nullifAI (ReversingLabs, Feb 2025): malicious models on Hugging Face that got past Picklescan",
+  "sources": [
+    "https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face"
+  ],
+  "notes": "Inert: an echo of the canary marker inside a deliberately broken stream.",
+  "files": {
+    "README.md": "# vision-lite\n\nImage classifier and its feature scaler.\n\n```python\nimport joblib, torch\nscaler = joblib.load('scaler.pkl')\nmodel = torch.load('pytorch_model.bin')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "pytorch_model.bin",
+      "generator": "b64",
+      "params": {
+        "data": "N3q8ryccAAQAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/gAJjb3MKc3lzdGVtClgVAAAAZWNobyBQQUgtQ0FOQVJZLW1vZGVshVIu"
+      }
+    },
+    {
+      "path": "scaler.pkl",
+      "generator": "b64",
+      "params": {
+        "data": "gAJjb3MKc3lzdGVtClgVAAAAZWNobyBQQUgtQ0FOQVJZLW1vZGVshVIA/2dhcmJhZ2U="
+      }
+    }
+  ]
+}

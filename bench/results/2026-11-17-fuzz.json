@@ -110,6 +110,15 @@
       "bypass": false
     },
     {
+      "case": "benign-hf-auto-map-model-code",
+      "kind": "benign",
+      "operator": "py_comments",
+      "expected": "pass",
+      "verdict": "pass",
+      "rules": [],
+      "bypass": false
+    },
+    {
       "case": "benign-mcp-json-local-stdio",
       "kind": "benign",
       "operator": "py_comments",
@@ -1621,6 +1630,78 @@
       "verdict": "block",
       "rules": [
         "PAH-T002"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_split",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C012"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_join",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C012"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_chr",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C012"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_hex_escape",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C012"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_rot13",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C012"
+      ],
+      "bypass": false
+    },
+    {
+      "case": "hf-auto-map-remote-code-miner",
+      "kind": "malicious",
+      "operator": "py_exec_base64",
+      "expected": "block",
+      "verdict": "block",
+      "rules": [
+        "PAH-C001",
+        "PAH-C002"
       ],
       "bypass": false
     },
@@ -4406,9 +4487,9 @@
   ],
   "name": "2026-11-17",
   "date": "2026-11-17",
-  "version": "0.4.0",
-  "code": "7ca4896a8d55",
-  "seconds": 6.9,
+  "version": "0.5.0",
+  "code": "61ed93bd3af9",
+  "seconds": 10.6,
   "operators": [
     "js_split",
     "js_array_join",

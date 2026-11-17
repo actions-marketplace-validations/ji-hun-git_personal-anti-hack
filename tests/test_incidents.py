@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "bench"))
 os.environ.setdefault("PAH_HOME", tempfile.mkdtemp(prefix="pah-test-home-"))
 
-from pah import av, checkup, cli, diff, guard, incidents, intel, mcp_server, packages, review, surfaces, watch  # noqa: E402,F401
+from pah import av, behavior, checkup, cli, diff, guard, incidents, intel, mcp_server, models, outputs, packages, review, surfaces, watch  # noqa: E402,F401
 from pah.model import RULES  # noqa: E402
 from pah.scan import scan  # noqa: E402
 

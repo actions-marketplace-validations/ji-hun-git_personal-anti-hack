@@ -177,3 +177,32 @@ Not adopted yet: pinning MCP tool descriptions to detect rug pulls ([mcp-scan](h
 ### August to November 2026 (incidents added in 0.4.0) [R]
 
 ChainDrop (keyv and 443 more packages released through the project's own trusted publishing), WFX Phantom (CI secret stealer reverted within seconds), MIDNIGHT NEPTUNE (fake recruiters, a Claude Code hook backdoor), strutil-core (a gem extension with the testmetest wiper), the Paperclip and Browser Use skill clones (a loader in a linked setup document), @subql/common (a release archive swapped in the publish workflow), the arrayref crates (a build script behind a new dependency), Deadbugz (an MCP server whose tools change after three calls), unauthorized Codex and Claude Code relays, and `.pth` typosquats of AI libraries. Each one, with sources, traces and the response: [incidents.md](incidents.md).
+
+## 10. Methods adopted in 0.5.0 (November 2026)
+
+Endpoint security vendors now sell agent protection built on their endpoint methods: CrowdStrike's Falcon Guardian
+(formerly Falcon AIDR) plugs into the agents' own hooks and inspects tool calls and outputs, and its Agent Graph links
+prompt, tool call and process activity; Palo Alto Networks' Cortex Agentic Endpoint Security (from Koi) applies block or
+ask policies to shell, file, MCP and network actions, and Prisma AIRS Model Security (from Protect AI) scans model
+files. The methods below are the ones that work on one machine without a vendor's cloud.
+
+| Method | Where it comes from | What agent-white-hat does with it |
+| --- | --- | --- |
+| Indicators of attack: sequences, not single events | CrowdStrike, [IOA vs IOC](https://www.crowdstrike.com/en-us/cybersecurity-101/threat-intelligence/indicators-of-attack-ioa/) | Every hook call becomes a tagged step in a per-session record (`session.py`); seven rules look for the orders attacks take (`behavior.py`, PAH-B001 to B007). In CrowdStrike's analysis of SANDWORM_MODE only 2 of 14 behaviors were alert-worthy alone, which is the case for judging sequences |
+| Causality chains | Palo Alto Networks, Cortex XDR [causality analysis](https://cortex-docs.paloaltonetworks.com/cortex-xdr/detect-investigate-and-respond-to-threats/investigate-and-respond-to-cases/case-concepts/what-is-causality) and [BIOC rules](https://cortex-docs.paloaltonetworks.com/cortex-xdr/detect-investigate-and-respond-to-threats/threat-management/detection-rules/whats-a-bioc/create-a-bioc-rule) | The agent session is the root of the chain; each alert names the earlier step that completes it, and `pah session show` prints the chain. Like a BIOC rule, each chain rule is checked against recorded history before it fires, and steps the guard denied never count as having happened |
+| Inspecting tool output, not only tool input | CrowdStrike [Falcon Guardian](https://www.crowdstrike.com/en-us/blog/falcon-guardian-defines-next-generation-of-ai-security/); Unit 42's [22 web prompt-injection techniques](https://unit42.paloaltonetworks.com/ai-agent-prompt-injection/) (2026) | `outputs.py` reads what WebFetch, web search, MCP tools, shell commands and file reads return, through post-tool hooks in Claude Code, Codex, Gemini CLI, Cursor and Copilot (PAH-O001 to O004) |
+| Untrusted data kept away from actions | [CaMeL](https://arxiv.org/abs/2503.18813) (2025), Microsoft [FIDES](https://arxiv.org/abs/2505.23643) (2025) | Not their full design (that needs control of the agent loop), but the same separation where a hook can enforce it: once an output carries injected instructions, the session's later sends, setting changes, guard changes and runs of downloaded files need the user (PAH-B003) |
+| Model files read without loading them | Protect AI [ModelScan](https://github.com/protectai/modelscan), Trail of Bits [fickling](https://github.com/trailofbits/fickling), Prisma AIRS [model security rules](https://docs.paloaltonetworks.com/ai-runtime-security/ai-model-security/model-security-to-secure-your-ai-models/understanding-ai-model-security-rules) | `models.py`: pickle opcodes listed with `pickletools` (ModelScan's critical modules, plus loaders of nested code), Keras configs and Lambda layers, GGUF chat templates, nullifAI's 7z packing and broken streams, `auto_map` code (PAH-M001 to M006) |
+| Tamper protection | Standard in endpoint agents | Writes that turn off hooks, permission prompts or the guard are denied; doing it after untrusted content is a chain (PAH-B005) |
+
+Not adopted, because they need what a local tool does not have: fleet-wide prevalence and cloud models (Threat
+Graph), detonation in a sandbox (WildFire), process and kernel telemetry (a rootkit such as IronWorm's hides from user
+space; agent-white-hat has no kernel driver), and managed hunting.
+
+### June to November 2026 (incidents added in 0.5.0) [R]
+
+IronWorm (an npm worm with an eBPF rootkit that steals AI-agent credentials), the Hades PyPI wave (wheels that tell AI
+scanners they are clean), Agentjacking (fake Sentry errors that made agents run npx; a demonstration), CVE-2026-54316
+(an issue that made Claude Code in CI leak its key through a pre-approved host), SANDWORM_MODE (rogue MCP servers and
+global git hooks) and Load/Mine (31 fake Qwen2 repositories that ran a miner through `trust_remote_code`). Each one,
+with sources and the response: [incidents.md](incidents.md).

@@ -83,7 +83,11 @@ SETUP = re.compile(
     r"|\bhatch\s+(?:run|env)\b|\btox\b|\bnox\b|\bpytest\b|\bcargo\s+(?:build|run|test|check|clippy|bench|install\s+--path)\b"
     r"|(?:^|[;&|]\s*)make\b|\bcmake\b|\bmeson\b|\bninja\b|(?:^|[;&|\s])\./[\w.-]+|\b(?:ba|z)?sh\s+[\w./-]+\.sh\b|\bgo\s+(?:run|generate|test|build)\b"
     r"|\bgradlew?\b|\bmvnw?\b|\bdocker\s+compose\s+up\b|\bdevcontainer\s+up\b|\bdirenv\s+allow\b|\bgit\s+(?:commit|checkout|switch|merge|rebase|pull)\b"
-    r"|\bdeno\s+(?:task|run)\b|\bbundle\s+(?:install|exec)\b|\bcomposer\s+install\b|\bdotnet\s+(?:build|run|restore)\b", re.I)
+    r"|\bdeno\s+(?:task|run)\b|\bbundle\s+(?:install|exec)\b|\bcomposer\s+install\b|\bdotnet\s+(?:build|run|restore)\b"
+    # loading a model runs whatever its pickle, Keras config, chat template or remote code says
+    r"|\bpython[0-9.]*\s+[^\n]{0,300}?(?:from_pretrained|torch\.load|pickle\.load|joblib\.load|load_model|np\.load|numpy\.load"
+    r"|AutoModel|pipeline\(|Llama\(|hf_hub_download)|\bpython[0-9.]*\s+(?!-)[\w./\\-]+\.py\b"
+    r"|\b(?:llama-cli|llama-server|llama-run)\b|\bollama\s+create\b|\blms\s+load\b", re.I)
 SELF_CONTROL = re.compile(
     r"\b(?:pah|pah_entry\.py)\b[^\n|;&]{0,80}\b(?:trust|untrust|install)\b|\b(?:pah|pah_entry\.py)\b[^\n|;&]{0,40}\bwatch\s+(?:accept|init)\b"
     r"|\.personal-anti-hack(?![\w.-])|\bPAH_HOME\s*=|\bclaude\s+plugin\s+(?:disable|uninstall|remove)\b[^\n]{0,80}(?:personal-anti-hack|agent-virus-check|agent-white-hat)", re.I)
@@ -290,6 +294,14 @@ def check_write(path: str, content: str | None = None, cwd: str = "") -> Decisio
                                  "package installs")
     elif PROJECT_AGENT_FILES.search(norm):
         decision.stricter("ask", f"agent-white-hat: {norm} makes commands run automatically for agents or editors")
+    if content and (GLOBAL_AGENT_FILES.search(norm) or PROJECT_AGENT_FILES.search(norm)
+                    or Path(norm).name.lower() in ("settings.json", "settings.local.json", "config.toml", ".claude.json")):
+        from .behavior import disables_guard
+
+        switched_off = disables_guard(content)
+        if switched_off:  # tamper protection: only the user turns off hooks, permission prompts or this guard
+            decision.stricter("deny", f"agent-white-hat: this change switches off hooks, permission prompts or the guard "
+                                      f"({switched_off}). Only the user should do that, by editing {norm} themselves.")
     if content:
         from .model import rank
         from .patterns import scan_text

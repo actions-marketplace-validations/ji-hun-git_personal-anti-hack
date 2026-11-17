@@ -33,6 +33,10 @@ def _pre(data: dict) -> dict | None:
         decision = check_fetch(str(inp.get("url", "")))
     else:
         decision = Decision()
+    from .agents import normalize
+    from .behavior import observe
+
+    decision = observe("claude", data, normalize("claude", data), decision, tool)  # the step judged by its session
     if decision.action == "defer":
         return None
     return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision.action,
@@ -40,8 +44,38 @@ def _pre(data: dict) -> dict | None:
 
 
 def _post(data: dict) -> dict | None:
-    if data.get("tool_name") not in SHELL_TOOLS:
+    injected = _inspect_output(data)
+    clone = _scan_clone(data) if data.get("tool_name") in SHELL_TOOLS else None
+    if not injected:
+        return clone
+    if not clone:
+        return injected
+    # both: one answer that carries the two messages
+    notes = [x.get("reason") or x.get("hookSpecificOutput", {}).get("additionalContext", "") for x in (injected, clone)]
+    merged = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(n for n in notes if n)}}
+    if injected.get("decision") == "block" or clone.get("decision") == "block":
+        merged.update(decision="block", reason="\n".join(n for n in notes if n))
+    return merged
+
+
+def _inspect_output(data: dict) -> dict | None:
+    """Instructions aimed at the agent in what a tool returned: warn the agent and mark the session."""
+    from .behavior import record_output
+    from .outputs import inspect, message
+
+    tool = str(data.get("tool_name", ""))
+    result = inspect(tool, data.get("tool_input") or {}, data.get("tool_response"), str(data.get("cwd") or ""))
+    if result is None:
         return None
+    record_output("claude", data, tool, result["severity"], result["source"], result["summary"], str(data.get("cwd") or ""))
+    text = message(result)
+    out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}
+    if result["severity"] in ("high", "critical"):
+        out.update(decision="block", reason=text)  # shown to the agent as feedback on the call it just made
+    return out
+
+
+def _scan_clone(data: dict) -> dict | None:
     command = str((data.get("tool_input") or {}).get("command", ""))
     dest = clone_destination(command, data.get("cwd") or os.getcwd())
     if dest is None or not dest.is_dir():
@@ -106,15 +140,16 @@ def run(event: str, raw: str) -> tuple[str, int]:
 def main(event: str, agent: str = "claude") -> int:
     raw = sys.stdin.read()
     if agent != "claude":
-        # Other agents: only the pre-tool check, answered in that agent's protocol. A crash never blocks the agent.
-        from .agents import respond, run_pre
+        # Other agents: the pre-tool check, and the output check where the agent has a post-tool hook, answered in that
+        # agent's protocol. A crash never blocks the agent.
+        from .agents import respond, run_post, run_pre
 
-        if event != "pre":
+        if event not in ("pre", "post"):
             return 0
         try:
-            out, code, err = run_pre(agent, raw)
+            out, code, err = run_pre(agent, raw) if event == "pre" else run_post(agent, raw)
         except Exception as exc:
-            out, code, err = respond(agent, "defer", "")
+            out, code, err = respond(agent, "defer", "") if event == "pre" else ("", 0, "")
             err = f"agent-white-hat hook error: {exc.__class__.__name__}: {exc}"
         if out:
             sys.stdout.write(out)

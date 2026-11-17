@@ -1,0 +1,24 @@
+{
+  "id": "benign-keras-dense",
+  "title": "Keras model made of Dense layers",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "model",
+  "technique": "config.json describes two Dense layers from keras.layers; no Lambda, no other module.",
+  "trigger": "keras.models.load_model",
+  "incident": "Legitimate Keras model (benign twin of keras-lambda-layer-bytecode)",
+  "notes": "Standard Keras 3 archive layout.",
+  "files": {
+    "README.md": "# price-regressor\n\nSmall Keras regressor.\n\n```python\nimport keras\nmodel = keras.models.load_model('model.keras')\n```\n"
+  },
+  "generated": [
+    {
+      "path": "model.keras",
+      "generator": "b64",
+      "params": {
+        "data": "UEsDBBQAAAAIAMV5cV1THoGSOwAAAD8AAAANAAAAbWV0YWRhdGEuanNvbqtWyk4tSiyOL0stKs7Mz1OyUlAy1jPVM1DSUVBKSSxJjS9OLEtNAQkbGRiZ6Roa6hoYOhgYWIGRUi0AUEsDBBQAAAAIAMV5cV0MzULrjgAAAIoBAAALAAAAY29uZmlnLmpzb26tjssKAjEMRX9lyHoQ3Ilr/8CliISZOBQzKTapIGX+3Xaw4AMFwV2453JyE4y+j0ywbuBEARXaBjpG1YPgOMdbOkcSc8gz83J0Q84T1II+FRivFDTnu/TqXtzZ24sNidIHe19ZFGfFu8o3duYuaM5LqQTiCFNbjsGpUaC+qiUyZ/KfKT7a45Dlz0P2X9gNUEsDBBQAAAAIAMV5cV03/DlODQAAAEAAAAAQAAAAbW9kZWwud2VpZ2h0cy5oNev0cHHj5ZLiYiATAABQSwECFAAUAAAACADFeXFdUx6BkjsAAAA/AAAADQAAAAAAAAAAAAAAgAEAAAAAbWV0YWRhdGEuanNvblBLAQIUABQAAAAIAMV5cV0MzULrjgAAAIoBAAALAAAAAAAAAAAAAACAAWYAAABjb25maWcuanNvblBLAQIUABQAAAAIAMV5cV03/DlODQAAAEAAAAAQAAAAAAAAAAAAAACAAR0BAABtb2RlbC53ZWlnaHRzLmg1UEsFBgAAAAADAAMAsgAAAFgBAAAAAA=="
+      }
+    }
+  ],
+  "sources": []
+}

@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.5.0 (2026-11-17)
+
+**Attack chains, judged as chains.** Each step an agent takes is now recorded per session, as a short description with
+anything token-shaped masked (no file contents, output or secret values, and nothing leaves the machine), and judged
+against the steps before it, the way endpoint products judge behavior rather than single events (CrowdStrike's
+indicators of attack, Cortex XDR's causality chains). Seven rules: credentials read, then data sent to a host that is
+not a known service (PAH-B001); a downloaded file made executable or run, a step at a time (PAH-B002); a sensitive step
+after a tool returned injected instructions (PAH-B003); persistence set up after a download (PAH-B004); the guard or an
+agent's permission checks switched off (PAH-B005); history cleared after credential access (PAH-B006); credentials
+collected from several stores or packed into one file (PAH-B007). It works in all nine agents, through each agent's own
+session id, and `pah session list | show` prints the steps behind each alert. MCP tool calls now pass the guard too.
+
+**What tools return is checked before the agent acts on it.** Web pages, search results, MCP results, issue text and
+files in projects you have not trusted are read for text aimed at the agent: overrides of its instructions, fake
+system or tool-result markers, orders to act without telling you, requests for secrets, image links built to carry
+data out, the same text hidden in invisible Unicode, and terminal sequences that write the clipboard (PAH-O001 to
+PAH-O004). The agent is told to treat the output as data, and the rest of that session's sensitive steps need your
+approval: a runtime form of keeping untrusted data away from actions (CaMeL, FIDES). Codex and Gemini CLI replace a
+high-severity output with the warning; Claude Code, Cursor and Copilot get the warning next to it. `pah install` adds
+these output hooks, and now updates an earlier version of its hook entries in place.
+
+**Model files.** Pickles (raw, in PyTorch zips, joblib, NumPy object arrays, compressed, or nested in another pickle),
+Keras archives and HDF5 files, GGUF chat templates, 7z-packed checkpoints and model repositories that run their own
+code are read without being loaded, as Protect AI's ModelScan and Trail of Bits' fickling do (PAH-M001 to PAH-M006): a
+pickle that imports `os.system` or `builtins.exec`, a Lambda layer with bytecode or a config that names arbitrary
+functions (CVE-2025-1550, CVE-2025-9906), a chat template that reaches `__globals__` (CVE-2024-34359), a stream that
+breaks right after its payload (nullifAI), and the files `auto_map` makes `trust_remote_code` import (the Load/Mine
+campaign), whose code is then judged as code that runs on its own. Files too large to read whole are judged from the
+parts that can run code. A command that loads a model (`from_pretrained`, `torch.load`, `joblib.load`, `llama-cli`)
+now has the folder scanned first, like `npm install`.
+
+**Tamper protection.** A write that turns off hooks, permission prompts or this guard in an agent's settings
+(`disableAllHooks`, `bypassPermissions`, the plugin disabled, Codex's `danger-full-access` or `approval_policy =
+"never"`) is denied rather than asked about. Doing it after untrusted content or a download is a chain (PAH-B005).
+
+**Incidents from June to November 2026.** IronWorm, the Hades PyPI wave, Agentjacking, CVE-2026-54316 (an issue that
+made Claude Code in CI leak its key), SANDWORM_MODE and Load/Mine join the catalog, now 39 incidents, each with its
+response in order.
+
+**Measured:** TrapRepo 76 of 76 malicious repositories caught, with 11 model cases added (6 malicious, 5 benign
+twins), 0 of 40 benign flagged; attack drill 1,131 decisions, 0 unexpected; chain drill (new, `bench/chains.py`) 77 of
+77 attack runs stopped across the nine agents, 51 of them only because of the steps before, and 0 of 72 ordinary runs
+given a prompt the same steps would not get on their own; fuzzer 353 of 353 rewrites caught, 0 of 12 harmless
+rewrites flagged; 30 popular repositories 26 pass, 4 warn, none blocked (67,014 files), the same verdicts as 0.4.0 at the same commits.
+
 ## 0.4.0 (2026-11-17)
 
 **Real incidents, and what to do about each one.** A catalog of 33 attacks on people who use AI agents, from

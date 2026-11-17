@@ -14,6 +14,7 @@ by `pah incident list --markdown`.
 | 2026-10 | [@subql/common release pipeline compromise](#subql-common) | ci | PAH-P001, PAH-D002 | - |
 | 2026-10 | [PolinRider](#polinrider) | repository | PAH-I001, PAH-C022, PAH-C023 | 2 |
 | 2026-10 | [MALFEX](#malfex) | package | PAH-T006 | 1 |
+| 2026-10 | [Load/Mine: fake Qwen2 model repositories](#load-mine) | model | PAH-M006, PAH-C001 | - |
 | 2026-10 | [LiteLLM .pth compromise](#litellm-pth) | package | PAH-P008 | 1 |
 | 2026-10 | [Apex Accelerator](#apex-accelerator) | package | PAH-C009 | 2 |
 | 2026-10 | [Poisoned AGENTS.md in Downloads (function-color)](#agents-md-function-color) | instruction-file | PAH-A011 | - |
@@ -25,8 +26,13 @@ by `pah incident list --markdown`.
 | 2026-08 | [ChainDrop (keyv worm)](#chaindrop) | package | PAH-P001, PAH-C006, PAH-C004, PAH-A001, PAH-I001, PAH-I010 | 3 |
 | 2026-08 | [arrayref, internment and append-only-vec crates](#arrayref-crates) | package | PAH-C001, PAH-P011, PAH-D001 | 3 |
 | 2026-08 | [Stealers that take AI-agent tokens (WardenStealer, Aokigahara, Vidar)](#ai-token-stealers) | stealer | - | 1 |
+| 2026-07 | [SANDWORM_MODE: rogue MCP servers and global git hooks](#sandworm-mode) | package | PAH-P001, PAH-A005, PAH-A014, PAH-G002 | - |
 | 2026-06 | [Planted programs and relocated agent configuration](#planted-programs) | agent-flaw | PAH-F006, PAH-A008 | - |
 | 2026-06 | [Miasma worm](#miasma-worm) | repository | PAH-A001, PAH-I001 | - |
+| 2026-06 | [IronWorm: an npm worm that hides with a rootkit](#ironworm) | package | PAH-P001, PAH-C004 | - |
+| 2026-06 | [Hades: PyPI wheels that talk to AI scanners](#hades-pypi) | package | PAH-C011, PAH-C002, PAH-C004 | - |
+| 2026-06 | [CVE-2026-54316: an issue that made Claude Code in CI leak its key](#claude-code-ci-key-leak) | agent-flaw | PAH-A021, PAH-O001, PAH-B003 | - |
+| 2026-06 | [Agentjacking: fake error reports that run npx](#agentjacking) | mcp | PAH-O001, PAH-B003 | - |
 | 2026-03 | [InstallFix: fake AI install pages](#installfix) | install-page | PAH-C001, PAH-C013 | 3 |
 | 2026-02 | [Clinejection](#clinejection) | ci | PAH-I011, PAH-P001 | - |
 | 2026-02 | [ClawHavoc: malicious skills on ClawHub](#clawhavoc) | skill | PAH-C001, PAH-A016 | - |
@@ -258,6 +264,33 @@ by `pah incident list --markdown`.
 6. Sign out of every browser session for email, password manager and code hosting, and revoke them from each account's security page: stealers take cookies, which skip passwords and 2FA.
 
 **Sources:** <https://checkmarx.com/zero-post/malfex-npm-malware-campaign-three-payloads-and-an-adversary-that-signs-their-work/>
+
+<a id="load-mine"></a>
+## Load/Mine: fake Qwen2 model repositories
+
+*2026-10, model.* 31 fake Qwen2 repositories on Hugging Face used auto_map in config.json, so loading them with trust_remote_code=True imported their own Python files. Those files installed a cryptocurrency miner, added SSH keys and opened reverse shells. About 30,000 downloads; Hugging Face's scanners did not flag them (September 21 to October 28).
+
+**How it got in**
+
+- Loading a model with trust_remote_code=True (transformers' from_pretrained) from a repository that ships its own modeling code.
+
+**What agent-white-hat checks**
+
+- [PAH-M006](rules.md) Model repository runs its own code (trust_remote_code)
+- [PAH-C001](rules.md) Downloads code and runs it
+- Trap repositories: `hf-auto-map-remote-code-miner`
+
+**What to do, in order**
+
+1. Stop the agent, terminal or editor that ran it and end processes you do not recognise. If it may still be sending data, disconnect the network. Do not wipe the machine yet: its files show what was taken.
+2. Look for a miner (a process using all CPU), keys you did not add in ~/.ssh/authorized_keys, and new cron jobs, services or scheduled tasks. Remove them before rotating anything.
+3. Delete the model from the Hugging Face cache (~/.cache/huggingface/hub) and from wherever it was copied.
+4. Remove what it left behind (the traces above), then look for other persistence: shell profiles, LaunchAgents, systemd user units, scheduled tasks and the Startup folder, cron and ~/.ssh/authorized_keys. pah checkup lists the usual places.
+5. From a device you trust, revoke and reissue AI credentials: API keys in each provider's console, and agent logins (sign out of Claude Code, Codex, Gemini CLI, Copilot and Cursor, then sign in again). A new password does not end a stolen session.
+6. Cloud: rotate the access keys in ~/.aws, the gcloud and Azure folders and .env files, and review the audit log for new users, keys and resources.
+7. Load models only from organizations you know, pin the revision, prefer safetensors, and leave trust_remote_code off unless you have read the code (pah scan <model folder>).
+
+**Sources:** <https://pluto.security/blog/hugging-face-malware-campaign-load-mine/>
 
 <a id="litellm-pth"></a>
 ## LiteLLM .pth compromise
@@ -579,6 +612,36 @@ by `pah incident list --markdown`.
 
 **Sources:** <https://spycloud.com/blog/infostealers-now-target-ai-tokens-and-api-keys/>, <https://research.checkpoint.com/2026/infostealer-riding-the-ai-train/>, <https://www.infostealers.com/article/hudson-rock-identifies-real-world-infostealer-infection-targeting-openclaw-configurations/>
 
+<a id="sandworm-mode"></a>
+## SANDWORM_MODE: rogue MCP servers and global git hooks
+
+*2026-07, package.* A supply-chain worm that adds a rogue MCP server to Claude Desktop, Cursor, VS Code and Windsurf configurations. The server's instructions tell assistants to collect SSH, AWS and npm secrets. It also installs global git hooks. In CrowdStrike's analysis only 2 of its 14 behaviors were alert-worthy on their own: the attack shows in the sequence.
+
+**How it got in**
+
+- Installing an infected package; its install script edits agent MCP configurations and git's hooks.
+
+**What agent-white-hat checks**
+
+- [PAH-P001](rules.md) Install-time script
+- [PAH-A005](rules.md) Repository defines an MCP server the agent will start
+- [PAH-A014](rules.md) MCP tool description gives the model hidden orders
+- [PAH-G002](rules.md) Git configuration that runs commands
+- Trap repositories: `npm-postinstall-beacon`, `mcp-tool-description-poisoning`, `git-dir-hookspath-fsmonitor`
+
+**What to do, in order**
+
+1. Stop the agent, terminal or editor that ran it and end processes you do not recognise. If it may still be sending data, disconnect the network. Do not wipe the machine yet: its files show what was taken.
+2. Remove MCP servers you did not add from Claude Desktop, Cursor, VS Code and Windsurf (pah checkup lists them), and check `git config --global core.hooksPath` and ~/.gitconfig for hooks you did not install.
+3. Check every agent's configuration for hooks, MCP servers, rules files, skills and folder-open tasks you did not add: pah sweep and pah watch check.
+4. Remove what it left behind (the traces above), then look for other persistence: shell profiles, LaunchAgents, systemd user units, scheduled tasks and the Startup folder, cron and ~/.ssh/authorized_keys. pah checkup lists the usual places.
+5. npm and PyPI: revoke your tokens (npm token list, npm token revoke) and check whether any of your packages got a version you did not publish; deprecate or yank it and tell its users.
+6. Cloud: rotate the access keys in ~/.aws, the gcloud and Azure folders and .env files, and review the audit log for new users, keys and resources.
+7. GitHub: revoke personal access tokens, OAuth app grants, SSH and deploy keys you do not recognise, then review the security log and recent pushes, workflows, repositories and gists for ones you did not make.
+8. pah session list: look for agent sessions that read credentials and then sent data out.
+
+**Sources:** <https://www.crowdstrike.com/en-us/blog/denying-the-worm-sandworm-mode-and-ai-toolchain-supply-chain-attacks/>
+
 <a id="planted-programs"></a>
 ## Planted programs and relocated agent configuration
 
@@ -629,6 +692,107 @@ by `pah incident list --markdown`.
 7. Scan the repositories, packages and extensions involved, and every project opened since: pah scan <path>.
 
 **Sources:** <https://www.stepsecurity.io/blog/miasma-worm-hits-microsoft-again-azure-functions-action-and-72-other-repositories-disabled-after-supply-chain-attack-targeting-ai-coding-agents>, <https://labs.cloudsecurityalliance.org/research/csa-research-note-agent-instruction-file-poisoning-20261027/>
+
+<a id="ironworm"></a>
+## IronWorm: an npm worm that hides with a rootkit
+
+*2026-06, package.* An npm worm that hides from ps and top with an eBPF rootkit, steals Claude, Codex and Gemini credential files and AI API keys, and commits to the repositories it reaches under the name "claude".
+
+**How it got in**
+
+- npm install of an infected package (an install script).
+
+**What agent-white-hat checks**
+
+- [PAH-P001](rules.md) Install-time script
+- [PAH-C004](rules.md) Reads secrets or the environment and sends data out
+- Trap repositories: `npm-postinstall-beacon`
+
+**What to do, in order**
+
+1. Stop the agent, terminal or editor that ran it and end processes you do not recognise. If it may still be sending data, disconnect the network. Do not wipe the machine yet: its files show what was taken.
+2. A rootkit hides processes from ps and top: check the machine from a clean boot or another system, and reinstall if in doubt.
+3. Reinstall the operating system if the payload ran with administrator rights, installed remote access, or left persistence you cannot fully explain.
+4. From a device you trust, revoke and reissue AI credentials: API keys in each provider's console, and agent logins (sign out of Claude Code, Codex, Gemini CLI, Copilot and Cursor, then sign in again). A new password does not end a stolen session.
+5. npm and PyPI: revoke your tokens (npm token list, npm token revoke) and check whether any of your packages got a version you did not publish; deprecate or yank it and tell its users.
+6. GitHub: revoke personal access tokens, OAuth app grants, SSH and deploy keys you do not recognise, then review the security log and recent pushes, workflows, repositories and gists for ones you did not make.
+7. Look for commits authored as "claude" that you did not make, in every repository you can push to.
+
+**Sources:** <https://research.jfrog.com/post/iron-worm-shai-hulud-rustier-cousin/>
+
+<a id="hades-pypi"></a>
+## Hades: PyPI wheels that talk to AI scanners
+
+*2026-06, package.* 37 wheels on PyPI carried text telling LLM-based security scanners to report the package as clean, next to code that stole credentials.
+
+**How it got in**
+
+- pip install of one of the wheels; the payload ran on import.
+
+**What agent-white-hat checks**
+
+- [PAH-C011](rules.md) Text addressed to AI reviewers or agents
+- [PAH-C002](rules.md) Decodes hidden data and executes it
+- [PAH-C004](rules.md) Reads secrets or the environment and sends data out
+- Trap repositories: `python-exec-loader-ai-reviewer-comment`
+
+**What to do, in order**
+
+1. Stop the agent, terminal or editor that ran it and end processes you do not recognise. If it may still be sending data, disconnect the network. Do not wipe the machine yet: its files show what was taken.
+2. Uninstall the packages and scan the environments they were installed in (pah scan <venv>).
+3. Cloud: rotate the access keys in ~/.aws, the gcloud and Azure folders and .env files, and review the audit log for new users, keys and resources.
+4. npm and PyPI: revoke your tokens (npm token list, npm token revoke) and check whether any of your packages got a version you did not publish; deprecate or yank it and tell its users.
+5. Do not take an AI reviewer's verdict on code that addresses the reviewer: that text is the attack.
+
+**Sources:** <https://www.zscaler.com/blogs/security-research/shai-hulud-campaign-evolution-miasma-hades-and-ai-scanner-evasion>
+
+<a id="claude-code-ci-key-leak"></a>
+## CVE-2026-54316: an issue that made Claude Code in CI leak its key
+
+*2026-06, agent-flaw.* A prompt-injected GitHub issue made Claude Code running in CI send its API key out through download counters on huggingface.co, a host its configuration pre-approved. Fixed in Claude Code 2.1.163 (advisory in June; presented at Black Hat in August).
+
+**How it got in**
+
+- Issue or pull request text read by an agent in CI that may fetch pre-approved hosts without asking.
+
+**What agent-white-hat checks**
+
+- [PAH-A021](rules.md) Agent setup lets content anyone can write reach a way out without asking
+- [PAH-O001](rules.md) Tool output carries instructions aimed at the agent
+- [PAH-B003](rules.md) Sensitive step after a tool returned injected instructions
+- Trap repositories: `mcp-toxic-flow-autoapprove`
+
+**What to do, in order**
+
+1. Update Claude Code to 2.1.163 or later.
+2. From a device you trust, revoke and reissue AI credentials: API keys in each provider's console, and agent logins (sign out of Claude Code, Codex, Gemini CLI, Copilot and Cursor, then sign in again). A new password does not end a stolen session.
+3. In CI, give the agent only the secrets the job needs and pre-approve only the hosts it needs; a host anyone can publish to (a model hub, a paste site) is a way out.
+4. Read the job logs for requests to hosts you did not expect.
+
+**Sources:** <https://advisories.gitlab.com/npm/@anthropic-ai/claude-code/CVE-2026-54316/>, <https://novee.security/blog/critical-flaws-in-anthropic-google-and-openais-coding-agents/>
+
+<a id="agentjacking"></a>
+## Agentjacking: fake error reports that run npx
+
+*2026-06, mcp.* Researchers planted error events in Sentry; returned through the Sentry MCP server, the "fix" in them made Claude Code, Cursor and Codex run an attacker's npx command about 85% of the time. A demonstration, not a campaign, of how tool output steers an agent.
+
+**How it got in**
+
+- An agent reading an error report through an MCP server and following the command in it.
+
+**What agent-white-hat checks**
+
+- [PAH-O001](rules.md) Tool output carries instructions aimed at the agent
+- [PAH-B003](rules.md) Sensitive step after a tool returned injected instructions
+
+**What to do, in order**
+
+1. Treat what MCP tools return as data: read a suggested command before letting an agent run it.
+2. Keep agent-white-hat's output hook on, so such output is flagged and the next package install in that session needs your approval (pah install adds it for Claude Code, Codex, Gemini CLI, Cursor and Copilot).
+3. If the package already ran: @contain
+4. npm and PyPI: revoke your tokens (npm token list, npm token revoke) and check whether any of your packages got a version you did not publish; deprecate or yank it and tell its users.
+
+**Sources:** <https://tenetsecurity.ai/blog/agentjacking-coding-agents-with-fake-sentry-errors/>
 
 <a id="installfix"></a>
 ## InstallFix: fake AI install pages

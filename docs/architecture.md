@@ -23,8 +23,23 @@ Report         findings, surfaces, verdict (model.py, report.py)
 ```
 
 `pah diff` runs this twice and keeps what is new (diff.py, capabilities.py). `pah checkup` looks at the computer
-instead of a target (checkup.py, incidents.py, flows.py). The guard runs the command analysis on what an agent is
-about to do (guard.py, hooks.py).
+instead of a target (checkup.py, incidents.py, flows.py). Model files are read in the dispatch step (models.py).
+
+## What the guard does with each step
+
+```
+hook payload  each agent's own format, read into one ToolEvent (agents.py; hooks.py for Claude Code)
+   |
+judge alone   the command, write, read or fetch on its own (guard.py, with patterns.py), and a scan of the
+   |          project before setup or a model load
+judge in its  the step reduced to tags (credential read, download, send, run, persistence, tamper, ...) and
+session       checked against the session's earlier steps (behavior.py, session.py)
+   |
+answer        deny or ask in the agent's protocol, or nothing; the step is recorded with the answer
+
+after a tool  what it returned is read for instructions aimed at the agent (outputs.py); a hit warns the agent
+ran            and marks the session, so its later sensitive steps need the user
+```
 
 ## Modules
 
@@ -47,6 +62,9 @@ about to do (guard.py, hooks.py).
 | `incidents.py`, `data/incidents.json` | The incident catalog: what happened, what checks it, traces, the response in order |
 | `checkup.py`, `watch.py`, `protect.py`, `av.py` | The computer: exposures and traces, configuration baseline, real-time protection and quarantine, the local antivirus engine |
 | `guard.py`, `hooks.py`, `install.py`, `agents.py` | The guard in each agent's hook protocol, and installing it |
+| `behavior.py`, `session.py` | Steps judged by the steps before them (PAH-B rules), and the per-session record behind `pah session` |
+| `outputs.py` | What tools return: injected instructions, hidden text, exfiltration links, terminal sequences (PAH-O rules) |
+| `models.py` | Model files read without loading them: pickles, PyTorch, Keras, GGUF, NumPy, remote code (PAH-M rules) |
 | `intel.py`, `names.py`, `lockfiles.py`, `review.py` | Registry and OSV lookups (opt-in), look-alike names, pinned versions, the model review (opt-in) |
 | `report.py`, `ci.py`, `mcp_server.py`, `cli.py` | Text, JSON and SARIF; GitHub Actions; the MCP server; the command line |
 | `model.py`, `collector.py` | Findings, rules registry, reports; one file's findings, deduplicated |
@@ -61,6 +79,10 @@ about to do (guard.py, hooks.py).
   that code as code that runs on its own. Route it in `surfaces/dispatch.py` or `dispatch_packages`.
 - **A way to hide code:** an operator in `bench/fuzz.py` first, then the decoding in `deobfuscate.py`.
 - **A real incident:** an entry in `pah/data/incidents.json`, then `pah incident list --markdown > docs/incidents.md`.
+- **An attack that shows only as a sequence:** a tag for the step in `behavior.act_of` if it needs one, the rule in
+  `behavior.evaluate`, and a chain with its ordinary counterpart in `bench/fixtures/drill-chains.json`.
+- **A model format:** a reader in `models.py` that lists what loading would import or call, and a case in
+  `bench/fixtures/model_bytes.py` (assembled, never loaded) with its benign twin.
 - **A new agent:** its configuration files in `surfaces/agent_configs.py`, its hook protocol in `hooks.py` and
   `agents.py`, its user-level files in `watch.locations()`.
 

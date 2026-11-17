@@ -1,0 +1,17 @@
+{
+  "id": "benign-hf-auto-map-model-code",
+  "title": "Model repository with its own modeling code and nothing else",
+  "kind": "benign",
+  "expected": "pass",
+  "category": "model",
+  "technique": "auto_map points at modeling_tiny.py, which only defines layers with torch.nn; trust_remote_code runs it, and it does nothing but build the model.",
+  "trigger": "AutoModel.from_pretrained(..., trust_remote_code=True)",
+  "incident": "Legitimate custom architecture (benign twin of hf-auto-map-remote-code-miner)",
+  "notes": "Reported as low (runs repository code) without blocking.",
+  "files": {
+    "README.md": "# tiny-mixer\n\nA small MLP-Mixer.\n\n```python\nfrom transformers import AutoModel\nmodel = AutoModel.from_pretrained('.', trust_remote_code=True)\n```\n",
+    "config.json": "{\n  \"architectures\": [\n    \"TinyMixer\"\n  ],\n  \"model_type\": \"tiny-mixer\",\n  \"auto_map\": {\n    \"AutoModel\": \"modeling_tiny.TinyMixer\"\n  }\n}\n",
+    "modeling_tiny.py": "import torch\nfrom torch import nn\nfrom transformers import PreTrainedModel\n\n\nclass TinyMixer(PreTrainedModel):\n    def __init__(self, config):\n        super().__init__(config)\n        self.mix = nn.Sequential(nn.Linear(64, 64), nn.GELU(), nn.Linear(64, 64))\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        return self.mix(x)\n"
+  },
+  "sources": []
+}

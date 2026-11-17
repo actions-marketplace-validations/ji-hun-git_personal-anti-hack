@@ -312,7 +312,7 @@ def cmd_mcp(args) -> int:
 
 
 def cmd_rules(args) -> int:
-    from . import av, checkup, diff, guard, intel, packages, review, scan, surfaces, watch  # noqa: F401  (registers every rule)
+    from . import av, behavior, checkup, diff, guard, intel, models, outputs, packages, review, scan, surfaces, watch  # noqa: F401  (registers every rule)
     from .model import RULES
     from .report import rules_markdown
 
@@ -321,6 +321,54 @@ def cmd_rules(args) -> int:
     else:
         for rid in sorted(RULES):
             print(f"{rid}  {RULES[rid].title}")
+    return 0
+
+
+def cmd_session(args) -> int:
+    """What agents did, step by step, as the hooks recorded it: the chain behind each alert."""
+    import time
+
+    from . import behavior, outputs  # noqa: F401  (rule titles)
+    from . import session as sessions
+    from .model import RULES
+
+    if args.action == "clear":
+        n = sessions.clear(args.id)
+        print(f"Removed {n} session record(s).")
+        return 0
+    if args.action == "list":
+        rows = sessions.sessions(args.limit)
+        if args.json:
+            print(json.dumps(rows, indent=1, ensure_ascii=False))
+            return 0
+        if not rows:
+            print("No sessions recorded yet. The hooks record each agent step once agent-white-hat is installed.")
+            return 0
+        for r in rows:
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last"]))
+            alerts = ", ".join(sorted(set(r["alerts"]))) or "-"
+            print(f"{r['id'][:12]}  {when}  {r['agent']:<11} {r['steps']:>4} steps  {r['denied']:>3} denied  alerts: {alerts}"
+                  f"\n              {r['cwd']}")
+        print("\npah session show <id> (or latest) for the steps.")
+        return 0
+    events = sessions.events_of(args.id or "latest")
+    if args.json:
+        print(json.dumps(events, indent=1, ensure_ascii=False))
+        return 0
+    if not events:
+        print("No such session; pah session list shows them.")
+        return 64
+    first = events[0]
+    print(f"Session of {first.get('agent', '?')} in {first.get('cwd', '?')}, {len(events)} steps\n")
+    for i, e in enumerate(events, 1):
+        when = time.strftime("%H:%M:%S", time.localtime(e.get("t", 0)))
+        mark = {"deny": "DENIED", "ask": "ASKED"}.get(e.get("action", ""), "")
+        print(f"{i:>4}  {when}  {e.get('tool', '')[:22]:<22} {e.get('text', '')[:90]}  {mark}")
+        tags = e.get("tags") or {}
+        if tags:
+            print("      " + "; ".join(f"{k}: {', '.join(v)[:80]}" for k, v in tags.items()))
+        for rid in e.get("alerts", []):
+            print(f"      ! {rid} {RULES[rid].title if rid in RULES else ''}")
     return 0
 
 
@@ -334,7 +382,7 @@ def _incidents_for(arg: str | None):
 
 
 def cmd_incident(args) -> int:
-    from . import av, checkup, diff, guard, incidents, intel, packages, review, scan, surfaces, watch  # noqa: F401  (rule titles)
+    from . import av, behavior, checkup, diff, guard, incidents, intel, models, outputs, packages, review, scan, surfaces, watch  # noqa: F401  (rule titles)
 
     if args.action == "list":
         if args.markdown:
@@ -516,6 +564,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--markdown", action="store_true", help="list: write docs/incidents.md")
     p.set_defaults(func=cmd_incident)
+
+    p = sub.add_parser("session", help="what agents did, step by step, and the chains the guard stopped")
+    p.add_argument("action", nargs="?", choices=("list", "show", "clear"), default="list")
+    p.add_argument("id", nargs="?", help="session id from `pah session list`, or latest (show); omit to clear all")
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_session)
 
     p = sub.add_parser("mcp", help="run as an MCP server over stdio (scan, check_command, checkup, watch_check, incident)")
     p.set_defaults(func=cmd_mcp)

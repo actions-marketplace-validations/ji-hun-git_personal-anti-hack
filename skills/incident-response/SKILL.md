@@ -24,6 +24,8 @@ Order matters: stop the damage, find out what ran, take back the accounts, remov
 
 - Identify the exact package, version, repository commit, extension or command, and the time. Shell history, the agent's transcript and package-manager logs help.
 - Match it to a known incident: `pah incident check` looks for the files known campaigns leave on a computer, and `pah incident show <name or package>` gives what happened and the response in order (MCP tool `incident`). Follow an incident's own order where it differs from the steps below: some worms wipe files when their stolen token is revoked, so the payload must go first.
+- See what the agent did: `pah session list` and `pah session show <id>` print each recorded step (credential reads,
+  downloads, data sent out, settings changed) and the chain behind each alert. Records are kept for a week.
 - Audit it with the malware-audit skill (`pah audit <path or URL>`) to learn what it collects, where it sends data and what it leaves behind.
 - Check this computer: `pah checkup` (keys saved in plain files, risky agent settings, planted instruction files, `curl | sh` and ClickFix traces, known malware traces, outdated agents) and `pah watch check` (changes to agent and shell configuration since the baseline). Persistence locations to inspect by hand are in [persistence](references/persistence.md).
 

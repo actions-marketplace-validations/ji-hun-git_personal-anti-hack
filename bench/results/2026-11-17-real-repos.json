@@ -7,7 +7,7 @@
    "commit": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
    "verdict": "pass",
    "files": 217,
-   "seconds": 0.9,
+   "seconds": 3.3,
    "surfaces": 0,
    "incomplete": [],
    "top": []
@@ -17,7 +17,7 @@
    "commit": "6b5aafc1cd538998728be6f45c65b0f80bae01b2",
    "verdict": "pass",
    "files": 140,
-   "seconds": 6.7,
+   "seconds": 8.8,
    "surfaces": 2,
    "incomplete": [],
    "top": []
@@ -27,7 +27,7 @@
    "commit": "3f0023dc10d7003d70f2e31aa56300eab80e76d6",
    "verdict": "pass",
    "files": 60,
-   "seconds": 0.5,
+   "seconds": 1.3,
    "surfaces": 0,
    "incomplete": [],
    "top": []
@@ -37,7 +37,7 @@
    "commit": "9a34cfeda175bb30538157a24a0c681d7180496c",
    "verdict": "pass",
    "files": 805,
-   "seconds": 2.1,
+   "seconds": 4.8,
    "surfaces": 15,
    "incomplete": [],
    "top": []
@@ -47,7 +47,7 @@
    "commit": "1e4f284f30ed0ac40ec216bdf93ab12f726039a3",
    "verdict": "pass",
    "files": 290,
-   "seconds": 0.3,
+   "seconds": 1.8,
    "surfaces": 106,
    "incomplete": [],
    "top": []
@@ -57,7 +57,7 @@
    "commit": "35ea15ea0aaebaef67c3ee65dc22bac10ca0fcb5",
    "verdict": "pass",
    "files": 1598,
-   "seconds": 9.2,
+   "seconds": 18.0,
    "surfaces": 5,
    "incomplete": [],
    "top": []
@@ -67,7 +67,7 @@
    "commit": "f6058f8364fe7ab91ca57a83e02577ed74c9cae4",
    "verdict": "pass",
    "files": 351,
-   "seconds": 16.4,
+   "seconds": 21.7,
    "surfaces": 7,
    "incomplete": [],
    "top": []
@@ -77,7 +77,7 @@
    "commit": "2cc4f0fd2cc44a970229a5cb025cd47c63f31b04",
    "verdict": "pass",
    "files": 9787,
-   "seconds": 23.8,
+   "seconds": 93.4,
    "surfaces": 0,
    "incomplete": [],
    "top": []
@@ -87,7 +87,7 @@
    "commit": "3c7baaa05ab4aa49cc819ce3a819d260de19c157",
    "verdict": "pass",
    "files": 131,
-   "seconds": 1.8,
+   "seconds": 2.8,
    "surfaces": 3,
    "incomplete": [],
    "top": []
@@ -97,7 +97,7 @@
    "commit": "49943b5a94413a530761350f04e896f76e8d620e",
    "verdict": "pass",
    "files": 237,
-   "seconds": 1.2,
+   "seconds": 2.6,
    "surfaces": 4,
    "incomplete": [],
    "top": []
@@ -107,7 +107,7 @@
    "commit": "a1b3be01aadc61c67edc09eed4f6cc1fcc3d3b8f",
    "verdict": "pass",
    "files": 3269,
-   "seconds": 9.8,
+   "seconds": 28.8,
    "surfaces": 16,
    "incomplete": [],
    "top": []
@@ -117,7 +117,7 @@
    "commit": "50234b4e670064c42a4c29cb6258115a2079ba4c",
    "verdict": "pass",
    "files": 646,
-   "seconds": 10.1,
+   "seconds": 14.5,
    "surfaces": 18,
    "incomplete": [],
    "top": []
@@ -127,7 +127,7 @@
    "commit": "8c3ddc37a168c9de59448780a3585aac1861852c",
    "verdict": "pass",
    "files": 9284,
-   "seconds": 15.5,
+   "seconds": 21.2,
    "surfaces": 15,
    "incomplete": [],
    "top": []
@@ -137,7 +137,7 @@
    "commit": "8a6a9492d0bc897ebb455fc1ab6916fb34e7b55a",
    "verdict": "warn",
    "files": 11326,
-   "seconds": 56.6,
+   "seconds": 116.2,
    "surfaces": 16,
    "incomplete": [],
    "top": [
@@ -155,7 +155,7 @@
    "commit": "178cc027e283fd965cb72d0a7395b219eada170c",
    "verdict": "pass",
    "files": 227,
-   "seconds": 3.7,
+   "seconds": 6.0,
    "surfaces": 1,
    "incomplete": [],
    "top": []
@@ -165,7 +165,7 @@
    "commit": "e306b0c7c40ad21d5bdf52bcd20da513904682ae",
    "verdict": "pass",
    "files": 362,
-   "seconds": 1.4,
+   "seconds": 3.3,
    "surfaces": 5,
    "incomplete": [],
    "top": []
@@ -175,7 +175,7 @@
    "commit": "f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
    "verdict": "pass",
    "files": 893,
-   "seconds": 6.9,
+   "seconds": 14.1,
    "surfaces": 1,
    "incomplete": [],
    "top": []
@@ -185,7 +185,7 @@
    "commit": "1ad046cb015cfcb6ad90293c605ee4e38326bd13",
    "verdict": "pass",
    "files": 1557,
-   "seconds": 6.9,
+   "seconds": 15.8,
    "surfaces": 4,
    "incomplete": [],
    "top": []
@@ -195,7 +195,7 @@
    "commit": "5b3d2c7fce11a62d0df0105e9cc7290f50f2a0f8",
    "verdict": "pass",
    "files": 10400,
-   "seconds": 150.4,
+   "seconds": 252.8,
    "surfaces": 19,
    "incomplete": [],
    "top": []
@@ -205,7 +205,7 @@
    "commit": "4fa64e71b9b4e1bb65a86cc2863574f561b82340",
    "verdict": "warn",
    "files": 3058,
-   "seconds": 74.4,
+   "seconds": 113.9,
    "surfaces": 35,
    "incomplete": [],
    "top": [
@@ -258,7 +258,7 @@
    "commit": "e1dc4b18dbb948921da37f3d4224a628730b43b0",
    "verdict": "warn",
    "files": 415,
-   "seconds": 6.3,
+   "seconds": 10.0,
    "surfaces": 23,
    "incomplete": [],
    "top": [
@@ -276,7 +276,7 @@
    "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
    "verdict": "pass",
    "files": 494,
-   "seconds": 3.7,
+   "seconds": 6.4,
    "surfaces": 20,
    "incomplete": [],
    "top": []
@@ -286,7 +286,7 @@
    "commit": "8abdf329ecbc9315dc4e3334a5702782f70b8b02",
    "verdict": "warn",
    "files": 4838,
-   "seconds": 46.7,
+   "seconds": 86.7,
    "surfaces": 1134,
    "incomplete": [],
    "top": [
@@ -381,7 +381,7 @@
    "commit": "c0140703a53eb0d22be44f7bac318d0baacc927c",
    "verdict": "pass",
    "files": 1200,
-   "seconds": 4.2,
+   "seconds": 10.0,
    "surfaces": 1,
    "incomplete": [],
    "top": []
@@ -391,7 +391,7 @@
    "commit": "6f5767a530d186f013dca720c30858577e773f1d",
    "verdict": "pass",
    "files": 539,
-   "seconds": 2.4,
+   "seconds": 4.9,
    "surfaces": 3,
    "incomplete": [],
    "top": []
@@ -401,7 +401,7 @@
    "commit": "e5b3c5834e3932c8aaa42deef4794076c9b0cbf0",
    "verdict": "pass",
    "files": 20,
-   "seconds": 0.3,
+   "seconds": 0.4,
    "surfaces": 0,
    "incomplete": [],
    "top": []
@@ -411,7 +411,7 @@
    "commit": "0536d5e5288458c696ccbeac0e68d87128300069",
    "verdict": "pass",
    "files": 1681,
-   "seconds": 16.6,
+   "seconds": 30.8,
    "surfaces": 16,
    "incomplete": [],
    "top": []
@@ -421,7 +421,7 @@
    "commit": "500158f732419217507c7656904b8e6aa1bcc0d6",
    "verdict": "pass",
    "files": 167,
-   "seconds": 0.4,
+   "seconds": 1.3,
    "surfaces": 2,
    "incomplete": [],
    "top": []
@@ -431,7 +431,7 @@
    "commit": "56c12dca911e43bea1e9ac73dd2f6937bd892c56",
    "verdict": "pass",
    "files": 14,
-   "seconds": 0.0,
+   "seconds": 0.1,
    "surfaces": 1,
    "incomplete": [],
    "top": []
@@ -441,7 +441,7 @@
    "commit": "9a8d1a98922c5e445e8a618b8c27f84c63b9fbff",
    "verdict": "pass",
    "files": 3008,
-   "seconds": 8.4,
+   "seconds": 26.1,
    "surfaces": 3,
    "incomplete": [],
    "top": []
