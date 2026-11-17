@@ -30,8 +30,10 @@ The verdict colors were checked with the dataviz skill's validator against GitHu
 contrast all pass. A verdict color always comes with its word or icon, never alone. Labels inside a fill are white,
 or near-black where white would fall under 4.5:1 (amber in both modes, green in dark mode).
 
-Backgrounds are transparent, so a figure sits on GitHub's light, dark and dimmed themes alike; logs and terminals
-carry their own panel.
+Each figure carries its page's background (white, or GitHub's dark `#0d1117`) with rounded corners. GitHub picks the
+light or dark version by the operating system's setting, which can differ from the reader's GitHub theme; a
+transparent figure would then put dark ink on a dark page. Where the two agree, the figure blends into the page; where
+they do not, it reads as a clean panel. Logs and terminals carry their own panel inside it.
 
 ## Type
 
