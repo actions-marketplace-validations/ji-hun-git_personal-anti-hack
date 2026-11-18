@@ -17,6 +17,10 @@ agent-white-hat is released under the MIT License (see `LICENSE`). It includes t
   Datadog, Inc., Apache License 2.0), with agent-white-hat's verdict on each. No sample is included in this
   repository; `bench/independent.py` downloads them into memory when it runs. The same files list the names, versions
   and digests of the popular PyPI and npm releases in the evaluation, which are not included either.
+- **`bench/results/*-shellgate*.json`**: agent-white-hat's verdict on each row of the
+  [Obfuscated-Shell Gate Benchmark](https://huggingface.co/datasets/FINAL-Bench/Obfuscated-Shell-Gate) dev split
+  (VIDRAFT / FINAL-Bench, 2026, CC-BY-4.0), referenced by row id, family and disguise. The commands themselves are not
+  included; `bench/shellgate.py` downloads the dev split into memory when it runs.
 
 - **`scripts/fonts/`**: [Instrument Sans](https://github.com/Instrument/instrument-sans) (Copyright 2022 The Instrument
   Sans Project Authors) and [IBM Plex Mono](https://github.com/IBM/plex) (Copyright IBM Corp.), both under the SIL Open

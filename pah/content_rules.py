@@ -233,3 +233,9 @@ R_SWEEP = rule(
     "secrets manager from an install script is credential harvesting (Shai-Hulud ran TruffleHog on the home folder).",
     "Do not install it; rotate cloud and CI credentials if it ran.", attack=("T1552", "T1552.005"),
     refs=("https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/",))
+R_LOG_WIPE = rule(
+    "PAH-C030", "Deletes or silences logs",
+    "Removing audit logs, system logs or shell history, or stopping the services that write them, hides what was "
+    "done; it is the clean-up step after a break-in, and an agent has no reason to do it.",
+    "Do not run it. If it already ran, assume the logs that would show what happened are gone.",
+    attack=("T1070.002", "T1070.003", "T1562.002"))

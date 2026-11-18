@@ -249,8 +249,21 @@ def _shellgate() -> dict | None:
         b = sum(right["after"][i] and not right["before"][i] for i in ids)   # fixed by the change
         c = sum(right["before"][i] and not right["after"][i] for i in ids)   # broken by the change
         paired[half] = {"n": len(ids), "fixed": b, "broken": c, "p": mcnemar(b, c)}
+    rows = {r["id"]: r for r in after["rows"]}
+
+    def families(ids) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for i in ids:
+            key = f"{rows[i]['family']} ({'risky' if rows[i]['is_risky'] else 'harmless'})"
+            out[key] = out.get(key, 0) + 1
+        return dict(sorted(out.items(), key=lambda kv: (-kv[1], kv[0])))
+
+    test_ids = [i for i in rows if halves[i] == "test"]
     return {"source": name, "dataset": after["dataset"], "code_before": before["code"], "code_after": after["code"],
-            "before": before["summary"], "after": after["summary"], "paired": paired}
+            "before": before["summary"], "after": after["summary"], "paired": paired,
+            "test_still_wrong": families(i for i in test_ids if not right["after"][i]),
+            "broken": families(i for i in rows if right["before"][i] and not right["after"][i]),
+            "test_still_wrong_seeds": len({rows[i]["seed_id"] for i in test_ids if not right["after"][i]})}
 
 
 def _independent() -> dict | None:
@@ -365,7 +378,12 @@ def _shellgate_section(s: dict) -> list[str]:
     lines += [
         "",
         f"On the test half, {t['fixed']} of its {t['n']} commands were judged right after the change and wrong before, "
-        f"and {t['broken']} the other way round: exact McNemar p = {pval(t['p'])}. Over the whole set, balanced accuracy "
+        f"and {t['broken']} the other way round: exact McNemar p = {pval(t['p'])}. Still wrong on the test half after the "
+        f"change: {sum(sg['test_still_wrong'].values())} commands from {sg['test_still_wrong_seeds']} seed "
+        f"command{'s' if sg['test_still_wrong_seeds'] != 1 else ''}, by family "
+        + ", ".join(f"{k} {v}" for k, v in sg["test_still_wrong"].items())
+        + "; the commands the change broke: " + ", ".join(f"{k} {v}" for k, v in sg["broken"].items())
+        + ". Over the whole set, balanced accuracy "
         f"after the change is {100 * a['all']['balanced_accuracy']:.1f} (bootstrap 95% interval "
         f"{100 * a['all']['balanced_accuracy_ci95'][0]:.1f} to {100 * a['all']['balanced_accuracy_ci95'][1]:.1f}), and "
         f"the obfuscation gap, plain minus disguised, is {100 * a.get('obfuscation_gap', 0):+.1f} points.",

@@ -16,6 +16,21 @@ from the obfuscated-code rule on bundled JavaScript, invisible characters in Uni
 and prebuilt binaries. `docs/statistics.md` gives every rate an exact 95% interval and names every flagged package;
 the README's new figure is a forest plot of all of it.
 
+**The guard reads disguised shell commands.** Scored on ViKernel's shell benchmark (FINAL-Bench/Obfuscated-Shell-Gate,
+the public dev split: 222 bash commands, each risky one paired with a harmless one in the same disguise), the guard
+first reached 55.5 balanced accuracy. It denied anything decoded into a shell, harmless or not, and could not read
+`${IFS}`, quote and backslash breaks, octal `printf`, rot13 or reversal. The new `pah/shellfold.py` works out what a
+command really runs without running it (those breaks, variables, runners such as `script -qc`, `watch` and `bash -c`,
+and pipelines through base64, hex, `printf`, `tr`, `rev` and gzip), and the same rules judge that. A decode-and-run
+whose payload decodes completely to nothing risky is reported, not blocked; one that cannot be read is still denied.
+Written against half of the commands and measured on the other half, it lifted balanced accuracy there from 56.0 to
+93.8 (exact McNemar p = 3.7e-11); on the whole set it scores 96.1 and lets every harmless command through. New
+single-step checks for an agent's commands: deleting or silencing logs (PAH-C030, denied), recursive or bulk deletion
+outside the project folder (asked), a program downloaded and made executable (asked; denied over plain HTTP, from a
+bare IP or a look-alike host), and a file with a secret-looking name uploaded anywhere (denied). TrapRepo, the fuzzer,
+both drills and the 30 popular repositories give the same verdicts as before. Still open: a recursive search for
+tokens in a configuration folder is not yet treated as hunting for credentials.
+
 ## 0.5.1 (2026-11-17)
 
 **Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,

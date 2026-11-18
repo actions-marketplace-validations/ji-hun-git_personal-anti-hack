@@ -144,6 +144,8 @@ STR = {
         "int_shell_rows": ("Risky commands stopped", "Harmless commands let through"),
         "int_shell_note": "{n} commands, dev split",
         "int_shell_legend": ("After the change", "Before, untuned"),
+        "int_foot_shell": "Shell commands: FINAL-Bench/Obfuscated-Shell-Gate (CC-BY-4.0), the public dev split, halved by "
+                          "a fixed seed; bench/shellgate.py.",
         "int_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so the held-out rates are rates "
                     "on malware Datadog caught, not on all malware. Sample, protocol and every verdict: "
                     "bench/independent.py, bench/fixtures/independent-sample.json and bench/results/.",
@@ -238,6 +240,8 @@ STR = {
         "int_shell_rows": ("위험한 명령을 멈춤", "무해한 명령을 통과시킴"),
         "int_shell_note": "명령 {n}개, dev 분할",
         "int_shell_legend": ("고친 뒤", "고치기 전"),
+        "int_foot_shell": "셸 명령: FINAL-Bench/Obfuscated-Shell-Gate(CC-BY-4.0) 공개 dev 분할을 고정 시드로 반으로 나눔. "
+                          "bench/shellgate.py.",
         "int_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, 독립 세트의 비율은 모든 악성 코드가 아니라 "
                     "Datadog이 잡은 악성 코드에서의 비율입니다. 표본, 절차와 모든 판정: bench/independent.py, "
                     "bench/fixtures/independent-sample.json, bench/results/.",
@@ -807,7 +811,7 @@ def intervals(lang: str, theme: str, st: dict | None = None) -> str:
             f'<div class="panel"><h3>{e(s["int_mal"])}</h3>{legend(s["int_legend"]) if rings else ""}'
             f'{forest(mal, mal_dom, lang)}</div>'
             f'<div class="panel"><h3>{e(s["int_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>{shell}'
-            f'<p class="foot">{e(s["int_foot"])}</p></div>')
+            f'<p class="foot">{e(s["int_foot"] + (" " + s["int_foot_shell"] if shell else ""))}</p></div>')
     return page(theme, body, INTERVALS_CSS, lang=lang)
 
 

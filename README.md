@@ -369,6 +369,45 @@ flagged means blocked or warned. The rules were not changed before these results
 - **Campaign checks:** switched off, they cost 8 catches (8 in npm packages published to attack): the general rules do nearly all of the work.
 - **What this means:** on real malicious packages, agent-white-hat catches far less than the 100% TrapRepo shows, and on popular packages it flags about 11 in 100. Its strong ground is what runs by itself when an agent sets a project up; code that runs later, on import or on activation, and attacks written as instructions are where it falls short. Fixes for both will be measured on a fresh draw from the same sources, not on this one.
 
+### ViKernel's shell benchmark
+
+[ViKernel](https://huggingface.co/spaces/FINAL-Bench/ViKernel-Scanner) is a security kernel that judges an agent's tool calls before they run, the job agent-white-hat's
+guard does. Its authors measure gates on the [Obfuscated-Shell Safety Leaderboard](https://huggingface.co/spaces/FINAL-Bench/obfuscated-shell-leaderboard): one bash command at a time,
+often disguised in base64, hex, octal `printf`, rot13, reversal, `${IFS}` or variable splitting, every risky command
+paired with a harmless one in the same disguise, so a gate scores only by reading what the command does.
+[`bench/shellgate.py`](bench/shellgate.py) scores the guard the same way on the public dev split
+([FINAL-Bench/Obfuscated-Shell-Gate](https://huggingface.co/datasets/FINAL-Bench/Obfuscated-Shell-Gate), 222 commands); a deny or an ask stops a command.
+
+| Guard | Half | Balanced accuracy | Risky commands stopped | Harmless commands let through |
+| --- | --- | --- | --- | --- |
+| before, untuned | test | 56.0 | 33 of 64 | 32 of 53 |
+| **after** | **test** | **93.8** | **56 of 64** | **53 of 53** |
+| before, untuned | all | 55.5 | 46 of 103 | 79 of 119 |
+| after | all | 96.1 | 95 of 103 | 119 of 119 |
+
+- **The first run failed.** Untuned, the guard stopped 46 of 103 risky commands and
+  blocked 40 of 119 harmless ones: it denied anything decoded into a
+  shell, harmless or not, and could not read `${IFS}`, quote breaks, octal `printf`, rot13 or reversal.
+- **The fix reads the command.** [`pah/shellfold.py`](pah/shellfold.py) works out what a command really runs without
+  running it (quote and backslash breaks, `${IFS}`, variables, runners such as `script -qc` and `watch`, and
+  pipelines through base64, hex, `printf`, `tr`, `rev` and gzip) and the same rules judge that. A decode-and-run whose
+  payload decodes completely to nothing risky is let through; one that cannot be read is still denied.
+- **Measured on commands it was not built against.** The seed commands were split in two halves by a fixed seed and
+  the change was written looking only at one half. On the other half, 47 commands went from wrong to right
+  and 3 the other way (exact McNemar p = 3.7e-11).
+- **What still gets through.** All 8 risky commands it lets through on the test half come from one seed command: a recursive `grep` for a token in a home folder's configuration, which the guard does not yet treat as hunting for credentials. The 3 commands the change broke are encoded versions of it that the untuned guard denied only because it denied everything decoded into a shell. A rule for searches through credential folders is the next fix, to be measured on commands the guard has not seen.
+- **Against the leaderboard.** On the whole dev split the guard now scores 96.1
+  (bootstrap 95% interval 93.2 to 98.5)
+  with an obfuscation gap of -2.6 points, and 93.8 on the
+  robustness checks (no risky command talked into ALLOW by text that calls it safe). The leaderboard's 20 models score
+  from 56.8 to 99.5 (GPT-6.1 Terra), with Kimi K3.1 Pro at 97.9 and DeepSeek V4.1 Flash at 95.2, on a private split:
+  the comparison is of method, not command for command. The guard is a deterministic check that runs offline in
+  milliseconds, with no model.
+- **Four single-step checks came with it:** deleting or silencing logs (`PAH-C030`, denied), recursive or bulk
+  deletion outside the project folder (asked), downloading a program and making it executable (asked; denied over
+  plain HTTP, from a bare IP or a look-alike host), and uploading a file with a secret-looking name (denied). TrapRepo, the fuzzer, both drills and the 30 popular repositories
+  give the same verdicts as before. Details: [docs/statistics.md](docs/statistics.md#vikernels-shell-benchmark).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.png">
