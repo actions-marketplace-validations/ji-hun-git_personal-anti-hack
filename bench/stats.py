@@ -377,7 +377,8 @@ def _round_two() -> dict | None:
     if not sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent-round2.json")):
         return None
     name, data = load("independent-round2")
-    sample = json.loads((ROOT / data["sample"]).read_text(encoding="utf-8"))
+    sample_path = data["sample"].replace("\\", "/")  # the run recorded it with Windows separators
+    sample = json.loads((ROOT / sample_path).read_text(encoding="utf-8"))
     errors: dict[str, int] = {}
     for r in data["rows"]:
         if "error" in r or "baseline_error" in r:
@@ -389,11 +390,46 @@ def _round_two() -> dict | None:
             for rid, sev in r["rules"].items():
                 if sev in ("medium", "high", "critical"):
                     fa_rules[rid] = fa_rules.get(rid, 0) + 1
+    misses = RESULTS / name.replace("-independent-round2.json", "-independent-round2-misses.json")
+    profile = json.loads(misses.read_text(encoding="utf-8")) if misses.exists() else None
     return {"source": name, "code": data["code"], "baseline": data.get("baseline", {}).get("commit"),
-            "dataset": data["dataset"], "drawn_on": sample["drawn"], "sample": data["sample"],
-            **paired_rounds(data["rows"]),
+            "dataset": data["dataset"], "drawn_on": sample["drawn"], "sample": sample_path,
+            "misses": profile["sets"] if profile else None, "misses_per_set": profile["per_set"] if profile else None,
+            **paired_rounds(data["rows"]), "changes": what_changed(data["rows"]),
             "rules_behind_false_alarms": dict(sorted(fa_rules.items(), key=lambda kv: (-kv[1], kv[0]))[:10]),
             "left_out_why": dict(sorted(errors.items()))}
+
+
+_STRONG = ("medium", "high", "critical")
+
+
+def what_changed(rows: list[dict]) -> dict:
+    """Described after round two's results came in, not part of the analysis fixed before them: the rule each
+    newly caught or flagged sample rests on (its only finding at medium severity or above), the findings that fell
+    below medium on the samples only round one's rules caught, and each set's rate with the campaign checks
+    (pah/campaigns.py) switched off."""
+    resting: dict[str, dict[str, int]] = {}
+    general: dict[str, dict] = {}
+    lost, new_flags = [], []
+    for key in sorted({r["set"] for r in rows}, key=lambda k: (k.endswith("/popular"), _SET_ORDER.get(k, 9), k)):
+        ok = [r for r in rows if r["set"] == key and "error" not in r and "verdict_baseline" in r]
+        general[key] = rate(sum(r["verdict_without_campaign_shapes"] in FLAGGED for r in ok), len(ok))
+        counts: dict[str, int] = {}
+        for r in ok:
+            now, before = r["verdict"] in FLAGGED, r["verdict_baseline"] in FLAGGED
+            strong = sorted(rid for rid, sev in r["rules"].items() if sev in _STRONG)
+            if now and not before:
+                why = strong[0] if len(strong) == 1 else "two or more rules" if strong else "no rule above low"
+                counts[why] = counts.get(why, 0) + 1
+                if key.endswith("/popular"):
+                    new_flags.append((key.split("/")[0], r["package"], r["version"], r["verdict"],
+                                      {rid: r["rules"][rid] for rid in strong}))
+            elif before and not now and not key.endswith("/popular"):
+                fell = {rid: [sev, r["rules"].get(rid, "none")] for rid, sev in sorted(r["rules_baseline"].items())
+                        if sev in _STRONG and r["rules"].get(rid) not in _STRONG}
+                lost.append((key, r["package"], r["version"], fell))
+        resting[key] = dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+    return {"new_resting_on": resting, "general_rules": general, "lost": lost, "new_false_alarms": new_flags}
 
 
 _SET_ORDER = {"npm/malicious_intent": 0, "pypi/malicious_intent": 1, "ai-skills/malicious_intent": 2,
@@ -600,6 +636,49 @@ def _round_two_section(s: dict) -> list[str]:
     if r2["left_out_why"]:
         lines += ["Left out because they could not be downloaded, verified or unpacked: "
                   + ", ".join(f"{n} ({why})" for why, n in r2["left_out_why"].items()) + ".", ""]
+    ch = r2.get("changes")
+    if ch:
+        def rule(why: str) -> str:
+            return f"`{why}`" if why.startswith("PAH-") else why
+
+        resting = [f"{SET_NAMES.get(k, k)}, {sum(v.values())}: " + ", ".join(f"{rule(w)} {n}" for w, n in v.items())
+                   for k, v in ch["new_resting_on"].items() if v]
+        lines += [
+            "### What changed, described after the results",
+            "",
+            "Not part of the analysis fixed before the download. The samples only the current rules catch or flag, "
+            "by the rule each rests on (its only finding at medium severity or above): " + "; ".join(resting) + ".",
+            "",
+        ]
+        if ch["lost"]:
+            lines += ["The findings that fell below medium on the samples only round one's rules caught: "
+                      + "; ".join(f"{p} {ver} ({SET_NAMES.get(k, k)}): "
+                                  + ", ".join(f"`{rid}` {a} before, {b} now" for rid, (a, b) in fell.items())
+                                  for k, p, ver, fell in ch["lost"]) + ".", ""]
+        if ch["new_false_alarms"]:
+            lines += ["Popular packages only the current rules flag: "
+                      + "; ".join(f"{p} {ver} ({eco}, {verdict}: "
+                                  + ", ".join(f"`{rid}` {sev}" for rid, sev in strong.items()) + ")"
+                                  for eco, p, ver, verdict, strong in ch["new_false_alarms"]) + ".", ""]
+        lines += ["With the checks written for named campaigns (`pah/campaigns.py`) switched off, the current rules "
+                  "catch or flag: " + "; ".join(f"{SET_NAMES.get(k, k)} {g['k']} (with them, {r2['sets'][k]['now']['k']})"
+                                               for k, g in ch["general_rules"].items()) + ".", ""]
+    if r2.get("misses"):
+        lines += [
+            "### What the current rules still miss",
+            "",
+            f"`python bench/independent.py profile --kind independent-round2` describes a random "
+            f"{r2['misses_per_set']} of the current rules' misses in each set (all of them where there are fewer) by "
+            "structure only, as for round one.",
+            "",
+            "| Set | Missed | Described | What they have, by number of samples described |",
+            "| --- | --- | --- | --- |",
+        ]
+        for key, v in r2["misses"].items():
+            if v["missed"]:
+                feats = "; ".join(f"{f} {n}" for f, n in list(v["features"].items())[:6])
+                lines.append(f"| {SET_NAMES.get(key, key)} | {v['missed']} | {v['profiled']} | {feats} |")
+        lines.append("")
     return lines
 
 

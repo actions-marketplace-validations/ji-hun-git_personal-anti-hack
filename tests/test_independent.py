@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import os
 import sys
 import tarfile
 import unittest
@@ -77,6 +78,14 @@ class DigestTests(unittest.TestCase):
         self.assertTrue(independent._digest_ok({"integrity": sri}, data))
         self.assertTrue(independent._digest_ok({"shasum": hashlib.sha1(data).hexdigest()}, data))
         self.assertFalse(independent._digest_ok({}, data))
+
+
+class PathTests(unittest.TestCase):
+    def test_recorded_paths_use_forward_slashes_from_the_root(self):
+        target = independent.ROOT / "bench" / "fixtures" / "independent-sample-round2.json"
+        self.assertEqual(independent._rel(target), "bench/fixtures/independent-sample-round2.json")
+        relative = Path(os.path.relpath(target))  # as typed on the command line, from any folder
+        self.assertEqual(independent._rel(relative), "bench/fixtures/independent-sample-round2.json")
 
 
 class DrawTests(unittest.TestCase):

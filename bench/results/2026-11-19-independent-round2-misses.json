@@ -1,0 +1,80 @@
+{
+ "source": "2026-11-19-independent-round2.json",
+ "per_set": 60,
+ "seed": "agent-white-hat independent evaluation 2026-11-18:misses",
+ "sets": {
+  "npm/malicious_intent": {
+   "missed": 126,
+   "profiled": 60,
+   "features": {
+    "no install-time script: runs when imported or run": 41,
+    "npm install-time script": 19,
+    "starts a process": 19,
+    "decodes or unpacks code": 16,
+    "makes a network call": 12,
+    "no code files": 12,
+    "reads environment or secret files": 12
+   }
+  },
+  "pypi/malicious_intent": {
+   "missed": 129,
+   "profiled": 60,
+   "features": {
+    "makes a network call": 25,
+    "starts a process": 23,
+    "decodes or unpacks code": 21,
+    "setup.py starts a process or makes a network call": 17,
+    "no setup.py": 14,
+    "__init__.py starts a process or makes a network call (runs on import)": 11,
+    "reads environment or secret files": 8
+   }
+  },
+  "ai-skills/malicious_intent": {
+   "missed": 44,
+   "profiled": 44,
+   "features": {
+    "no code files": 24,
+    "skill text has shell commands": 22,
+    "makes a network call": 6,
+    "reads environment or secret files": 6,
+    "starts a process": 6,
+    "skill text downloads something": 5
+   }
+  },
+  "ide_extensions/malicious_intent": {
+   "missed": 33,
+   "profiled": 33,
+   "features": {
+    "activates when the editor starts": 23,
+    "starts a process": 21,
+    "reads environment or secret files": 11,
+    "makes a network call": 9,
+    "decodes or unpacks code": 8,
+    "no code files": 2
+   }
+  },
+  "npm/compromised_lib": {
+   "missed": 16,
+   "profiled": 16,
+   "features": {
+    "no install-time script: runs when imported or run": 16,
+    "reads environment or secret files": 8,
+    "makes a network call": 7,
+    "starts a process": 4,
+    "decodes or unpacks code": 2
+   }
+  },
+  "pypi/compromised_lib": {
+   "missed": 3,
+   "profiled": 3,
+   "features": {
+    "makes a network call": 3,
+    "no setup.py": 3,
+    "reads environment or secret files": 3,
+    "starts a process": 3,
+    "__init__.py starts a process or makes a network call (runs on import)": 2,
+    "decodes or unpacks code": 2
+   }
+  }
+ }
+}

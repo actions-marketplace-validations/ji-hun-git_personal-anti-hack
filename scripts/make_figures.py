@@ -763,7 +763,8 @@ def forest(rows: list[dict], dom: tuple[float, float], lang: str) -> str:
         lo, hi = r["rate"]["ci95"]
         x = k / n
         alt = r.get("ring")
-        dodge = alt is not None and alt["k"] != k  # a second estimate on the same cases, set just below the first
+        # a second estimate on the same cases, set just below the first; when it is the same, drawn only if asked
+        dodge = alt is not None and (alt["k"] != k or r.get("always_ring", False))
         y = "calc(50% - 7px)" if dodge else "50%"
         marks = interval(lo, hi, tone, y)
         if dodge:
@@ -851,7 +852,8 @@ def round_two(lang: str, theme: str, st: dict | None = None) -> str | None:
     mal, ben = [], []
     for key, v in r2["sets"].items():
         note = s["r2_note"].format(b=f"{v['only_now']:,}", c=f"{v['only_before']:,}", p=_p(v["p_holm"]))
-        row = {"label": s["int_sets"].get(key, key), "note": note, "rate": v["now"], "ring": v["before"]}
+        row = {"label": s["int_sets"].get(key, key), "note": note, "rate": v["now"], "ring": v["before"],
+               "always_ring": True}  # an equal rate is a result here, not a ring left out
         (mal if v["kind"] == "malicious" else ben).append(row)
     low = min(min(r["rate"]["ci95"][0], r["ring"]["ci95"][0]) for r in mal)
     high = max(max(r["rate"]["ci95"][1], r["ring"]["ci95"][1]) for r in ben)

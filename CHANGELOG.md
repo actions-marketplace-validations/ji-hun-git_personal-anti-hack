@@ -30,11 +30,11 @@ outside the project folder (asked), a program downloaded and made executable (as
 bare IP or a look-alike host), and a file with a secret-looking name uploaded anywhere (denied). TrapRepo, the fuzzer,
 both drills and the 30 popular repositories give the same verdicts as before.
 
-**What the held-out test taught.** Round one's false alarms and misses, studied only on samples that round two will
-not measure, led to the fixes below. Round two is a fresh draw committed before its download (f36ee66); until it
-runs, these fixes are not measured. It judges every sample with both these rules and round one's
-(`bench/independent.py run --baseline 71e982b`), and `bench/stats.py` tests the difference set by set with an exact
-McNemar test, Holm-adjusted, an analysis fixed before the download.
+**What the held-out test taught.** Round one's false alarms and misses, studied only on samples that round two does
+not measure, led to the fixes below. Round two is a fresh draw committed before its download (f36ee66). It judged
+every sample with both these rules and round one's (`bench/independent.py run --baseline 71e982b`), and
+`bench/stats.py` tests the difference set by set with an exact McNemar test, Holm-adjusted, an analysis fixed before
+the download. Its results close this entry.
 
 *False alarms.* A message wrapped with `+` for line length is not obfuscation when the URL or name in it is written
 out whole elsewhere in the file; escapes, character codes and ROT13 count however often the name is spelled out.
@@ -74,6 +74,20 @@ coincidences: three hijacked @mastra releases carry their payload in an added de
 source maps; a copy of Microsoft's React Native Tools under another publisher was flagged only for invisible
 characters in strings and a look-alike name in its README. TrapRepo, the fuzzer, both drills and the 30 popular
 repositories give the same verdicts as before.
+
+*Measured on round two* (2,262 fresh samples, none left out, run once): the rules catch 911 of 1,262 malicious samples
+where round one's caught 737 on the same files (176 caught only now, 2 only before; exact McNemar p = 1.7e-49, Holm),
+and flag 53 of 1,000 popular packages where round one's flagged 108 (2 only now, 57 only before; p = 6.1e-15); 24 are
+blocked, against 37. By set: npm packages published to attack 74.8% (round one's rules 52.4%), PyPI ones 74.2%
+(67.2%), agent skills 56.9% (37.3%) and IDE extensions 35.3% (19.6%), each significant after Holm's adjustment;
+hijacked releases unchanged in npm (84 of 100) and one fewer in PyPI (6 of 9); popular PyPI projects flagged 8.8%
+(14.0%), popular npm packages 1.8% (7.6%). 92 of the 113 new npm catches rest on PAH-C031 alone. Each catch lost
+rested on one medium finding a fix lowered (a long line in a data file; a name close to a popular package's). Both
+new false alarms are blocks by the entry-file rule: esptool, whose serial-port server reads the machine's name next to
+its network code in an `__init__.py`, and disposable-email-domains, whose list of domains includes webhook.site. Most
+misses still run on import or when an extension activates, or are written as instructions. No rule changed after the
+run. `docs/statistics.md` adds what changed, counted after the results, and the README a forest plot of both versions
+on the same samples.
 
 ## 0.5.1 (2026-11-17)
 

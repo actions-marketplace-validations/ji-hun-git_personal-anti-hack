@@ -26,7 +26,7 @@ The protocol, fixed in bench/fixtures/independent-sample.json before the first d
 - `run --baseline COMMIT` also judges every sample with the rules as they were at an earlier commit (exported from
   git and imported as pah_baseline beside the current code), so two versions are compared on the same samples:
   bench/stats.py tests the samples only one of them catches or flags with an exact McNemar test per set. Round two
-  (bench/fixtures/independent-sample-round2.json, kind independent-round2) runs with --baseline 71e982b, the code
+  (bench/fixtures/independent-sample-round2.json, kind independent-round2) ran with --baseline 71e982b, the code
   round one measured.
 
 Results go to bench/results/<date>-independent.json: per sample its set, name, version, file, digest, verdict and the
@@ -433,10 +433,11 @@ def _download(sample: dict) -> bytes:
 
 
 def _rel(path: Path) -> str:
+    """The path from the repository root with forward slashes, so results written on Windows read anywhere."""
     try:
-        return path.relative_to(ROOT).as_posix()
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _key(sample: dict) -> str:
