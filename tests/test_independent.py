@@ -83,12 +83,31 @@ class DrawTests(unittest.TestCase):
     def test_the_draw_is_fixed_by_the_seed(self):
         frame = {s: {f"p{i}": [{"path": f"samples/{s}/p{i}/{v}/x.zip", "bytes": 1, "git_blob": "0"} for v in (1, 2)]
                      for i in range(1, 700)} for s in independent.MALICIOUS}
-        first, second = independent.draw_malicious(frame), independent.draw_malicious(frame)
+        (first, _), (second, _) = independent.draw_malicious(frame), independent.draw_malicious(frame)
         self.assertEqual(first, second)
         per_set = {s: sum(r["set"] == s for r in first) for s in independent.MALICIOUS}
         for s, k in independent.MALICIOUS.items():
             self.assertEqual(per_set[s], k if k is not None else 699)
         self.assertEqual(first[0]["version"], first[0]["path"].split("/")[4])
+
+    def test_a_second_round_draws_new_packages_and_halves_the_whole_sets(self):
+        frame = {s: {f"p{i}": [{"path": f"samples/{s}/p{i}/1/x.zip", "bytes": 1, "git_blob": "0"}]
+                     for i in range(1, 700)} for s in independent.MALICIOUS}
+        first, _ = independent.draw_malicious(frame)
+        used: dict[str, set[str]] = {}
+        for row in first:
+            used.setdefault(row["set"], set()).add(row["package"])
+        second, tune = independent.draw_malicious(frame, "round 2", used, split=True, commit="abc")
+        for row in second:
+            if independent.MALICIOUS[row["set"]] is not None:
+                self.assertNotIn(row["package"], used[row["set"]])  # never drawn before
+            else:
+                self.assertNotIn(row["package"], tune[row["set"]])  # measured only on the half not tuned on
+            self.assertEqual(row["commit"], "abc")
+        for stratum, names in tune.items():
+            tested = {r["package"] for r in second if r["set"] == stratum}
+            self.assertEqual(len(names) + len(tested), 699)
+            self.assertFalse(set(names) & tested)
 
 
 if __name__ == "__main__":
