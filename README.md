@@ -310,6 +310,27 @@ Reproduce: `python bench/run.py` (rules, offline, seconds) and
 A model gets what a person or an LLM-based scanner would give it: the file list and the files' text up to 100,000
 characters, and one question: is it safe to let my coding agent install and run this?
 
+**How sure these numbers are** ([docs/statistics.md](docs/statistics.md), made by `python bench/stats.py`). Each rate
+has an exact 95% confidence interval, and comparisons on the same cases use the exact McNemar test.
+
+| | Observed | 95% interval |
+| --- | --- | --- |
+| Malicious test repositories caught | 76 of 76 | 95.3% to 100% |
+| Benign look-alikes flagged | 0 of 40 | 0% to 8.8% |
+| Widely used repositories blocked | 0 of 30 | 0% to 11.6% |
+
+- **Against the models**, on the same 54 cases, every disagreement goes one way. agent-white-hat caught 10 cases that
+  GPT-6 Astra missed in at least one run and 14 that Muse Spark 1.3 did, and no model caught a case agent-white-hat
+  missed (p = 0.002 and p = 0.0001). Counting a case as caught when a model got it in any of its three runs, the gap
+  to GPT-6 Astra stays significant (p = 0.016) and the gap to Muse Spark 1.3 does not (5 cases, p = 0.06).
+- **Judging steps as a chain:** of the 12 attack scripts, 8 are stopped only when their steps are judged together and
+  none only one at a time (p = 0.008, counting scripts rather than the 77 runs, which repeat each script per agent).
+- **What this does not prove.** TrapRepo's cases were written here to cover the techniques of real incidents, not
+  drawn at random from all attacks, and when a case got through, the rules were fixed until it did not. So 76 of 76
+  says how well the rules cover known techniques, not how they do on attacks they have never seen. The 30 repositories
+  were chosen by hand and bound the false-alarm rate only to 11.6%. Narrowing both takes an independent corpus the
+  rules were never tuned on: real malicious packages, and thousands of popular ones.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.png">
