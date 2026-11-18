@@ -21,7 +21,7 @@ os.environ["PAH_HOME"] = _STATE  # before importing pah: caches and baselines go
 from pah import guard, hooks, intel, mcp_server, report  # noqa: E402
 from pah.names import lookalike, names_in_command  # noqa: E402
 from pah.patterns import analyze_command, classify_host, scan_text  # noqa: E402
-from pah.scan import scan  # noqa: E402
+from pah.scan import scan, scan_files  # noqa: E402
 from pah.text import decode_blobs, invisible, padding, reveal  # noqa: E402
 
 
@@ -705,6 +705,31 @@ class CorpusTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertEqual(missed, [], "malicious cases not flagged")
         self.assertEqual(false_alarms, [], "benign cases flagged")
+
+    def test_in_memory_scan_matches_the_folder_scan(self):
+        """scan_files, which bench/independent.py uses for samples that must never touch the disk, judges every
+        TrapRepo case as a scan of its folder does: the same verdict and the same findings."""
+        from materialize import materialize
+
+        tmp = Path(tempfile.mkdtemp(prefix="pah-test-memory-"))
+        compared = 0
+        try:
+            for path in sorted((ROOT / "bench" / "fixtures" / "traprepo").glob("*.json")):
+                case = json.loads(path.read_text(encoding="utf-8"))
+                with mock.patch("sys.stderr", new=io.StringIO()):
+                    root = materialize(case, tmp / case["id"])
+                paths = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+                if case.get("symlinks") or any(".git" in p.relative_to(root).parts for p in paths):
+                    continue  # links and git folders are read from the disk by design
+                on_disk = scan(root)
+                in_memory = scan_files({p.relative_to(root).as_posix(): p.read_bytes() for p in paths})
+                self.assertEqual(in_memory.verdict, on_disk.verdict, case["id"])
+                self.assertEqual(sorted((f.rule, f.path, f.line, f.severity) for f in in_memory.findings),
+                                 sorted((f.rule, f.path, f.line, f.severity) for f in on_disk.findings), case["id"])
+                compared += 1
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertGreater(compared, 100)
 
 
 if __name__ == "__main__":
