@@ -38,12 +38,14 @@ OUT = ROOT / "docs" / "figures"
 FONTS = Path(__file__).resolve().parent / "fonts"
 WIDTH = 960
 
+# Each figure carries its page's background: GitHub shows the light or dark version by the operating system's setting,
+# and a reader whose GitHub theme differs from it would otherwise get dark ink on a dark page.
 THEMES = {
-    "light": {"ink": "#13213c", "muted": "#59636e", "faint": "#818b98", "line": "#d1d9e0", "panel": "#f6f8fa",
+    "light": {"surface": "#ffffff", "ink": "#13213c", "muted": "#59636e", "faint": "#818b98", "line": "#d1d9e0", "panel": "#f6f8fa",
               "marker": "#ffe45e", "on-marker": "#13213c", "pass": "#12805c", "warn": "#b8800a", "block": "#bb3a32",
               "neutral": "#8c959f", "on-pass": "#ffffff", "on-warn": "#13213c", "on-block": "#ffffff",
               "on-neutral": "#13213c", "accent": "#1b6ac9", "tile": "#13213c", "hat": "#ffffff", "tile-line": "#13213c"},
-    "dark": {"ink": "#e6edf3", "muted": "#9198a1", "faint": "#6e7681", "line": "#3d444d", "panel": "#151b23",
+    "dark": {"surface": "#0d1117", "ink": "#e6edf3", "muted": "#9198a1", "faint": "#6e7681", "line": "#3d444d", "panel": "#151b23",
              "marker": "#e8c547", "on-marker": "#0d1117", "pass": "#1f9a72", "warn": "#c08a10", "block": "#bb3a32",
              "neutral": "#6e7681", "on-pass": "#0d1117", "on-warn": "#0d1117", "on-block": "#ffffff",
              "on-neutral": "#ffffff", "accent": "#5aa3f0", "tile": "#1d2d4d", "hat": "#ffffff", "tile-line": "#3d4f73"},
@@ -334,7 +336,7 @@ body{font-family:"Instrument Sans","Malgun Gothic","Apple SD Gothic Neo","Noto S
   -webkit-font-smoothing:antialiased;font-kerning:normal;text-rendering:geometricPrecision;word-break:keep-all;
   overflow-wrap:break-word}
 .mono,code{font-family:"IBM Plex Mono","D2Coding","Malgun Gothic",ui-monospace,monospace}
-.fig{padding:30px 34px 34px}
+.fig{padding:30px 34px 34px;background:var(--surface);border-radius:14px}
 h1,h2,h3{font-weight:700;letter-spacing:-0.012em;text-wrap:balance}
 p,.lab{text-wrap:pretty}
 h2{font-size:28px;line-height:1.15}
@@ -705,7 +707,7 @@ def repos(lang: str, theme: str) -> str:
 
 SOCIAL_CSS = """
 body{width:1280px;height:640px;background:#13213c;color:#ffffff}
-.fig{width:1280px;height:640px;padding:72px 84px;display:flex;flex-direction:column}
+.fig{width:1280px;height:640px;padding:72px 84px;display:flex;flex-direction:column;background:#13213c;border-radius:0}
 .brand{display:flex;align-items:center;gap:16px}
 .wordmark{font-size:30px;font-weight:700;letter-spacing:-0.01em}
 h1{font-size:68px;line-height:1.04;letter-spacing:-0.026em;margin-top:40px;max-width:980px}
@@ -732,7 +734,7 @@ def social() -> str:
 
 
 def icon() -> str:
-    body = f'<div class="fig" style="padding:0;width:512px;height:512px">{mark(512, "light", tile="#13213c")}</div>'
+    body = f'<div class="fig" style="padding:0;width:512px;height:512px;background:transparent;border-radius:0">{mark(512, "light", tile="#13213c")}</div>'
     return page("light", body, "body{width:512px;height:512px}", width=512)
 
 
