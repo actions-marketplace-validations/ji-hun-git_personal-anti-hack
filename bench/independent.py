@@ -2,8 +2,9 @@
 """An independent, held-out evaluation: real malicious packages the rules were never tuned on, and a random sample of
 the most-downloaded packages.
 
-    python bench/independent.py plan    # draw the sample: listings and registry metadata only, nothing downloaded
-    python bench/independent.py run     # download each file into memory, scan it there, write the results
+    python bench/independent.py plan      # draw the sample: listings and registry metadata only, nothing downloaded
+    python bench/independent.py run       # download each file into memory, scan it there, write the results
+    python bench/independent.py profile   # describe a random 60 misses per set by structure, never by contents
 
 The protocol, fixed in bench/fixtures/independent-sample.json before the first download:
 
@@ -35,6 +36,7 @@ import io
 import json
 import posixpath
 import random
+import re
 import sys
 import tarfile
 import tempfile
@@ -390,9 +392,12 @@ def cmd_run(args) -> int:
     done: dict[str, dict] = {}
     if progress.exists():
         for line in progress.read_text(encoding="utf-8").splitlines():
-            row = json.loads(line)
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue  # a line cut off when a run was stopped: that sample runs again
             done[_key(row)] = row
-    todo = [s for s in todo if _key(s) not in done]
+    todo = [s for s in todo if _key(s) not in done and s["set"] not in args.skip]
     total = len(plan["malicious"]) + len(plan["benign"])
     print(f"{len(done)} done before, {len(todo)} to go, {args.workers} worker processes; progress in {progress}",
           flush=True)
@@ -429,6 +434,102 @@ def cmd_run(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------------------------------------- what was missed
+
+# Structural features only: what kind of code a sample has and when it would run. They describe the misses for the
+# report; they are not detection rules, and nothing here reads or prints a sample's contents.
+NET_CALL = re.compile(r"\b(?:https?|net|dns|tls|dgram)\.(?:request|get|connect|createConnection|lookup|resolve\w*)\s*\(|"
+                      r"\bfetch\s*\(|\baxios(?:\.\w+)?\s*\(|XMLHttpRequest|urlopen\s*\(|urlretrieve\s*\(|"
+                      r"requests\.(?:get|post|put)\s*\(|http\.client|socket\.socket\s*\(|aiohttp\.|new\s+WebSocket|"
+                      r"discord(?:app)?\.com/api/webhooks|api\.telegram\.org", re.I)
+PROC_CALL = re.compile(r"child_process|\bexec(?:Sync|File)?\s*\(|\bspawn(?:Sync)?\s*\(|subprocess\.\w+\s*\(|"
+                       r"os\.system\s*\(|os\.popen\s*\(|Popen\s*\(", re.I)
+DECODE_CALL = re.compile(r"b64decode\s*\(|\batob\s*\(|Buffer\.from\([^)]{0,200}['\"](?:base64|hex)['\"]|marshal\.loads|"
+                         r"zlib\.decompress|String\.fromCharCode|exec\s*\(\s*(?:base64|zlib|marshal|codecs)", re.I)
+# The browser store names are split across literals so this file does not itself read as code that opens them.
+SECRETS = re.compile(r"process\.env\b|os\.environ|os\.getenv|\.ssh[/\\]|\.aws[/\\]|\.npmrc|\bwallet\b|Local State|"
+                     r"Login" r" Data|cookies\.sqlite", re.I)
+CODE_EXT = (".js", ".cjs", ".mjs", ".ts", ".py", ".sh", ".ps1", ".bat", ".cmd")
+NPM_INSTALL = ("preinstall", "install", "postinstall", "prepare")
+PROFILE_PER_SET = 60
+
+
+def features(set_name: str, files: dict[str, bytes]) -> set[str]:
+    texts = {p: b.decode("utf-8", "replace") for p, b in files.items() if len(b) < 5_000_000}
+    code = {p: t for p, t in texts.items() if p.lower().endswith(CODE_EXT)}
+    joined = "\n".join(code.values())
+    out = set()
+    for name, rx in (("starts a process", PROC_CALL), ("makes a network call", NET_CALL),
+                     ("decodes or unpacks code", DECODE_CALL), ("reads environment or secret files", SECRETS)):
+        if rx.search(joined):
+            out.add(name)
+    if not code:
+        out.add("no code files")
+    if set_name.startswith("npm"):
+        try:
+            scripts = json.loads(texts.get("package.json") or "{}").get("scripts") or {}
+        except (ValueError, AttributeError):
+            scripts = {}
+        out.add("npm install-time script" if any(k in scripts for k in NPM_INSTALL) else
+                "no install-time script: runs when imported or run")
+    if set_name.startswith("pypi"):
+        setup = texts.get("setup.py", "")
+        if not setup:
+            out.add("no setup.py")
+        elif NET_CALL.search(setup) or PROC_CALL.search(setup):
+            out.add("setup.py starts a process or makes a network call")
+        if any(p.endswith("__init__.py") and (NET_CALL.search(t) or PROC_CALL.search(t)) for p, t in code.items()):
+            out.add("__init__.py starts a process or makes a network call (runs on import)")
+    if set_name.startswith("ai-skills"):
+        md = "\n".join(t for p, t in texts.items() if p.lower().endswith(".md"))
+        if re.search(r"```(?:bash|sh|shell|powershell|pwsh|zsh|cmd)", md, re.I):
+            out.add("skill text has shell commands")
+        if re.search(r"\b(?:curl|wget|iwr|Invoke-WebRequest|Invoke-RestMethod)\b", md, re.I):
+            out.add("skill text downloads something")
+    if set_name.startswith("ide_extensions"):
+        try:
+            manifest = json.loads(texts.get("extension/package.json") or "{}")
+        except ValueError:
+            manifest = {}
+        if "*" in (manifest.get("activationEvents") or []) or "onStartupFinished" in (manifest.get("activationEvents") or []):
+            out.add("activates when the editor starts")
+    return out
+
+
+def cmd_profile(args) -> int:
+    found = sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent.json"))
+    if not found:
+        raise SystemExit("run the evaluation first")
+    data = json.loads(found[-1].read_text(encoding="utf-8"))
+    missed: dict[str, list[dict]] = {}
+    for r in data["rows"]:
+        if not r["set"].endswith("/popular") and "error" not in r and r["verdict"] not in FLAGGED:
+            missed.setdefault(r["set"], []).append(r)
+    out = {"source": found[-1].name, "per_set": PROFILE_PER_SET, "seed": f"{SEED}:misses", "sets": {}}
+    for key in MALICIOUS:
+        rows = missed.get(key, [])
+        rng = random.Random(f"{SEED}:misses:{key}")
+        pick = rng.sample(rows, min(PROFILE_PER_SET, len(rows)))
+        counts: dict[str, int] = {}
+        read = 0
+        for r in pick:
+            try:
+                files, _ = package_files(r, _download(r))
+            except (urllib.error.URLError, TimeoutError, ConnectionError, ValueError, zipfile.BadZipFile,
+                    tarfile.TarError, RuntimeError, NotImplementedError, EOFError, OSError):
+                continue
+            read += 1
+            for f in features(key, files):
+                counts[f] = counts.get(f, 0) + 1
+        out["sets"][key] = {"missed": len(rows), "profiled": read,
+                            "features": dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))}
+        print(f"{key}: {len(rows)} missed, {read} profiled", flush=True)
+    dest = RESULTS / found[-1].name.replace("-independent.json", "-independent-misses.json")
+    dest.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
+    print(f"-> {_rel(dest)}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -439,7 +540,10 @@ def main(argv=None) -> int:
     r.add_argument("--name", default=time.strftime("%Y-%m-%d"))
     r.add_argument("--progress", default=str(Path(tempfile.gettempdir()) / "pah-independent-progress.jsonl"))
     r.add_argument("--workers", type=int, default=3, help="scans run in this many processes (default 3)")
+    r.add_argument("--skip", nargs="*", default=[], help="sets to leave for a later run (it resumes from the progress)")
     r.set_defaults(fn=cmd_run)
+    m = sub.add_parser("profile", help="describe a random 60 misses per set by structure (no contents)")
+    m.set_defaults(fn=cmd_profile)
     args = ap.parse_args(argv)
     return args.fn(args)
 

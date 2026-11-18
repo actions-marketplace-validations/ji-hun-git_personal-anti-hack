@@ -328,8 +328,46 @@ has an exact 95% confidence interval, and comparisons on the same cases use the 
 - **What this does not prove.** TrapRepo's cases were written here to cover the techniques of real incidents, not
   drawn at random from all attacks, and when a case got through, the rules were fixed until it did not. So 76 of 76
   says how well the rules cover known techniques, not how they do on attacks they have never seen. The 30 repositories
-  were chosen by hand and bound the false-alarm rate only to 11.6%. Narrowing both takes an independent corpus the
-  rules were never tuned on: real malicious packages, and thousands of popular ones.
+  were chosen by hand and bound the false-alarm rate only to 11.6%. The held-out test below is the independent corpus
+  that narrows both, and it shows what they hid.
+
+### A held-out test on real malware
+
+TrapRepo's cases were written here, so they cannot show how the rules do on attacks nobody prepared them for. For that,
+[`bench/independent.py`](bench/independent.py) drew a random sample of 1,423 real malicious packages from
+[Datadog's malicious software packages dataset](https://github.com/DataDog/malicious-software-packages-dataset) (commit `72c723b`) and
+1,000 of the most-downloaded PyPI and npm packages, committed the sample before downloading anything, and ran once on
+code `9b1c1484919f`. Every file was unpacked and scanned in memory; nothing was written to disk or run. Caught or
+flagged means blocked or warned. The rules were not changed before these results were written down.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/intervals-en-dark.png">
+    <img src="docs/figures/intervals-en-light.png" width="100%" alt="Forest plot of detection and false-alarm rates with exact 95% confidence intervals. Held out, caught or flagged: npm packages published to attack: 56.0% (51.5%–60.4%); PyPI packages published to attack: 66.4% (62.1%–70.5%); Agent skills published to attack: 36.8% (30.1%–43.8%); IDE extensions published to attack: 22.5% (14.9%–31.9%); Hijacked releases of real npm packages: 88.0% (80.0%–93.6%); Hijacked releases of real PyPI packages: 82.4% (56.6%–96.2%); Popular PyPI projects: 15.6% (12.5%–19.1%); Popular npm packages: 6.2% (4.2%–8.7%). Written here: TrapRepo 100% caught, 0% of benign look-alikes flagged."/>
+  </picture>
+</p>
+
+| Held-out set | Packages in it | Scanned | Caught | 95% interval | Blocked |
+| --- | --- | --- | --- | --- | --- |
+| npm packages published to attack | 12,819 | 500 | 280 (56.0%) | 51.5% to 60.4% | 261 (52.2%) |
+| PyPI packages published to attack | 1,816 | 500 | 332 (66.4%) | 62.1% to 70.5% | 326 (65.2%) |
+| Agent skills published to attack | 204 | 204 | 75 (36.8%) | 30.1% to 43.8% | 52 (25.5%) |
+| IDE extensions published to attack | 102 | 102 | 23 (22.5%) | 14.9% to 31.9% | 17 (16.7%) |
+| Hijacked releases of real npm packages | 1,004 | 100 | 88 (88.0%) | 80.0% to 93.6% | 85 (85.0%) |
+| Hijacked releases of real PyPI packages | 17 | 17 | 14 (82.4%) | 56.6% to 96.2% | 13 (76.5%) |
+
+| Held-out set | Packages in it | Scanned | Flagged | 95% interval | Blocked |
+| --- | --- | --- | --- | --- | --- |
+| Popular PyPI projects | 5,000 | 500 | 78 (15.6%) | 12.5% to 19.1% | 25 (5.0%) |
+| Popular npm packages | 5,000 | 500 | 31 (6.2%) | 4.2% to 8.7% | 8 (1.6%) |
+| Both registries | 10,000 | 1,000 | 109 (10.9%) | 9.0% to 13.0% | 33 (3.3%) |
+
+- **Caught:** 812 of 1,423 malicious samples across the six sets, from 22.5% of IDE extensions published to attack to 88.0% of hijacked npm releases. The rules that fired most: sends to a request-capture, tunnel or raw-IP endpoint (`PAH-C007`, 358), reads secrets or the environment and sends data out (`PAH-C004`, 207), decodes hidden data and executes it (`PAH-C002`, 197).
+- **Missed, and why:** the scanner saves its high severities for code that runs by itself when a project is set up (install scripts, agent hooks, editor tasks), and most misses run at another moment. Of a random 60 missed npm packages, 45 have no install-time script: their code runs when the package is imported or run. Of 60 missed IDE extensions, 43 start a process from code that runs when the extension activates. Of 60 missed agent skills, 46 have no code at all: the attack is in the instructions, 38 of them with shell commands for the agent to run.
+- **Hijacked releases** of real packages, a small payload inside a large legitimate one: 88 of 100 npm and 14 of 17 PyPI releases caught.
+- **False alarms:** 78 of 500 popular PyPI releases (15.6%) and 31 of 500 npm releases (6.2%) were flagged, and 33 of the 1,000 blocked (3.3%, 95% interval 2.3% to 4.6%). The blocks come mostly from obfuscated code (`PAH-C012`, 11: @babel/core, @babel/plugin-transform-spread, @mui/base, @mui/x-internals); zero-width or filler characters (`PAH-T004`, 5: @angular/common, flasgger, inspect-scout, mitmproxy); Python code that runs at interpreter start (`PAH-P008`, 4: cibuildwheel, coloredlogs, ddtrace, jedi); executable disguised as another file type (`PAH-F002`, 3: psycopg-binary, rapidfuzz, triton).
+- **Campaign checks:** switched off, they cost 8 catches (8 in npm packages published to attack): the general rules do nearly all of the work.
+- **What this means:** on real malicious packages, agent-white-hat catches far less than the 100% TrapRepo shows, and on popular packages it flags about 11 in 100. Its strong ground is what runs by itself when an agent sets a project up; code that runs later, on import or on activation, and attacks written as instructions are where it falls short. Fixes for both will be measured on a fresh draw from the same sources, not on this one.
 
 <p align="center">
   <picture>

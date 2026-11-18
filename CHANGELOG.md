@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+**A held-out test on real malware.** `bench/independent.py` measures the rules on software they were never tuned
+on: a random draw of 1,423 malicious samples from Datadog's malicious software packages dataset (npm and PyPI packages
+published to attack, agent skills, IDE extensions and hijacked releases of real packages) and the latest release of
+1,000 of the most-downloaded PyPI and npm packages. The sample and protocol were committed before the first download
+(71e982b). Every file was unpacked and scanned in memory, through the new `pah.scan.scan_files`, and nothing was
+written to disk or run. It caught 56% of the npm and 66% of the PyPI packages published to attack, 37% of the agent
+skills, 23% of the IDE extensions, and 88% and 82% of the hijacked npm and PyPI releases; it flagged 10.9% of the
+popular packages and blocked 3.3%. TrapRepo's 76 of 76 measures how well the rules cover the techniques they were
+built against; these numbers measure the rest. Most misses run their code at another moment than setup (on import,
+when an editor extension activates) or attack through a skill's instructions; most blocks of popular packages come
+from the obfuscated-code rule on bundled JavaScript, invisible characters in Unicode test data, `.pth` startup hooks
+and prebuilt binaries. `docs/statistics.md` gives every rate an exact 95% interval and names every flagged package;
+the README's new figure is a forest plot of all of it.
+
 ## 0.5.1 (2026-11-17)
 
 **Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,

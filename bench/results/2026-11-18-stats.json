@@ -5,7 +5,8 @@
   "drill": "2026-11-17-drill.json",
   "chains": "2026-11-17-chains.json",
   "fuzz": "2026-11-17-fuzz.json",
-  "real_repos": "2026-11-17-real-repos.json"
+  "real_repos": "2026-11-17-real-repos.json",
+  "independent": "2026-11-18-independent.json"
  },
  "date": "2026-11-18",
  "traprepo": {
@@ -658,6 +659,1087 @@
     0.3072
    ]
   },
+  "flagged": {
+   "k": 4,
+   "n": 30,
+   "rate": 0.13333333333333333,
+   "ci95": [
+    0.0376,
+    0.3072
+   ]
+  },
   "files": 67014
+ },
+ "independent": {
+  "code": "9b1c1484919f",
+  "dataset": {
+   "repo": "DataDog/malicious-software-packages-dataset",
+   "commit": "72c723be547033c558244520524b117c8d71663b",
+   "license": "Apache-2.0",
+   "packages": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 102,
+    "npm/compromised_lib": 1004,
+    "npm/malicious_intent": 12819,
+    "pypi/compromised_lib": 17,
+    "pypi/malicious_intent": 1816
+   },
+   "samples": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 121,
+    "npm/compromised_lib": 1448,
+    "npm/malicious_intent": 25267,
+    "pypi/compromised_lib": 29,
+    "pypi/malicious_intent": 2503
+   }
+  },
+  "seed": "agent-white-hat independent evaluation 2026-11-18",
+  "misses": {
+   "npm/malicious_intent": {
+    "missed": 220,
+    "profiled": 60,
+    "features": {
+     "no install-time script: runs when imported or run": 45,
+     "starts a process": 38,
+     "npm install-time script": 15,
+     "makes a network call": 13,
+     "reads environment or secret files": 7,
+     "no code files": 5,
+     "decodes or unpacks code": 4
+    }
+   },
+   "pypi/malicious_intent": {
+    "missed": 168,
+    "profiled": 60,
+    "features": {
+     "starts a process": 29,
+     "makes a network call": 28,
+     "setup.py starts a process or makes a network call": 20,
+     "no setup.py": 13,
+     "__init__.py starts a process or makes a network call (runs on import)": 12,
+     "decodes or unpacks code": 12,
+     "reads environment or secret files": 6,
+     "no code files": 2
+    }
+   },
+   "ai-skills/malicious_intent": {
+    "missed": 129,
+    "profiled": 60,
+    "features": {
+     "no code files": 46,
+     "skill text has shell commands": 38,
+     "makes a network call": 8,
+     "skill text downloads something": 8,
+     "reads environment or secret files": 5,
+     "starts a process": 3
+    }
+   },
+   "ide_extensions/malicious_intent": {
+    "missed": 79,
+    "profiled": 60,
+    "features": {
+     "starts a process": 43,
+     "activates when the editor starts": 42,
+     "makes a network call": 23,
+     "reads environment or secret files": 19,
+     "decodes or unpacks code": 14,
+     "no code files": 4
+    }
+   },
+   "npm/compromised_lib": {
+    "missed": 12,
+    "profiled": 12,
+    "features": {
+     "no install-time script: runs when imported or run": 12,
+     "makes a network call": 5,
+     "reads environment or secret files": 5,
+     "starts a process": 4,
+     "decodes or unpacks code": 2
+    }
+   },
+   "pypi/compromised_lib": {
+    "missed": 3,
+    "profiled": 3,
+    "features": {
+     "makes a network call": 3,
+     "no setup.py": 3,
+     "reads environment or secret files": 3,
+     "starts a process": 3,
+     "__init__.py starts a process or makes a network call (runs on import)": 2,
+     "decodes or unpacks code": 1
+    }
+   }
+  },
+  "misses_per_set": 60,
+  "drawn_on": "2026-11-18",
+  "seen_before_run": 2,
+  "benign_passed_over": 2,
+  "sets": {
+   "npm/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 12819,
+    "flagged": {
+     "k": 280,
+     "n": 500,
+     "rate": 0.56,
+     "ci95": [
+      0.5152,
+      0.604
+     ]
+    },
+    "blocked": {
+     "k": 261,
+     "n": 500,
+     "rate": 0.522,
+     "ci95": [
+      0.4772,
+      0.5665
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 272,
+     "n": 500,
+     "rate": 0.544,
+     "ci95": [
+      0.4992,
+      0.5883
+     ]
+    }
+   },
+   "pypi/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 1816,
+    "flagged": {
+     "k": 332,
+     "n": 500,
+     "rate": 0.664,
+     "ci95": [
+      0.6207,
+      0.7053
+     ]
+    },
+    "blocked": {
+     "k": 326,
+     "n": 500,
+     "rate": 0.652,
+     "ci95": [
+      0.6084,
+      0.6937
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 332,
+     "n": 500,
+     "rate": 0.664,
+     "ci95": [
+      0.6207,
+      0.7053
+     ]
+    }
+   },
+   "ai-skills/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 204,
+    "left_out": 0,
+    "population": 204,
+    "flagged": {
+     "k": 75,
+     "n": 204,
+     "rate": 0.36764705882352944,
+     "ci95": [
+      0.3014,
+      0.4378
+     ]
+    },
+    "blocked": {
+     "k": 52,
+     "n": 204,
+     "rate": 0.2549019607843137,
+     "ci95": [
+      0.1966,
+      0.3205
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 75,
+     "n": 204,
+     "rate": 0.36764705882352944,
+     "ci95": [
+      0.3014,
+      0.4378
+     ]
+    }
+   },
+   "ide_extensions/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 102,
+    "left_out": 0,
+    "population": 102,
+    "flagged": {
+     "k": 23,
+     "n": 102,
+     "rate": 0.22549019607843138,
+     "ci95": [
+      0.1486,
+      0.3189
+     ]
+    },
+    "blocked": {
+     "k": 17,
+     "n": 102,
+     "rate": 0.16666666666666666,
+     "ci95": [
+      0.1002,
+      0.2534
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 23,
+     "n": 102,
+     "rate": 0.22549019607843138,
+     "ci95": [
+      0.1486,
+      0.3189
+     ]
+    }
+   },
+   "npm/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 100,
+    "left_out": 0,
+    "population": 1004,
+    "flagged": {
+     "k": 88,
+     "n": 100,
+     "rate": 0.88,
+     "ci95": [
+      0.7998,
+      0.9364
+     ]
+    },
+    "blocked": {
+     "k": 85,
+     "n": 100,
+     "rate": 0.85,
+     "ci95": [
+      0.7647,
+      0.9135
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 88,
+     "n": 100,
+     "rate": 0.88,
+     "ci95": [
+      0.7998,
+      0.9364
+     ]
+    }
+   },
+   "pypi/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 17,
+    "left_out": 0,
+    "population": 17,
+    "flagged": {
+     "k": 14,
+     "n": 17,
+     "rate": 0.8235294117647058,
+     "ci95": [
+      0.5657,
+      0.962
+     ]
+    },
+    "blocked": {
+     "k": 13,
+     "n": 17,
+     "rate": 0.7647058823529411,
+     "ci95": [
+      0.501,
+      0.9319
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 14,
+     "n": 17,
+     "rate": 0.8235294117647058,
+     "ci95": [
+      0.5657,
+      0.962
+     ]
+    }
+   },
+   "pypi/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 5000,
+    "flagged": {
+     "k": 78,
+     "n": 500,
+     "rate": 0.156,
+     "ci95": [
+      0.1253,
+      0.1908
+     ]
+    },
+    "blocked": {
+     "k": 25,
+     "n": 500,
+     "rate": 0.05,
+     "ci95": [
+      0.0326,
+      0.0729
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 76,
+     "n": 500,
+     "rate": 0.152,
+     "ci95": [
+      0.1217,
+      0.1865
+     ]
+    }
+   },
+   "npm/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 5000,
+    "flagged": {
+     "k": 31,
+     "n": 500,
+     "rate": 0.062,
+     "ci95": [
+      0.0425,
+      0.0869
+     ]
+    },
+    "blocked": {
+     "k": 8,
+     "n": 500,
+     "rate": 0.016,
+     "ci95": [
+      0.0069,
+      0.0313
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 31,
+     "n": 500,
+     "rate": 0.062,
+     "ci95": [
+      0.0425,
+      0.0869
+     ]
+    }
+   }
+  },
+  "benign_all": {
+   "flagged": {
+    "k": 109,
+    "n": 1000,
+    "rate": 0.109,
+    "ci95": [
+     0.0904,
+     0.13
+    ]
+   },
+   "blocked": {
+    "k": 33,
+    "n": 1000,
+    "rate": 0.033,
+    "ci95": [
+     0.0228,
+     0.046
+    ]
+   }
+  },
+  "rules_behind_catches": {
+   "PAH-C007": 358,
+   "PAH-C004": 207,
+   "PAH-C002": 197,
+   "PAH-C028": 163,
+   "PAH-C012": 116,
+   "PAH-T007": 102,
+   "PAH-C001": 87,
+   "PAH-C003": 55,
+   "PAH-C015": 41,
+   "PAH-A011": 31
+  },
+  "rules_behind_false_alarms": {
+   "PAH-T004": 21,
+   "PAH-C019": 20,
+   "PAH-F004": 18,
+   "PAH-C012": 14,
+   "PAH-C001": 10,
+   "PAH-T007": 10,
+   "PAH-P002": 8,
+   "PAH-P007": 8,
+   "PAH-P010": 5,
+   "PAH-G004": 4
+  },
+  "false_alarms": [
+   [
+    "npm",
+    "@angular/common",
+    "22.2.6",
+    "block"
+   ],
+   [
+    "npm",
+    "@babel/core",
+    "8.1.2",
+    "block"
+   ],
+   [
+    "npm",
+    "@babel/plugin-transform-spread",
+    "8.0.8",
+    "block"
+   ],
+   [
+    "npm",
+    "@esbuild/linux-arm",
+    "0.28.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@esbuild/win32-x64",
+    "0.28.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@js-joda/core",
+    "6.3.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@mui/base",
+    "5.0.0-beta.70",
+    "block"
+   ],
+   [
+    "npm",
+    "@mui/x-internals",
+    "9.18.0",
+    "block"
+   ],
+   [
+    "npm",
+    "@oxc-resolver/binding-linux-x64-gnu",
+    "11.24.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@rollup/rollup-win32-x64-msvc",
+    "4.68.6",
+    "warn"
+   ],
+   [
+    "npm",
+    "@rspack/binding-linux-x64-gnu",
+    "2.3.3",
+    "warn"
+   ],
+   [
+    "npm",
+    "@tailwindcss/oxide-linux-x64-gnu",
+    "4.3.5",
+    "warn"
+   ],
+   [
+    "npm",
+    "@tanstack/start-client-core",
+    "1.170.39",
+    "warn"
+   ],
+   [
+    "npm",
+    "bonjour-service",
+    "1.4.4",
+    "warn"
+   ],
+   [
+    "npm",
+    "clipanion",
+    "4.0.0-rc.4",
+    "warn"
+   ],
+   [
+    "npm",
+    "jest-runtime",
+    "30.5.2",
+    "block"
+   ],
+   [
+    "npm",
+    "jspdf",
+    "4.2.1",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-linux-arm64-musl",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-linux-x64-gnu",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-win32-x64-msvc",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "linkifyjs",
+    "4.4.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "mammoth",
+    "1.13.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "miniflare",
+    "4.20260730.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "mustache",
+    "4.2.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "react-day-picker",
+    "10.0.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "styled-jsx",
+    "5.1.7",
+    "block"
+   ],
+   [
+    "npm",
+    "superagent",
+    "10.4.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "swagger-ui-dist",
+    "5.35.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "vite",
+    "8.3.8",
+    "warn"
+   ],
+   [
+    "npm",
+    "xdg-app-paths",
+    "8.3.0",
+    "block"
+   ],
+   [
+    "npm",
+    "zone.js",
+    "0.16.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "alembic",
+    "1.20.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "apache-airflow-providers-amazon",
+    "9.40.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "apache-airflow-providers-fab",
+    "3.11.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "atlassian-python-api",
+    "5.0.5",
+    "block"
+   ],
+   [
+    "pypi",
+    "awkward-cpp",
+    "58",
+    "warn"
+   ],
+   [
+    "pypi",
+    "black",
+    "26.10.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "bpy",
+    "5.3.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cadquery-ocp",
+    "8.0.1.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cel-python",
+    "0.5.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "chromadb",
+    "1.5.9",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cibuildwheel",
+    "4.3.5",
+    "block"
+   ],
+   [
+    "pypi",
+    "cog",
+    "0.23.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "coloredlogs",
+    "15.0.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "ddtrace",
+    "4.17.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "drf-spectacular-sidecar",
+    "2026.10.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "espeakng-loader",
+    "0.2.4",
+    "warn"
+   ],
+   [
+    "pypi",
+    "fastmcp-slim",
+    "4.2.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "flasgger",
+    "0.9.7.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "griffe",
+    "2.4.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "idf-component-manager",
+    "3.1.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "inspect-scout",
+    "0.6.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "itables",
+    "2.9.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "jedi",
+    "0.20.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "keras-preprocessing",
+    "1.1.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lap",
+    "0.5.14",
+    "warn"
+   ],
+   [
+    "pypi",
+    "libtpu",
+    "0.0.53.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lightning",
+    "2.6.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lupa",
+    "2.8",
+    "block"
+   ],
+   [
+    "pypi",
+    "maturin",
+    "1.16.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "memray",
+    "1.20.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "mitmproxy",
+    "12.3.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "mitmproxy-linux",
+    "0.12.16",
+    "warn"
+   ],
+   [
+    "pypi",
+    "mkdocs",
+    "1.6.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ml-dtypes",
+    "0.7.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "mlflow-tracing",
+    "3.18.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "modelscope",
+    "1.40.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "music21",
+    "10.5.2",
+    "block"
+   ],
+   [
+    "pypi",
+    "omnibase-core",
+    "0.47.72",
+    "block"
+   ],
+   [
+    "pypi",
+    "onnx-ir",
+    "1.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "opencv-contrib-python-headless",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "opencv-python",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "opencv-python-headless",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "openfga-sdk",
+    "0.10.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "optax",
+    "0.2.9",
+    "warn"
+   ],
+   [
+    "pypi",
+    "paddlex",
+    "3.7.2",
+    "block"
+   ],
+   [
+    "pypi",
+    "pgpy",
+    "0.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "psycopg-binary",
+    "3.3.9",
+    "block"
+   ],
+   [
+    "pypi",
+    "pycryptodome",
+    "4.5.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pydata-google-auth",
+    "1.9.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pydata-sphinx-theme",
+    "0.24.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyloudnorm",
+    "0.2.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyproject-api",
+    "1.12.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyrate-limiter",
+    "4.5.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyright",
+    "1.1.414",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pytelegrambotapi",
+    "4.37.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "python-statemachine",
+    "3.2.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "rapidfuzz",
+    "3.14.6",
+    "block"
+   ],
+   [
+    "pypi",
+    "rdkit",
+    "2026.9.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "readabilipy",
+    "0.3.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "safety",
+    "3.8.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sagemaker-serve",
+    "1.30.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "scverse-misc",
+    "0.1.8",
+    "warn"
+   ],
+   [
+    "pypi",
+    "skypilot",
+    "0.14.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "sniffio",
+    "1.3.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sparklines",
+    "1.0.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sqlalchemy-mate",
+    "2.0.0.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "swebench",
+    "5.0.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "tecton",
+    "1.2.13",
+    "warn"
+   ],
+   [
+    "pypi",
+    "tensorflow-cpu",
+    "2.21.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "triton",
+    "3.9.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "turbopuffer",
+    "3.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "types-boto3",
+    "1.44.5",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ujson",
+    "6.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ultralytics-thop",
+    "2.2.5",
+    "warn"
+   ],
+   [
+    "pypi",
+    "uv",
+    "0.13.9",
+    "block"
+   ],
+   [
+    "pypi",
+    "valkey-glide",
+    "2.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "waybackpy",
+    "3.0.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "weasyprint",
+    "70.0",
+    "warn"
+   ]
+  ],
+  "left_out_why": {}
  }
 }

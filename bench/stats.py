@@ -219,8 +219,104 @@ def analyse() -> dict:
     verdicts = [r["verdict"] for r in repos["repos"]]
     out["real_repos"] = {"blocked": rate(verdicts.count("block"), len(verdicts)),
                          "warned": rate(verdicts.count("warn"), len(verdicts)),
+                         "flagged": rate(sum(v in FLAGGED for v in verdicts), len(verdicts)),
                          "files": sum(r.get("files", 0) for r in repos["repos"])}
+    independent = _independent()
+    if independent:
+        out["sources"]["independent"] = independent.pop("source")
+        out["independent"] = independent
+    shell = _shellgate()
+    if shell:
+        out["sources"]["shellgate"] = shell.pop("source")
+        out["shellgate"] = shell
     return out
+
+
+def _shellgate() -> dict | None:
+    """ViKernel's shell benchmark (bench/shellgate.py): the first, untuned run against the latest, paired by command."""
+    dated = "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+    if not (sorted(RESULTS.glob(f"{dated}-shellgate.json")) and sorted(RESULTS.glob(f"{dated}-shellgate-baseline.json"))):
+        return None
+    name, after = load("shellgate")
+    _, before = load("shellgate-baseline")
+    right = {}
+    for label, run in (("before", before), ("after", after)):
+        right[label] = {r["id"]: (r["verdict"] in ("deny", "ask")) == r["is_risky"] for r in run["rows"]}
+    halves = {r["id"]: r["half"] for r in after["rows"]}
+    paired = {}
+    for half in ("tune", "test", "all"):
+        ids = [i for i in right["after"] if half == "all" or halves[i] == half]
+        b = sum(right["after"][i] and not right["before"][i] for i in ids)   # fixed by the change
+        c = sum(right["before"][i] and not right["after"][i] for i in ids)   # broken by the change
+        paired[half] = {"n": len(ids), "fixed": b, "broken": c, "p": mcnemar(b, c)}
+    return {"source": name, "dataset": after["dataset"], "code_before": before["code"], "code_after": after["code"],
+            "before": before["summary"], "after": after["summary"], "paired": paired}
+
+
+def _independent() -> dict | None:
+    """The held-out evaluation (bench/independent.py), when it has been run."""
+    if not sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent.json")):
+        return None
+    name, data = load("independent")
+    sample = json.loads((ROOT / data["sample"]).read_text(encoding="utf-8"))
+    by_set: dict[str, list[dict]] = {}
+    for r in data["rows"]:
+        by_set.setdefault(r["set"], []).append(r)
+    sets = {}
+    for key, rows in by_set.items():
+        ok = [r for r in rows if "error" not in r]
+        sets[key] = {
+            "kind": "benign" if key.endswith("/popular") else "malicious",
+            "drawn": len(rows), "left_out": len(rows) - len(ok),
+            "population": data["dataset"]["packages"].get(key, 5000 if key.endswith("/popular") else None),
+            "flagged": rate(sum(r["verdict"] in FLAGGED for r in ok), len(ok)),
+            "blocked": rate(sum(r["verdict"] == "block" for r in ok), len(ok)),
+            "flagged_general_rules": rate(sum(r["verdict_without_campaign_shapes"] in FLAGGED for r in ok), len(ok)),
+        }
+    benign = [r for r in data["rows"] if r["set"].endswith("/popular") and "error" not in r]
+    caught = [r for r in data["rows"] if not r["set"].endswith("/popular") and r.get("verdict") in FLAGGED]
+    rule_counts: dict[str, int] = {}
+    for r in caught:
+        for rid, sev in r["rules"].items():
+            if sev in ("medium", "high", "critical"):
+                rule_counts[rid] = rule_counts.get(rid, 0) + 1
+    false_alarms = [r for r in benign if r["verdict"] in FLAGGED]
+    fa_rules: dict[str, int] = {}
+    for r in false_alarms:
+        for rid, sev in r["rules"].items():
+            if sev in ("medium", "high", "critical"):
+                fa_rules[rid] = fa_rules.get(rid, 0) + 1
+    errors: dict[str, int] = {}
+    for r in data["rows"]:
+        if "error" in r:
+            why = r["error"].split(":")[0]
+            errors[why] = errors.get(why, 0) + 1
+    misses = RESULTS / name.replace("-independent.json", "-independent-misses.json")
+    profile = json.loads(misses.read_text(encoding="utf-8")) if misses.exists() else None
+    return {"source": name, "code": data["code"], "dataset": data["dataset"], "seed": data["seed"],
+            "misses": profile["sets"] if profile else None, "misses_per_set": profile["per_set"] if profile else None,
+            "drawn_on": sample["drawn"], "seen_before_run": len(sample.get("seen_before_run", [])),
+            "benign_passed_over": len(sample.get("benign_passed_over", [])),
+            "sets": dict(sorted(sets.items(), key=lambda kv: (kv[1]["kind"] == "benign", _SET_ORDER.get(kv[0], 9)))),
+            "benign_all": {"flagged": rate(sum(r["verdict"] in FLAGGED for r in benign), len(benign)),
+                           "blocked": rate(sum(r["verdict"] == "block" for r in benign), len(benign))},
+            "rules_behind_catches": dict(sorted(rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:10]),
+            "rules_behind_false_alarms": dict(sorted(fa_rules.items(), key=lambda kv: (-kv[1], kv[0]))[:10]),
+            "false_alarms": sorted((r["set"].split("/")[0], r["package"], r["version"], r["verdict"])
+                                   for r in false_alarms),
+            "left_out_why": dict(sorted(errors.items()))}
+
+
+_SET_ORDER = {"npm/malicious_intent": 0, "pypi/malicious_intent": 1, "ai-skills/malicious_intent": 2,
+              "ide_extensions/malicious_intent": 3, "npm/compromised_lib": 4, "pypi/compromised_lib": 5,
+              "pypi/popular": 0, "npm/popular": 1}
+SET_NAMES = {"npm/malicious_intent": "npm packages published to attack",
+             "pypi/malicious_intent": "PyPI packages published to attack",
+             "ai-skills/malicious_intent": "Agent skills published to attack",
+             "ide_extensions/malicious_intent": "IDE extensions published to attack",
+             "npm/compromised_lib": "Hijacked releases of real npm packages",
+             "pypi/compromised_lib": "Hijacked releases of real PyPI packages",
+             "pypi/popular": "Popular PyPI projects", "npm/popular": "Popular npm packages"}
 
 
 # ------------------------------------------------------------------------------------------------- the report
@@ -228,6 +324,140 @@ def analyse() -> dict:
 
 def pct(x: float) -> str:
     return f"{100 * x:.1f}%"
+
+
+def _shellgate_section(s: dict) -> list[str]:
+    sg = s.get("shellgate")
+    if not sg:
+        return []
+    ds = sg["dataset"]
+
+    def cells(summary: dict) -> str:
+        rr, bp = summary["risky_recall"], summary["benign_pass"]
+        return (f"{100 * summary['balanced_accuracy']:.1f} | {rr['k']} of {rr['n']} ({ci(rr)}) | "
+                f"{bp['k']} of {bp['n']} ({ci(bp)})")
+
+    lines = [
+        "## ViKernel's shell benchmark",
+        "",
+        f"[`bench/shellgate.py`](../bench/shellgate.py) scores the guard on the public dev split of "
+        f"[{ds['name']}](https://huggingface.co/datasets/{ds['name']}) ({ds['license']}, {ds['rows']} bash commands, "
+        "each risky one paired with a harmless one in the same disguise), the way the "
+        "[Obfuscated-Shell Safety Leaderboard](https://huggingface.co/spaces/FINAL-Bench/obfuscated-shell-leaderboard) "
+        "scores a gate: risky recall, benign pass and their mean, balanced accuracy. A deny or an ask stops a command. "
+        "The leaderboard scores models on a private held-out split, so its numbers compare in method, not command for "
+        "command.",
+        "",
+        f"The first run, on code `{sg['code_before']}`, had never seen the set. The seed commands were then split in "
+        "two halves by a fixed seed; the shell-unfolding change (`pah/shellfold.py`, code "
+        f"`{sg['code_after']}`) was written by looking only at the tune half, so the test half measures it on commands "
+        "it was not built against.",
+        "",
+        "| Run | Half | Balanced accuracy | Risky stopped (95% interval) | Harmless let through (95% interval) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for half in ("test", "tune"):
+        lines.append(f"| Before | {half} | {cells(sg['before']['halves'][half])} |")
+        lines.append(f"| After | {half} | {cells(sg['after']['halves'][half])} |")
+    lines.append(f"| Before | all | {cells(sg['before']['all'])} |")
+    lines.append(f"| After | all | {cells(sg['after']['all'])} |")
+    t, a, rb = sg["paired"]["test"], sg["after"], sg["after"]["robustness"]
+    lines += [
+        "",
+        f"On the test half, {t['fixed']} of its {t['n']} commands were judged right after the change and wrong before, "
+        f"and {t['broken']} the other way round: exact McNemar p = {pval(t['p'])}. Over the whole set, balanced accuracy "
+        f"after the change is {100 * a['all']['balanced_accuracy']:.1f} (bootstrap 95% interval "
+        f"{100 * a['all']['balanced_accuracy_ci95'][0]:.1f} to {100 * a['all']['balanced_accuracy_ci95'][1]:.1f}), and "
+        f"the obfuscation gap, plain minus disguised, is {100 * a.get('obfuscation_gap', 0):+.1f} points.",
+        "",
+        "Robustness, built from the plain commands as the leaderboard builds it:",
+        "",
+        "| Holds under persuasion | Calm under alarm | Wrapped, risky stopped | Wrapped, harmless let through | Talked into ALLOW | Robustness |",
+        "| --- | --- | --- | --- | --- | --- |",
+        f"| {pct(rb['holds_under_persuasion']['rate'])} | {pct(rb['calm_under_alarm']['rate'])} "
+        f"| {pct(rb['wrapped_risky_denied']['rate'])} | {pct(rb['wrapped_benign_allowed']['rate'])} "
+        f"| {pct(rb['talked_into_allow']['rate'] or 0)} | {pct(rb['robustness'])} |",
+        "",
+    ]
+    return lines
+
+
+def _independent_section(s: dict) -> list[str]:
+    ind = s.get("independent")
+    if not ind:
+        return []
+    ds = ind["dataset"]
+    lines = [
+        "## A held-out test: real malware and popular packages",
+        "",
+        f"[`bench/independent.py`](../bench/independent.py) drew this sample on {ind['drawn_on']}, before downloading "
+        f"anything, and ran once on code `{ind['code']}`; the protocol is in its docstring and the sample, with every "
+        f"file's digest, in [`bench/fixtures/independent-sample.json`](../bench/fixtures/independent-sample.json). "
+        f"Malicious packages come from Datadog's [malicious software packages dataset]"
+        f"(https://github.com/{ds['repo']}) (Apache-2.0) at commit `{ds['commit'][:12]}`: a random draw from each set, "
+        "one version per package. Benign packages are a random 500 of the 5,000 most-downloaded PyPI projects and 500 "
+        "of the 5,000 most-downloaded npm packages, at their latest release. Every file was unpacked and scanned in "
+        "memory; nothing was written to disk or run. Caught or flagged means a block or warn verdict.",
+        "",
+        "| Set | Population | Scanned | Caught or flagged | 95% interval | Blocked | General rules alone |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for key, v in ind["sets"].items():
+        f, b, g = v["flagged"], v["blocked"], v["flagged_general_rules"]
+        pop = f"{v['population']:,}" if v.get("population") else ""
+        lines.append(f"| {SET_NAMES.get(key, key)} | {pop} | {f['n']} | {f['k']} ({pct(f['rate'])}) | {ci(f)} "
+                     f"| {b['k']} ({pct(b['rate'])}) | {g['k']} ({pct(g['rate'])}) |")
+    ba = ind["benign_all"]
+    lines += [
+        f"| All popular packages | 10,000 | {ba['flagged']['n']:,} | {ba['flagged']['k']} ({pct(ba['flagged']['rate'])}) "
+        f"| {ci(ba['flagged'])} | {ba['blocked']['k']} ({pct(ba['blocked']['rate'])}) | |",
+        "",
+        "\"General rules alone\" scans each caught sample again with the checks written for named campaigns "
+        "(`pah/campaigns.py`) switched off. The rules behind the catches, by the number of malicious samples each "
+        "fired on at medium severity or above: "
+        + ", ".join(f"`{rid}` {n}" for rid, n in ind["rules_behind_catches"].items()) + ".",
+        "",
+    ]
+    if ind["false_alarms"]:
+        lines += [
+            "Popular packages flagged: "
+            + ", ".join(f"{name} {version} ({eco}, {verdict})" for eco, name, version, verdict in ind["false_alarms"])
+            + ". The rules behind them: "
+            + ", ".join(f"`{rid}` {n}" for rid, n in ind["rules_behind_false_alarms"].items()) + ".",
+            "",
+        ]
+    notes = []
+    if ind["left_out_why"]:
+        notes.append("Left out because they could not be downloaded, verified or unpacked: "
+                     + ", ".join(f"{n} ({why})" for why, n in ind["left_out_why"].items()) + ".")
+    if ind["benign_passed_over"]:
+        notes.append(f"{ind['benign_passed_over']} popular packages were passed over in the draw because their "
+                     "latest release had no file to download.")
+    if ind["seen_before_run"]:
+        notes.append(f"While the unpacking code was written, the file lists (names and sizes, not contents) of "
+                     f"{ind['seen_before_run']} drawn samples were looked at; no rule was changed.")
+    notes.append("Datadog notes that most of its samples were found by one rule set (GuardDog), so read these rates "
+                 "as rates on malware Datadog caught, not on all malware. Each set is its own population: the rates "
+                 "are not pooled across sets.")
+    lines += [" ".join(notes), ""]
+    if ind.get("misses"):
+        lines += [
+            "### What the misses look like",
+            "",
+            f"`python bench/independent.py profile` describes a random {ind['misses_per_set']} of the misses in each "
+            "set (all of them where there are fewer) by structure only: what kind of code a sample has and when it "
+            "would run, never its contents. The features are descriptions for this report, not detection rules.",
+            "",
+            "| Set | Missed | Described | What they have, by number of samples described |",
+            "| --- | --- | --- | --- |",
+        ]
+        for key, v in ind["misses"].items():
+            if not v["missed"]:
+                continue
+            feats = "; ".join(f"{f} {n}" for f, n in list(v["features"].items())[:6])
+            lines.append(f"| {SET_NAMES.get(key, key)} | {v['missed']} | {v['profiled']} | {feats} |")
+        lines.append("")
+    return lines
 
 
 def ci(r: dict) -> str:
@@ -263,8 +493,11 @@ def markdown(s: dict) -> str:
         "**What the rules have seen.** Whenever a case got through, the rules were fixed until it did not: four of the "
         "cases added in 0.4.0 needed new detection, and the fuzzer's first run got eight rewrites past 0.2.1. So the "
         "TrapRepo and fuzzer rows say how well the rules cover the techniques they were built against. How they do on "
-        "attacks they have never seen takes a corpus they were never tuned on.",
+        "attacks they have never seen takes a corpus they were never tuned on"
+        + (": the held-out test below." if "independent" in s else "."),
         "",
+        *_independent_section(s),
+        *_shellgate_section(s),
         "## Detection and false alarms",
         "",
         "| Measure | Observed | 95% interval |",
