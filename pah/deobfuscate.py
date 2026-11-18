@@ -169,6 +169,39 @@ def is_sensitive(value: str) -> bool:
     return v.lower() in SENSITIVE_NAMES or "://" in v or bool(SECRET_PATHS.search(v)) or bool(SENSITIVE_TEXT.search(v))
 
 
+_URL_TOKEN = re.compile(r"[A-Za-z][\w+.-]{0,15}://[^\s'\"<>/]{1,100}")
+
+
+def needed_decoding(value: str, text: str, low: str | None = None) -> bool:
+    """The sensitive part of a decoded value is not written anywhere in the original text: it was hidden, not just
+    wrapped. Code splits long messages with + for line length (`'Check out http://babeljs.io/docs ' + more`), and the
+    URL in them sits whole in one piece; an attacker's 'ht' + 'tps://' or 'cu' + 'rl' never spells it out."""
+    low = text.lower() if low is None else low
+    v = value.strip()
+    tokens = [m.group() for m in _URL_TOKEN.finditer(v)] + [m.group() for m in SECRET_PATHS.finditer(v)]
+    tokens += [m.group() for m in SENSITIVE_TEXT.finditer(v)]
+    if not tokens and v.lower() in SENSITIVE_NAMES:  # a bare name: written plainly only as a whole word
+        return not re.search(rf"(?<![\w$]){re.escape(v.lower())}(?![\w$])", low)
+    return not tokens or any(t.lower() not in low for t in tokens)
+
+
+_DOC_HOST = re.compile(r"(?:[\w-]+\.)*example\.(?:com|org|net)(?::\d{1,5})?", re.I)
+
+
+def placeholder_url(value: str) -> bool:
+    """A decoded value made sensitive only by URLs on the documentation domains (RFC 2606): example data, not a
+    destination. The whole host must be one: example.com.attacker.io, example.com@attacker.io and
+    attacker.io\\@example.com all lead somewhere else."""
+    urls = _URL_TOKEN.findall(value)
+    if not urls:
+        return False
+    for url in urls:
+        host = re.split(r"[\\/?#]", url.split("://", 1)[1], maxsplit=1)[0].rsplit("@", 1)[-1]
+        if not _DOC_HOST.fullmatch(host):
+            return False
+    return not is_sensitive(_URL_TOKEN.sub(" ", value))
+
+
 def decoded_items(text: str, path: str) -> list[tuple[int, str, str]]:
     """(position, decoded value, how) for every value the code spells in a disguise: pieces, character codes,
     escapes, ROT13, or a shell command assembled from variables."""

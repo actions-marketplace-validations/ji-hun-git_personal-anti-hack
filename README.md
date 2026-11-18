@@ -160,7 +160,7 @@ operating system, so a separate antivirus product adds little.
 | Full scan | Every file, against signatures | `pah sweep`: Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, editor extensions, startup items, exposed keys and known traces; binaries go to Microsoft Defender (built into Windows) or ClamAV |
 | Real-time protection | Hooks into the file system | `pah protect`: new downloads, clones, extensions, skills and startup items are scanned within seconds; `--install` starts it at login. Your agents' own hooks stop dangerous commands before they run |
 | Quarantine | Moves infected files | `pah quarantine`: moves a blocked download, extension or skill, or only the payload files of a project, and restores them on request |
-| Agent hooks, skills, MCP servers, prompt injection | Not read | 129 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
+| Agent hooks, skills, MCP servers, prompt injection | Not read | 132 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
 | Behavior over time | Behavior monitoring of processes | Each step your agent takes is judged by the steps before it: a credential read, then an upload; a download, then `chmod +x`, then a run; a web page, then the guard switched off ([attack chains](#attack-chains)) |
 | AI model files | Known samples, if any | Pickles, PyTorch, Keras and GGUF files read without loading them: what loading would import or run |
 | Known malware binaries (ransomware, droppers) | Signature engine | The engine already on your computer, called locally (`pah audit`, `pah sweep`) |

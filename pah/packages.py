@@ -8,8 +8,8 @@ from __future__ import annotations
 import posixpath
 import re
 
-from .model import rule
-from .names import R_LOOKALIKE, lookalike, lookalike_severity, requirement_names
+from .model import bump, rule
+from .names import R_LOOKALIKE, lookalike, lookalike_severity, normalize, requirement_names
 from .hosts import OFFICIAL_REGISTRIES, USER_CONTENT_HOSTS, classify_host, host_of
 from .patterns import analyze_command
 from .surfaces import File, State, line_of, load_jsonc, load_toml
@@ -99,6 +99,9 @@ TRIGGER_NPM = "npm install / pnpm install / yarn in this folder"
 
 def _dep_spec_risk(spec: str) -> tuple[str, str] | None:
     spec = spec.strip()
+    if re.search(r"#[0-9a-f]{40}$", spec) and re.search(r"^(?:git\+|git://|github:|gitlab:|bitbucket:)|\.git#", spec) \
+            and not spec.startswith("http://"):
+        return "low", "git repository pinned to a commit"  # a full commit hash cannot be swapped out later
     if spec.startswith("http://"):
         return "high", "plain-HTTP URL"
     if re.match(r"https?://", spec):
@@ -108,6 +111,19 @@ def _dep_spec_risk(spec: str) -> tuple[str, str] | None:
         if re.search(r"#[0-9a-f]{40}$", spec):
             return "low", "git repository pinned to a commit"  # a full commit hash cannot be swapped out later
         return "medium", "git repository"
+    return None
+
+
+def _entry_file(state: State, base: str, main: str) -> str | None:
+    """The file a package.json "main" names, as Node resolves it: the path, path.js, or path/index.js. VS Code joins
+    "main" to the extension's folder, so a leading slash still means a file inside it."""
+    main = main.strip().lstrip("/\\")
+    if not main:
+        return None
+    rel = posixpath.normpath(posixpath.join(base, main)) if base else posixpath.normpath(main)
+    for cand in (rel, rel + ".js", rel + ".cjs", posixpath.join(rel, "index.js")):
+        if cand in state.files:
+            return cand
     return None
 
 
@@ -130,6 +146,8 @@ def package_json(state: State, f: File) -> None:
             if alias in scripts and alias not in LIFECYCLE and isinstance(scripts[alias], str):
                 state.command(scripts[alias], f.rel, line_of(text, f'"{alias}"'), f"npm script '{alias}' (via {name})",
                               TRIGGER_NPM, base_dir=f.dir)
+    all_deps = {normalize(str(d), "npm") for s in ("dependencies", "devDependencies", "optionalDependencies",
+                                                     "peerDependencies") if isinstance(data.get(s), dict) for d in data[s]}
     for section in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
         deps = data.get(section)
         if not isinstance(deps, dict):
@@ -140,12 +158,15 @@ def package_json(state: State, f: File) -> None:
             line = line_of(text, f'"{dep}"')
             risk = _dep_spec_risk(spec)
             if risk and not in_node_modules:
-                state.add(R_URL_DEP, risk[0], f.rel, line, f"{dep} comes from a {risk[1]}: {spec}", f'"{dep}": "{spec}"')
+                sev, note = risk[0], ""
+                if section == "devDependencies":  # installed only when the project itself is set up, not by its users
+                    sev, note = bump(sev, -1), " (devDependencies)"
+                state.add(R_URL_DEP, sev, f.rel, line, f"{dep} comes from a {risk[1]}: {spec}{note}", f'"{dep}": "{spec}"')
             target = spec[4:].rsplit("@", 1)[0] if spec.startswith("npm:") else dep
             if not in_node_modules and not risk and not spec.startswith(("file:", "link:", "workspace:")):
                 state.packages.append(("npm", target, f.rel, line, "config"))
             hit = lookalike(target, "npm") if not in_node_modules else None
-            if hit:
+            if hit and hit[0] not in all_deps:  # both listed: siblings, not a typo
                 state.add(R_LOOKALIKE, lookalike_severity(hit[1], "manifest"), f.rel, line,
                           f"{target} {hit[1]} from {hit[0]}", f'"{dep}": "{spec}"')
     if data.get("gypfile") or "binding.gyp" in (posixpath.basename(r) for r in state.files if posixpath.dirname(r) == f.dir):
@@ -159,6 +180,13 @@ def package_json(state: State, f: File) -> None:
         eager = "*" in events or "onStartupFinished" in events
         state.surface("editor extension", f.rel, "every start of the editor" if eager else "when the editor activates "
                       "the extension", str(data.get("main") or data.get("browser") or ""))
+        main = _entry_file(state, f.dir, str(data.get("main") or data.get("browser") or ""))
+        if eager and main:
+            state.entry[main] = "an editor extension's main file, run at every start of the editor"
+    elif not in_node_modules and data.get("name") and data.get("version"):
+        main = _entry_file(state, f.dir, str(data.get("main") or "index.js"))
+        if main:
+            state.entry.setdefault(main, "the package's main file, run as soon as it is required")
     bins = data.get("bin") if isinstance(data.get("bin"), dict) else {}
     own = str(data.get("name") or "").rsplit("/", 1)[-1]
     for command in bins:
@@ -340,19 +368,50 @@ def conftest(state: State, f: File) -> None:
     state.mark_autoexec(f.rel, "pytest imports conftest.py")
 
 
+def _own_modules(state: State, line: str) -> list[str]:
+    """Files in the scanned tree that the import statements of a .pth line load."""
+    out = []
+    for stmt in line.split(";"):
+        m = re.match(r"\s*import\s+([\w., ]+)$", stmt.strip() + "")
+        for name in (m.group(1).split(",") if m else []):
+            mod = name.strip().split(" ")[0].replace(".", "/")
+            out += [c for c in (f"{mod}.py", f"{mod}/__init__.py") if c in state.files]
+    return out
+
+
 def pth(state: State, f: File) -> None:
+    # Python reads .pth files only at the top of site-packages; one inside a folder (a test fixture, a resource the
+    # package copies elsewhere) does not run where it sits.
     text = f.text or ""
+    nested = "/" in f.rel
     for i, line in enumerate(text.splitlines(), 1):
         if re.match(r"\s*import[\s;]", line):
             state.surface(".pth import line", f.rel, "every Python start once installed", line, i)
             found = analyze_command(line, f.rel, i, "autoexec")
             state.extend(found)
-            state.add(R_PTH, "critical" if found else "high", f.rel, i, "executes code at interpreter start", line)
+            own = _own_modules(state, line)
+            for target in own:  # what it imports runs at every start: judge it as code that runs on its own
+                state.mark_autoexec(target, f"{f.name} imports it at every Python start")
+            if found:
+                sev, note = "critical", ""
+            elif nested:
+                sev, note = "low", " (inside a folder, where Python does not read it)"
+            elif own:
+                sev, note = "low", f" (it imports {own[0]}, judged as code that runs on its own)"
+            else:
+                sev, note = "high", ""
+            state.add(R_PTH, sev, f.rel, i, "executes code at interpreter start" + note, line)
             break
 
 
 def sitecustomize(state: State, f: File) -> None:
     state.surface(f.name, f.rel, "every Python start once on the path")
+    if "/" in f.rel and not f.rel.startswith(("src/", "lib/")):
+        # Inside a package or a resources folder it runs only for a program that puts that folder on the path
+        # itself, as ddtrace and cibuildwheel do on purpose.
+        state.add(R_PTH, "low", f.rel, 1, f"{f.name} inside {posixpath.dirname(f.rel)}: it runs at interpreter start "
+                  "only for a program that puts its folder on the path", f.rel)
+        return
     state.mark_autoexec(f.rel, f.name)
     state.add(R_PTH, "high", f.rel, 1, f"{f.name} runs at interpreter start", f.rel)
 
@@ -369,18 +428,21 @@ def pyproject(state: State, f: File) -> None:
             for cand in (f"{module}.py", f"{module}/__init__.py"):
                 target = posixpath.normpath(posixpath.join(f.dir, base, cand))
                 state.mark_autoexec(target, "in-tree build backend")
-        state.add(R_PY_BUILD, "medium", f.rel, line_of(text, "backend-path"), f"in-tree backend {backend}", "backend-path")
+        fixture = bool(re.search(r"(?:^|/)(?:tests?|testing|fixtures?|examples?)/", f.rel))
+        state.add(R_PY_BUILD, "low" if fixture else "medium", f.rel, line_of(text, "backend-path"),
+                  f"in-tree backend {backend}" + (" (in a test fixture)" if fixture else ""), "backend-path")
     deps = list((data.get("project") or {}).get("dependencies") or []) + list(build.get("requires") or [])
     for group in ((data.get("project") or {}).get("optional-dependencies") or {}).values():
         deps += list(group or [])
     poetry = ((data.get("tool") or {}).get("poetry") or {})
     deps += list((poetry.get("dependencies") or {}).keys())
+    declared = {normalize(re.split(r"[\s\[<>=!~;@(]", str(d).strip())[0], "pypi") for d in deps}
     for dep in deps:
         name = re.split(r"[\s\[<>=!~;@(]", str(dep).strip())[0]
         if name and name.lower() != "python":
             state.packages.append(("pypi", name, f.rel, line_of(text, name), "config"))
         hit = lookalike(name, "pypi") if name and name.lower() != "python" else None
-        if hit:
+        if hit and normalize(hit[0], "pypi") not in declared:  # both listed (types-boto3-rds and -drs): siblings
             state.add(R_LOOKALIKE, lookalike_severity(hit[1], "manifest"), f.rel, line_of(text, name),
                       f"{name} {hit[1]} from {hit[0]}", str(dep))
     for m in re.finditer(r"(?m)^\s*(?:url|index-url|extra-index-url|default-index)\s*=\s*[\"']([^\"']+)[\"']", text):
@@ -400,15 +462,23 @@ def requirements(state: State, f: File) -> None:
             kind = classify_host(value)
             state.add(R_REGISTRY_CFG, "high" if flag in ("-i", "--index-url") or kind != "unknown" else "medium", f.rel, line,
                       f"{flag} {value}", m.group(0))
+    # A requirements file at the top of the project is what `pip install -r` is pointed at; one deep in deploy or
+    # docs folders is read only by whoever runs it on purpose.
+    nested = f.rel.count("/") >= 2
     for m in re.finditer(r"(?m)^\s*(?:[\w.-]+\s*@\s*)?((?:https?|git\+\w+)://\S+)", text):
         url = m.group(1).replace("git+", "", 1)
         trusted = classify_host(url) == "official" or host_of(url) in USER_CONTENT_HOSTS
-        state.add(R_URL_DEP, "medium" if trusted else "high", f.rel,
-                  text.count("\n", 0, m.start()) + 1, f"requirement from {m.group(1)}", m.group(0))
+        sev = "medium" if trusted or (nested and not url.startswith("http://")) else "high"
+        if trusted and (re.search(r"@[0-9a-f]{40}\b", url) or re.search(r"(?:^|/)(?:docs?|tests?)[/-]|-(?:test|tests|docs?|dev)"
+                                                                       r"\.txt$", f.rel)):
+            sev = "low"  # pinned to a commit on a code host, or only for building the docs or running the tests
+        state.add(R_URL_DEP, sev, f.rel, text.count("\n", 0, m.start()) + 1, f"requirement from {m.group(1)}"
+                  + (" (in a nested requirements file)" if nested and sev == "medium" and not trusted else ""), m.group(0))
+    declared = {normalize(n, "pypi") for _, n in requirement_names(text)}
     for line, name in requirement_names(text):
         state.packages.append(("pypi", name, f.rel, line, "config"))
         hit = lookalike(name, "pypi")
-        if hit:
+        if hit and normalize(hit[0], "pypi") not in declared:  # both listed: siblings, not a typo
             state.add(R_LOOKALIKE, lookalike_severity(hit[1], "manifest"), f.rel, line,
                       f"{name} {hit[1]} from {hit[0]}", name)
 

@@ -15,20 +15,21 @@ import time
 from dataclasses import dataclass
 
 from .campaigns import campaign_shapes
-from .codectx import (REGEX_LIKE, after_trailing_comment, data_string, enclosing_string, first_near, has,
-                      in_other_string, line_window, named_in_string)
+from .codectx import (EXEC_ON_LINE, REGEX_LIKE, after_trailing_comment, data_string, enclosing_string, first_near,
+                      has, in_other_string, line_window, named_in_string)
 from .collector import Collector
 from .content_rules import (R_AGENT_BYPASS, R_AGENT_CFG_WRITE, R_AI_ADDRESSED, R_BIDI, R_CONDITIONAL, R_DECODE_EXEC,
                             R_DESTRUCTIVE, R_DISGUISED_RUN, R_DOWNLOAD_EXEC, R_ENV_DUMP, R_EXFIL, R_EXFIL_HOST,
-                            R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_INLINE_NET, R_LOG_WIPE, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
+                            R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_ATTACK_TOOL, R_INLINE_NET, R_LOG_WIPE, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
                             R_OBFUSCATED, R_PAD_LINES, R_PAD_SPACES, R_PERSIST, R_QUARANTINE, R_REGISTRY,
-                            R_REVERSE_SHELL, R_SECRETS, R_SELECTORS, R_TAGS, R_TERMINAL, R_URL_INSTALL, R_ZERO_WIDTH)
-from .deobfuscate import DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive
+                            R_REVERSE_SHELL, R_SECRETS, R_SELECTORS, R_SELF_PUBLISH, R_SWEEP, R_TAGS, R_TERMINAL, R_URL_INSTALL, R_ZERO_WIDTH)
+from .deobfuscate import (DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive,
+                          needed_decoding, placeholder_url)
 from .hosts import URL, classify_host, host_kind, host_of
 from .indicators import EXFIL_HOSTS, RAW_IP_URL, SECRET_PATHS, WRITE_OP, is_private_ip  # noqa: F401
 from .model import Finding, bump, clip, rank
 from .policy import is_test_code
-from .text import decode_blobs, in_comment, in_string_literal, invisible, long_lines, padding
+from .text import FILLERS, decode_blobs, in_comment, in_string_literal, invisible, long_lines, padding
 
 
 TERMINAL_HIDE = re.compile("\x1b\\[(?:8m|[0-2]?K|\\d*[AF]|2J)")
@@ -97,9 +98,28 @@ COMMAND_PATTERNS = [
        S("critical", "high", "high", "high"), "evaluates decoded data"),
     _p(R_DECODE_EXEC, r"\bnew\s+Function\s*\([^\n]{0,200}(?:atob|Buffer\.from|fromCharCode|base64)",
        S("critical", "high", "high", "high"), "builds a function from decoded data"),
-    _p(R_DECODE_EXEC, r"\b(?:exec|eval)\s*\(\s*(?:base64\.b64decode|b64decode|base64\.decodebytes|zlib\.decompress|"
-       r"marshal\.loads|codecs\.decode|bytes\.fromhex|__import__\(\s*['\"](?:base64|zlib|marshal|codecs)['\"]\s*\))",
+    # `import base64 as b; exec(b.b64decode(...))`: the module may be renamed, so any prefix counts
+    _p(R_DECODE_EXEC, r"\b(?:exec|eval)\s*\(\s*(?:(?:[A-Za-z_]\w*\.)?(?:b64decode|b32decode|b85decode|a85decode|decodebytes|"
+       r"decompress|unhexlify|fromhex)\s*\(|marshal\.loads|codecs\.decode|"
+       r"__import__\(\s*['\"](?:base64|zlib|marshal|codecs|binascii)['\"]\s*\))",
        S("critical", "high", "high", "high"), "executes decoded Python"),
+    _p(R_DECODE_EXEC, r"\b(?:exec|eval)\s*\([^\n]{0,120}?\.decrypt\s*\(", S("critical", "high", "high", "high"),
+       "executes decrypted code"),
+    # `os.system(b64d("..."))`: whatever the helper is called, its output from an encoded literal is run
+    _p(R_DECODE_EXEC, r"\b(?:os\.system|os\.popen|subprocess\.(?:run|call|Popen|check_output|check_call|getoutput)|exec|"
+       r"eval|execSync)\s*\(\s*[A-Za-z_$][\w$.]*\(\s*[bru]?['\"][A-Za-z0-9+/=_-]{24,}['\"]\s*\)",
+       S("critical", "high", "medium", "high"), "runs what a decoder makes of an encoded string"),
+    # Searching the folders that hold credentials for the words credentials contain. Searching the project is
+    # ordinary; dot-folders in the home folder, /etc and the whole home are where an agent has no reason to look.
+    _p(R_SWEEP, r"\b(?:grep|egrep|rg|ag|ack|findstr|Select-String)\b[^\n|;&]{0,160}?\b(?:tokens?|passw(?:or)?ds?|secrets?|"
+       r"api[_-]?keys?|credentials?|aws_access_key_id|private[_ ]?keys?)\b[^\n|;&]{0,160}?(?:(?:~|\$HOME|\$\{HOME\})"
+       r"(?:/\.[\w.-]+|(?=[\s'\"]|$))|(?<![\w.])/etc\b|(?<![\w.])/root\b|/\.(?:config|ssh|aws|gnupg|kube|docker|azure)\b)"
+       r"|\bfind\s+(?:~|\$HOME|\$\{HOME\}|/home|/Users|/root|/)(?:\s|/[^\s]*\s)[^\n|;&]{0,160}?-i?name\s+['\"]?\*?"
+       r"(?:\.pem|\.key|id_rsa\*?|id_ed25519\*?|\.env|\*?credential\w*\*?|\.kdbx|\.npmrc|\.git-credentials)\b",
+       S("high", "medium", "low", "high"), "searches credential folders for passwords, tokens or keys"),
+    _p(R_ATTACK_TOOL, r"\b(?:mimikatz|lazagne|rubeus|sharphound|linpeas|winpeas|linux-exploit-suggester|pspy(?:32|64)s?|"
+       r"meterpreter|cobaltstrike|mimipenguin|nanodump|safetykatz)\b", S("high", "medium", "low", "high"),
+       "fetches or runs an attack tool"),
     _p(R_DECODE_EXEC, r"\bexec\s*\(\s*compile\s*\((?![^\n]{0,200}?(?:\.read\(\)|read_text\(\)|\bopen\())",
        S("medium", "low", "low", "low"), "executes a compiled string"),
     _p(R_DECODE_EXEC, r"\b(?:exec|eval)\s*\(\s*[A-Za-z_]\w*\.decode\s*\(",
@@ -217,6 +237,13 @@ _NEEDS = {
     "runs a font, image or media file with an interpreter": ("node", "bun", "deno", "py", "ruby", "perl", "php", "sh",
                                                              "pwsh", "powershell", "wscript", "cscript"),
     "deletes or silences logs": ("log", "hist", "audit", "tmp", "journal", "wevtutil"),
+    "executes decrypted code": ("decrypt",),
+    "searches credential folders for passwords, tokens or keys": ("grep", "rg ", "ag ", "ack", "findstr", "select-string",
+                                                                  "find "),
+    "runs what a decoder makes of an encoded string": ("system", "popen", "subprocess", "exec", "eval"),
+    "fetches or runs an attack tool": ("mimikatz", "lazagne", "rubeus", "sharphound", "linpeas", "winpeas",
+                                       "exploit-suggester", "pspy", "meterpreter", "cobaltstrike", "mimipenguin",
+                                       "nanodump", "safetykatz"),
     "downloads a program and makes it executable": ("chmod",),
 }
 
@@ -418,6 +445,34 @@ def _sev_context(context: str) -> str:
     return "autoexec" if context == "agent" else context
 
 
+_CODE_HOSTS = ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "git.sr.ht")
+
+
+def _agent_loaded(path: str) -> bool:
+    """Skills, AGENTS.md, CLAUDE.md and rules files: instructions an agent follows, unlike a README a person reads."""
+    from .surfaces import AUTO_LOADED
+
+    return bool(AUTO_LOADED.search(path)) or path.lower().endswith("skill.md")
+
+
+def _code_host_install(snippet: str) -> bool:
+    """Every URL or shorthand the install line uses is HTTPS on a public code host."""
+    urls_ = re.findall(r"(?:git\+)?(https?)://([^/\s'\"#@]+)", snippet)
+    short = re.findall(r"\b(github|gitlab|bitbucket):", snippet)
+    return bool(urls_ or short) and all(scheme == "https" and host.lower().split(":")[0] in _CODE_HOSTS
+                                        for scheme, host in urls_)
+
+
+_FETCH_NEAR = re.compile(r"\b(?:https?|ftp)://|\b(?:curl|wget|iwr|Invoke-WebRequest|DownloadFile|DownloadString|"
+                         r"urlretrieve|urlopen)\b|\b(?:fetch|requests\.get|axios\.get|https?\.get)\s*\(", re.I)
+
+
+def _acts_on(text: str, start: int, end: int) -> bool:
+    """Something on the same line as a match downloads or starts a program."""
+    around = text[max(text.rfind("\n", 0, start) + 1, start - 300):start] + line_window(text, start, end, 300)
+    return bool(_FETCH_NEAR.search(around) or EXEC_ON_LINE.search(around))
+
+
 def _apply(patterns, col: Collector, text: str, context: str, low: str | None = None) -> None:
     ctx = _sev_context(context)
     low = text.lower() if low is None else low
@@ -432,6 +487,18 @@ def _apply(patterns, col: Collector, text: str, context: str, low: str | None = 
                 continue
             if pat.rule == R_URL_INSTALL and re.search(r"[@#][0-9a-f]{40}\b", m.group(0)):
                 severity, message = bump(severity, -1), message + " (pinned to a commit)"
+            elif pat.rule == R_URL_INSTALL and ctx == "doc" and _code_host_install(m.group(0)) \
+                    and not _agent_loaded(col.path):
+                # A README that says how to install the project from its source repository is documenting, not
+                # luring; other hosts, plain HTTP and bare addresses keep their severity.
+                severity, message = "low", message + " (from a code host, in documentation)"
+            if pat.rule == R_DECODE_EXEC and pat.message == "loads marshalled bytecode" and ctx == "code" \
+                    and not re.search(r"\b(?:exec|eval)\s*\(", line_window(text, m.start(), m.end(), 200)):
+                severity = "low"  # serializers load marshal data; running it is what the exec-of-marshal pattern catches
+            if pat.rule == R_ATTACK_TOOL and ctx == "code" and not _acts_on(text, m.start(), m.end()):
+                # Detection rules, blocklists and scanners name these tools too; code that fetches or runs one has a
+                # URL, a download or a call that starts a program on the same line.
+                severity, message = "low", message + " (named, not fetched or run)"
             commented = code_file and in_comment(text, m.start(), col.path)
             if pat.message == "pipes a download into an interpreter" and INLINE_PROGRAM.match(text, m.end()):
                 continue  # `curl page | perl -ne '...'`: the download is input to a program written on the line
@@ -605,6 +672,62 @@ FUNCTION_ALIAS = re.compile(r"\.constructor\s*\.\s*constructor\b(?!\s*\(\s*['\"]
                             r"|\bReflect\.construct\s*\(\s*Function\b")
 
 
+# Host details that identify a machine or its owner. Not the home folder: installers use it to find their cache.
+FINGERPRINT = re.compile(r"\bsocket\.(?:gethostname|getfqdn)\s*\(|\bgetpass\.getuser\s*\(|\bos\.getlogin\s*\(|"
+                         r"\bplatform\.node\s*\(|\buuid\.getnode\s*\(|\bos\.(?:hostname|userInfo|networkInterfaces)\s*\(|"
+                         r"\bdns\.getServers\s*\(")
+_DNS_SEND = re.compile(r"\bgethostbyname(?:_ex)?\s*\(|\bgetaddrinfo\s*\(|\bdns\.(?:lookup|resolve\w*)\s*\(|\bresolver\.resolve\s*\(")
+_PY_FETCH = re.compile(r"\brequests\.(?:get|post)\s*\(|\burlopen\s*\(|\burlretrieve\s*\(|\bhttpx\.(?:get|stream)\s*\(|"
+                       r"\bwget\.download\s*\(")
+_PY_WRITE = re.compile(r"open\([^)\n]{0,200}['\"]wb['\"]|\.write_bytes\s*\(|copyfileobj\s*\(|\burlretrieve\s*\(")
+_PY_RUN = re.compile(r"\bos\.(?:system|startfile|popen|exec[lv]p?e?)\s*\(|\bsubprocess\.(?:run|call|Popen|check_call|check_output)\s*\(")
+_STAGED = re.compile(r"(?m)^[ \t]*(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*[^\n;]{0,300}?(?:b64decode|b32decode|"
+                     r"b85decode|decodebytes|decompress|unhexlify|fromhex|\.decrypt\s*\(|Buffer\.from\([^\n;]{0,300}?"
+                     r"['\"](?:base64|hex)['\"]\s*\)|\batob\s*\()")
+_NPM_PUBLISH = re.compile(r"\b(?:exec|execSync|spawn|spawnSync|execFile|execFileSync|execa)\s*\([^)]{0,200}?"
+                          r"\b(?:npm|pnpm|yarn)\b['\"]?\s*,?\s*\[?\s*['\"]?\s*publish\b")
+_PKG_WRITE = re.compile(r"writeFile(?:Sync)?\s*\(\s*[^,\n]{0,120}package\.json")
+
+
+def _two_step_shapes(col: Collector, text: str, path: str, context: str, low: str, nets: list[int], live) -> None:
+    """Shapes whose evidence sits in two statements: data decoded into a variable and then run, host details taken
+    and a network call made while installing, a program downloaded, saved and run, and a package that rewrites its
+    package.json and publishes itself."""
+    auto = context == "autoexec"
+    for m in live(_STAGED.finditer(text), 20) if has(low, ("decode", "decompress", "unhexlify", "fromhex", "decrypt",
+                                                          "base64", "atob")) else ():
+        name = re.escape(m.group(1))
+        after = text[m.end():m.end() + 5000]
+        if re.search(rf"(?:\b(?:exec|eval|execSync|spawnSync)|new\s+Function|\bFunction|vm\.runIn\w+|os\.system|os\.popen|"
+                     rf"subprocess\.\w+)\s*\(\s*(?:[\w$]+\.)?{name}\b", after):
+            col.add(R_DECODE_EXEC, "critical" if auto else "high", m.start(),
+                    f"decodes data into {m.group(1)}, then runs it", context)
+            break
+    if auto and has(low, ("hostname", "getfqdn", "getuser", "getlogin", "platform.node", "getnode", "userinfo",
+                          "networkinterfaces", "getservers")):
+        fp = next(iter(live(FINGERPRINT.finditer(text), 1)), None)
+        if fp and (nets or _DNS_SEND.search(text)):
+            col.add(R_EXFIL, "high", fp.start(), "takes host details (machine or user name, network interfaces, DNS "
+                    "servers) and makes a network call while installing", context)
+    if path.lower().endswith((".py", ".pyw")) and has(low, ("requests", "urlopen", "urlretrieve", "httpx", "wget")):
+        for dl in live(_PY_FETCH.finditer(text), 10):
+            # The run follows the download closely and starts a program: `chmod +x`, `./name`, `name.exe`, `start`
+            span = text[dl.start():dl.start() + 1500]
+            run = _PY_RUN.search(span)
+            if run and (_PY_WRITE.search(span) or "urlretrieve" in span) and re.search(
+                    r"chmod\s+\+?[0-7x]|0o?7[0-7]{2}|\./|\.exe\b|\bstart\s|startfile", span[:run.end() + 200], re.I):
+                col.add(R_DOWNLOAD_EXEC, "critical" if auto else "medium", dl.start(), "downloads a file and runs it",
+                        context)
+                break
+    if has(low, ("publish",)) and "package.json" in low:
+        pub = next(iter(live(_NPM_PUBLISH.finditer(text), 1)), None)
+        if pub and _PKG_WRITE.search(text):
+            spreads = bool(re.search(r"\.name\s*=|setInterval|setTimeout|while\s*\(\s*true", text))
+            col.add(R_SELF_PUBLISH, "high" if spreads or auto else "medium", pub.start(),
+                    "rewrites package.json and runs npm publish" + (", renaming or repeating itself" if spreads else ""),
+                    context)
+
+
 def scan_text(text: str, path: str, context: str, *, decode: bool = True, structural: bool = True,
               note: str = "", line_offset: int = 0, fold: bool = True) -> list[Finding]:
     """All content rules for one text. Structural checks (invisible characters, padding) run on original text only."""
@@ -670,6 +793,8 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
                     "assembled at run time)", context)
         else:
             col.add(R_NET_AUTO, "low", nets[0], "network call in code that runs automatically", context)
+    if is_code:
+        _two_step_shapes(col, text, path, context, low, nets, live)
     for m in DOWNLOAD_THEN_RUN.finditer(text) if context in ("autoexec", "code") and has(low, ("curl", "wget")) else ():
         commented = in_comment(text, m.start(), path)
         kind = host_kind(m.group())
@@ -779,7 +904,13 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
         # else, and a sensitive name or URL that needed decoding is a sign of its own: legitimate code writes
         # 'https' and 'eval' plainly.
         normal = deobfuscate(text, path)
+        # Wrapping a long message in pieces, or naming a tool in a shell variable, is how ordinary code reads; only
+        # when the sensitive part is nowhere in plain text did the pieces hide it. Escapes, character codes and ROT13
+        # are not how anyone wraps a message, and stay reported whatever else the file spells out.
         flagged = [(pos, value, how) for pos, value, how in decoded_items(text, path) if is_sensitive(value)
+                   and not placeholder_url(value)
+                   and (how not in ("builds out of pieces", "assembles a command from shell variables")
+                        or needed_decoding(value, text, low))
                    and not in_comment(text, pos, path) and not after_trailing_comment(text, pos, path)
                    and not in_other_string(text, pos, path) and not (context == "code" and is_test_code(path))]
         if flagged:
@@ -821,6 +952,25 @@ def _strings_in_test(text: str, path: str, context: str, item: dict) -> bool:
     return context == "code" and is_test_code(path) and all(in_string_literal(text, p) for p in item.get("positions", [item["pos"]]))
 
 
+BUNDLED = re.compile(r"(?:\.min\.|[-.]bundle\.|\.browser\.|\.umd\.|[\\/](?:dist|build|vendor|umd|bundles?|assets|static|chunks|_next|"
+                     r"locales?|i18n|l10n)[\\/])", re.I)
+
+
+def _strings_in_bundle(text: str, path: str, context: str, item: dict) -> bool:
+    """Every occurrence sits in a string in built, vendored or locale files: text the code carries, not code a person
+    reads. Bundles keep Unicode tables and translated text that legitimately hold these characters."""
+    return context == "code" and bool(BUNDLED.search(path)) and all(
+        in_string_literal(text, p) or text.rfind("\n", 0, p) < p - 4000 for p in item.get("positions", [item["pos"]]))
+
+
+_ZW_RUN = re.compile("[​‌‍⁠-⁤﻿]{8,}")
+
+
+def _long_run(text: str, item: dict) -> bool:
+    """Eight or more zero-width characters in a row: data spelled out in invisible characters, not text."""
+    return bool(_ZW_RUN.search(text))
+
+
 def _structural(col: Collector, text: str, path: str, context: str) -> None:
     is_code = context in ("code", "autoexec")
     for item in invisible(text):
@@ -846,18 +996,30 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
             note = ""
             if _strings_in_test(text, path, context, item):
                 sev, note = "low", " (inside string literals in a test file)"
+            elif _strings_in_bundle(text, path, context, item):
+                sev, note = "low", " (inside strings in a bundled file)"
             col.add(R_BIDI, sev, pos, f"{item['count']} bidirectional control characters{note}", context)
         elif kind == "zero-width":
             sev = ("medium" if item["count"] < 10 else "high") if is_code else "low"
             note = ""
             if _strings_in_test(text, path, context, item):
                 sev, note = "low", " (inside string literals in a test file)"
+            elif _strings_in_bundle(text, path, context, item) and not _long_run(text, item):
+                sev, note = "low", " (inside strings in a bundled file)"
+            elif is_code and item["count"] < 10 and not _long_run(text, item) and all(
+                    in_string_literal(text, p) for p in item.get("positions", [pos])):
+                # A few inside strings are text-handling constants (strip or split on them); deception is in names
+                sev, note = "low", " (inside string literals)"
             elif is_code and all(in_comment(text, p, path) for p in item.get("positions", [pos])):
                 sev, note = "low", " (in comments)"  # a pasted typo; identifiers are where these deceive
             col.add(R_ZERO_WIDTH, sev, pos, f"{item['count']} zero-width characters{note}", context)
         elif kind == "filler":
-            col.add(R_ZERO_WIDTH, "high" if is_code else "medium", pos, f"{item['count']} Hangul filler characters "
-                    "(invisible identifiers)", context)
+            sev, note = ("high" if is_code else "medium"), ""
+            spots = {"pos": pos, "positions": [m.start() for m in FILLERS.finditer(text)][:200]}
+            if _strings_in_test(text, path, context, spots) or _strings_in_bundle(text, path, context, spots):
+                sev, note = "low", " (inside strings in a test or bundled file)"
+            col.add(R_ZERO_WIDTH, sev, pos, f"{item['count']} Hangul filler characters (invisible identifiers){note}",
+                    context)
     if "\x1b" in text:
         hides = list(TERMINAL_HIDE.finditer(text))
         if hides:
@@ -878,8 +1040,11 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
                 sev, note = "low", " (inside a string literal in a test file)"
             col.add(R_PAD_SPACES, sev, item["pos"], f"code after {item['count']:,} spaces{note}", context)
     minified = bool(re.search(r"(?:\.min\.|[\\/](?:dist|build|vendor|umd|bundles?)[\\/])", path, re.I))
+    data_file = path.lower().endswith((".map", ".json", ".geojson", ".ndjson", ".jsonl", ".csv", ".tsv", ".svg"))
     for pos, length in long_lines(text, 5000):
-        if length >= 1_000_000:
+        if data_file and context != "autoexec":
+            sev = "low"  # source maps, JSON and tables are data: one long line is how they are written
+        elif length >= 1_000_000:
             sev = "high" if context == "autoexec" else "medium"
         elif length >= 100_000 and not minified:
             sev = "medium" if context == "autoexec" else "low"

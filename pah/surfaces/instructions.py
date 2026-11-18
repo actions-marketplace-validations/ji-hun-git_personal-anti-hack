@@ -8,7 +8,7 @@ import posixpath
 import re
 
 from ..content_rules import R_AGENT_CFG_WRITE, R_DOWNLOAD_EXEC
-from ..hosts import host_kind
+from ..hosts import classify_host, host_kind, host_of
 from ..model import bump, rank
 from ..names import R_LOOKALIKE, lookalike, lookalike_severity, names_in_command, normalize, popular
 from ..patterns import HOST_NOTE, analyze_command
@@ -70,6 +70,9 @@ IMPERATIVES = [
      "tells the agent to read or send credentials"),
     (re.compile(r"\b(?:extract|unzip|unpack)\b[^\n]{0,80}\b(?:and|then)\s+(?:run|execute|launch|source)\b", re.I), "medium",
      "tells the agent to unpack something and run it"),
+    (re.compile(r"\b(?:run|execute|eval(?:uate)?)\b[^.\n]{0,80}\bwithout\s+(?:any\s+)?(?:verification|verifying|checking|"
+                r"review(?:ing)?|reading\s+it|inspect(?:ing|ion)|validation|validating)\b", re.I), "high",
+     "tells the agent to run code without checking it"),
     # ClawHavoc's skills sent people to password-protected archives: antivirus cannot look inside them.
     (re.compile(r"\.(?:zip|7z|rar)\b[^\n]{0,200}?\b(?:password|passcode)\s*(?:is\s*)?[:=]?\s*[`\"'*]*[\w!@#$%^&-]{3,}"
                 r"|\b(?:password|passcode)\s*(?:is|:|=)\s*[`\"'*]*[\w!@#$%^&-]{3,}[^\n]{0,200}?\.(?:zip|7z|rar)\b", re.I),
@@ -77,7 +80,18 @@ IMPERATIVES = [
 ]
 
 
+# ClawHavoc's skills (Jan to Feb 2026) opened with a prerequisite: a helper to download and install from a link before
+# the skill would work. The helper was the infostealer. Vendors' own sites and package registries are not reported.
+PREREQUISITE = re.compile(
+    r"\b(?:must\s+(?:first\s+)?(?:be\s+)?install(?:ed)?|requires?\s+(?:you\s+to\s+)?(?:first\s+)?install(?:ing)?|"
+    r"install\s+(?:it\s+|this\s+)?(?:first|before)|before\s+using\s+this\s+skill|prerequisites?\s*[:*])"
+    r"[\s\S]{0,300}?\b(?:download|install|get)\b[^\n]{0,120}?https?://[^\s)\]>\"'`]+", re.I)
+
+
 _FENCE = re.compile(r"(?ms)^[ \t]*(```|~~~)[ \t]*([\w+-]*)[^\n]*\n(.*?)^[ \t]*\1")
+# Commands run from code in a Python or JavaScript block: `os.system("curl ... | sh")` is a shell command too.
+_CODE_COMMAND = re.compile(r"(?:\bos\.system|\bos\.popen|\bsubprocess\.(?:run|call|Popen|check_output|check_call)|"
+                           r"\bexecSync|\bexec)\s*\(\s*[fr]?(['\"`])([^'\"`\n]{4,300})\1")
 
 
 _INLINE = re.compile(r"`([^`\n]{4,300})`")
@@ -96,6 +110,11 @@ def commands_in_markdown(text: str) -> list[tuple[int, str]]:
     out = []
     for m in _FENCE.finditer(text):
         lang = m.group(2).lower()
+        if lang in ("python", "py", "python3", "javascript", "js", "node", "ts", "typescript"):
+            start = text.count("\n", 0, m.start(3)) + 1
+            for c in _CODE_COMMAND.finditer(m.group(3)):
+                out.append((start + m.group(3).count("\n", 0, c.start()), c.group(2).strip()))
+            continue
         if lang and lang not in ("sh", "bash", "shell", "zsh", "console", "terminal", "powershell", "ps1", "pwsh", "cmd",
                                  "bat", "shellsession", "text", "txt"):
             continue
@@ -189,6 +208,14 @@ def instructions(state: State, f: File, auto_loaded: bool) -> None:
             state.add(R_INSTRUCTION, sev if auto_loaded else "low", f.rel, lines.line(m.start()),
                       message + ("" if auto_loaded else " (setup document)"), text[max(0, m.start() - 60):m.end() + 80], "doc")
             break
+    for m in PREREQUISITE.finditer(text) if auto_loaded else ():
+        link = re.search(r"https?://[^\s)\]>\"'`]+", m.group())
+        kind = classify_host(link.group()) if link else "unknown"
+        if kind in ("official", "reference") or _negated(text, m.start()) or _quoted_example(text, m.start(), m.end()):
+            continue
+        state.add(R_INSTRUCTION, "high", f.rel, lines.line(m.start()), "makes installing a program from a link a "
+                  f"condition of using it ({host_of(link.group()) if link else 'a link'})", m.group()[:240], "doc")
+        break
     if f.name.upper() == "SKILL.MD" or re.search(r"(?:^|/)(?:\.claude/)?commands/[^/]+\.md$", f.rel):
         skill_shell(state, f)
     if f.name.upper() == "SKILL.MD":

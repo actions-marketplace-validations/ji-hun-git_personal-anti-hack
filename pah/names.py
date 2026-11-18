@@ -98,8 +98,9 @@ def lookalike_severity(how: str, where: str) -> str:
     """where: manifest (a declared dependency), command (an install an agent or hook runs), auto-doc (instructions
     agents load on their own) or doc (a README)."""
     strong = how.startswith(STRONG)
+    # A README a person reads is "low": the guard checks the name again when an agent actually runs the install.
     return {"manifest": ("medium", "low"), "command": ("high", "medium"), "auto-doc": ("high", "medium"),
-            "doc": ("medium", "low")}[where][0 if strong else 1]
+            "doc": ("low", "low")}[where][0 if strong else 1]
 
 
 def lookalike(name: str, ecosystem: str) -> tuple[str, str] | None:
@@ -107,7 +108,7 @@ def lookalike(name: str, ecosystem: str) -> tuple[str, str] | None:
     targets = popular(ecosystem)
     if not targets:
         return None
-    norm = normalize(name, ecosystem)
+    norm = normalize(name.rstrip(".,;:/)]}'\"`"), ecosystem)  # 'pipx.' at the end of a sentence is pipx
     if not norm or norm in known(ecosystem) or len(norm) < 4:
         return None
     scope, _, bare = norm.rpartition("/") if norm.startswith("@") else ("", "", norm)

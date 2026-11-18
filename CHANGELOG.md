@@ -28,8 +28,52 @@ Written against half of the commands and measured on the other half, it lifted b
 single-step checks for an agent's commands: deleting or silencing logs (PAH-C030, denied), recursive or bulk deletion
 outside the project folder (asked), a program downloaded and made executable (asked; denied over plain HTTP, from a
 bare IP or a look-alike host), and a file with a secret-looking name uploaded anywhere (denied). TrapRepo, the fuzzer,
-both drills and the 30 popular repositories give the same verdicts as before. Still open: a recursive search for
-tokens in a configuration folder is not yet treated as hunting for credentials.
+both drills and the 30 popular repositories give the same verdicts as before.
+
+**What the held-out test taught.** Round one's false alarms and misses, studied only on samples that round two will
+not measure, led to the fixes below. Round two is a fresh draw committed before its download (f36ee66); until it
+runs, these fixes are not measured. It judges every sample with both these rules and round one's
+(`bench/independent.py run --baseline 71e982b`), and `bench/stats.py` tests the difference set by set with an exact
+McNemar test, Holm-adjusted, an analysis fixed before the download.
+
+*False alarms.* A message wrapped with `+` for line length is not obfuscation when the URL or name in it is written
+out whole elsewhere in the file; escapes, character codes and ROT13 count however often the name is spelled out.
+Zero-width joiners between letters of scripts that need them (Persian, Indic, Sinhala, Lao, Mongolian) are not hidden
+text. Invisible characters inside string literals are reported low when there are only a few, or when they sit in
+bundled files or test data, unless eight or more zero-width characters run together and spell out data. A `.pth` file or
+`sitecustomize.py` inside a folder does not run at startup, and a `.pth` that imports the package's own module is
+judged by that module, which is how editable installs work. Reported low or not at all: native extensions (`.pyd`)
+and binaries in wheels or in npm packages built for named platforms, bytecode cached in `__pycache__` without its
+source (except in a skill, which can tell the agent to run it), submodule pointers inside the tree, install commands
+in a README, development dependencies, git dependencies pinned to a commit, long lines in data files such as source
+maps, `marshal` used to store data, near-identical names among a package's own dependencies (types-boto3-rds and
+types-boto3-drs), and the documentation domains (example.com).
+
+*Misses.* Decoded code run through a renamed module (`import base64 as b`), a decryptor or a helper function, or
+decoded into a variable that runs later; the machine's name or user sent out while installing, in a URL or a DNS
+lookup; a download written, made executable and run from Python; a package that publishes itself (PAH-C031, how the
+IndonesianFoods worm spread); an attack tool fetched at install (PAH-C032). In an entry file, the code that runs as
+soon as a package is loaded (npm `main`, an editor extension activated at startup, a top-level `__init__.py`), a
+capture or tunnel endpoint and details of the machine sent out now count as high, since nothing has to call them, and
+so does a program that such an editor extension downloads and runs. Skills that require a program downloaded from a
+link, run commands from a Python or JavaScript block, or tell the agent to run code without checking it are caught.
+
+*The guard* denies a recursive search for passwords, tokens or keys in credential folders (`grep -r token ~/.config`,
+`find ~ -name '*.pem'`); the same searches inside the project still run. ViKernel's dev split now scores 100.0 (103
+of 103 risky commands stopped, 119 of 119 harmless ones let through; `bench/results/2026-11-19-tuned-shellgate.json`),
+a tuned figure, since every command in it had been read; the held-out 93.8 above is the measurement.
+
+*On the samples they were written against* (tuning data, not a measurement), the rules now catch 395 of round one's
+500 npm packages published to attack (round one: 280), 373 of 500 PyPI ones (332), 52 of the 102 agent skills studied
+(37), 16 of the 51 IDE extensions studied (13), 85 of 100 hijacked npm releases (88) and 7 of the 8 hijacked PyPI
+releases studied (7), and they flag 43 of the 1,000 popular packages (109) and block 13 (33). 93 of the 115 new npm
+catches are spam packages that publish copies of themselves, 68 of them named the IndonesianFoods way (an Indonesian
+name, a food and a number); without PAH-C031 the npm rate would be 302 of 500. The four catches lost were
+coincidences: three hijacked @mastra releases carry their payload in an added dependency named to pass for dayjs
+(easy-day-js), which a scan of the package itself cannot see, and round one flagged them only for long lines in their
+source maps; a copy of Microsoft's React Native Tools under another publisher was flagged only for invisible
+characters in strings and a look-alike name in its README. TrapRepo, the fuzzer, both drills and the 30 popular
+repositories give the same verdicts as before.
 
 ## 0.5.1 (2026-11-17)
 

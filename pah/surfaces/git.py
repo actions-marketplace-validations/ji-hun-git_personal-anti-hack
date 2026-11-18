@@ -66,4 +66,10 @@ def git_hook(state: State, f: File) -> None:
 
 def git_indirection(state: State, f: File) -> None:
     target = (f.text or "").strip().removeprefix("gitdir:").strip()
+    inside = posixpath.normpath(posixpath.join(posixpath.dirname(f.rel), target.replace("\\", "/")))
+    if (not target.startswith(("/", "\\")) and not re.match(r"[A-Za-z]:", target) and not inside.startswith("..")
+            and re.match(r"(?:\.git/modules|\.git/worktrees)/", inside)):
+        # A submodule checkout: its .git file points at the parent repository's .git/modules, inside the tree.
+        state.add(R_WORKTREE, "low", f.rel, 1, f"submodule pointer to {target}, inside the repository", target)
+        return
     state.add(R_WORKTREE, "high", f.rel, 1, f"{f.name} points to {target}", target)
