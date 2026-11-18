@@ -52,11 +52,15 @@ dots. Large standalone numbers use proportional figures.
   nothing else is.
 - **Charts follow the dataviz method:** tall segmented bars for a whole split into parts, labels inside a part only
   when they fit, a legend for every chart with more than one series, hairline rules, no dashed lines.
+- **Uncertainty is drawn, not left out.** A rate measured on a sample is a dot with a line across its exact 95%
+  interval (a forest plot, as in clinical and machine-learning papers), with the estimate and interval written beside
+  it as "91.2% (88.4–93.5)". Sets that were not held out are drawn in the secondary ink and grouped apart. A second
+  estimate on the same cases sits just below the first with its own interval, never on top of it.
 - **Readable when GitHub shrinks it.** Figures are 960 pixels wide; text that matters is 15 pixels or more.
 
 ## Regenerating
 
 ```
 python scripts/make_figures.py                 # every figure into docs/figures/
-python scripts/make_figures.py --only hero     # one of: hero how chain results scan repos social icon
+python scripts/make_figures.py --only hero     # one of: hero how chain results scan repos intervals social icon
 ```

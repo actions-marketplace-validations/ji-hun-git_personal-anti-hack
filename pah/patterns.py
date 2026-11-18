@@ -20,7 +20,7 @@ from .codectx import (REGEX_LIKE, after_trailing_comment, data_string, enclosing
 from .collector import Collector
 from .content_rules import (R_AGENT_BYPASS, R_AGENT_CFG_WRITE, R_AI_ADDRESSED, R_BIDI, R_CONDITIONAL, R_DECODE_EXEC,
                             R_DESTRUCTIVE, R_DISGUISED_RUN, R_DOWNLOAD_EXEC, R_ENV_DUMP, R_EXFIL, R_EXFIL_HOST,
-                            R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_INLINE_NET, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
+                            R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_INLINE_NET, R_LOG_WIPE, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
                             R_OBFUSCATED, R_PAD_LINES, R_PAD_SPACES, R_PERSIST, R_QUARANTINE, R_REGISTRY,
                             R_REVERSE_SHELL, R_SECRETS, R_SELECTORS, R_TAGS, R_TERMINAL, R_URL_INSTALL, R_ZERO_WIDTH)
 from .deobfuscate import DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive
@@ -158,6 +158,19 @@ COMMAND_PATTERNS = [
        r"\bRemove-Item\b[^\n]{0,100}-Recurse[^\n]{0,100}(?:\$env:USERPROFILE|[A-Z]:\\\s|~[\\/]?\s)|"
        r"\bdd\s+if=/dev/(?:zero|u?random)\s+of=/dev/[sh]d",
        S("critical", "high", "medium", "high"), "deletes a home directory, drive or disk"),
+    _p(R_LOG_WIPE, r"\b(?:rm|unlink|shred|truncate|srm|wipe)\b[^\n;&|]{0,200}?(?:/var/log(?:/|\b)|\baudit\.log\b|"
+       r"\.(?:ba|z)sh_history\b|\b(?:wtmp|btmp|lastlog|utmp)\b|/journal/|\bauth\.log\b|\bsyslog\b|ConsoleHost_history)"
+       r"|(?:^|[;&|]\s*|\s)(?::\s*)?>\s*['\"]?[^\s'\"]*(?:/var/log/[^\s'\"]+|audit\.log|\.(?:ba|z)sh_history)"
+       r"|\bhistory\s+-c\b|\bunset\s+HISTFILE\b|\bHISTFILE=/dev/null\b|\bexport\s+HISTSIZE=0\b|\bset\s+\+o\s+history\b"
+       r"|\bauditctl\s+-(?:D\b|e\s*0\b)|\b(?:systemctl|service)\s+(?:stop|disable|mask)\s+(?:auditd|rsyslog|syslog|"
+       r"systemd-journald|journald)\b|\bservice\s+(?:auditd|rsyslog|syslog)\s+stop\b|\bwevtutil(?:\.exe)?\s+cl\b"
+       r"|\bClear-EventLog\b", S("high", "low", "low", "high"), "deletes or silences logs"),
+    # Staging a program to run: fetch it to a file, then mark that same file executable (the privilege-escalation
+    # toolkits linpeas, les.sh and pspy arrive this way).
+    _p(R_DOWNLOAD_EXEC, rf"\b{FETCH}\b[^\n;&|]{{0,300}}?(?:\s(?:-[a-zA-Z]*[oO]|--output|--output-document)[= ]?\s*|\s>\s*)"
+       r"['\"]?([^\s'\";&|>]+)['\"]?[^\n]{0,200}?(?:&&|;|\n)\s*(?:sudo\s+)?chmod\s+(?:-\S+\s+)*"
+       r"(?:[ugoa]*\+[rwX]*x[rwX]*|[0-7]*[1357][0-7]*)\s+['\"]?\1(?![\w./-])",
+       S("medium", "low", "low", "medium"), "downloads a program and makes it executable"),
     # curl's flags are case-sensitive: -f is --fail, -F is --form; -d is data, -D dumps headers; -T uploads, -t is telnet.
     _p(R_EXFIL, r"\b(?:curl|wget)(?:\.exe)?\b[^\n|;&]{0,300}?(?-i:\s(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form|-T|"
        r"--upload-file|--post-data|--post-file)\b|\s-X\s*POST\b)[^\n|;&]{0,300}https?://"
@@ -203,6 +216,8 @@ _NEEDS = {
     "sends data to a remote host": ("curl", "wget", "invoke-"), "installs from a URL or git": ("npm", "pnpm", "yarn", "bun", "pip", "npx"),
     "runs a font, image or media file with an interpreter": ("node", "bun", "deno", "py", "ruby", "perl", "php", "sh",
                                                              "pwsh", "powershell", "wscript", "cscript"),
+    "deletes or silences logs": ("log", "hist", "audit", "tmp", "journal", "wevtutil"),
+    "downloads a program and makes it executable": ("chmod",),
 }
 
 
@@ -423,6 +438,12 @@ def _apply(patterns, col: Collector, text: str, context: str, low: str | None = 
             if pat.rule == R_DOWNLOAD_EXEC:  # the risk depends on where the script comes from
                 kind = host_kind(line_window(text, m.start(), m.end()))
                 severity = DOWNLOAD_SEVERITY["doc" if (sev == "doc" or commented) else ctx][kind]
+                if pat.message == "downloads a program and makes it executable":
+                    if context != "agent":
+                        continue  # files have their own staged-download check (DOWNLOAD_THEN_RUN in scan_text)
+                    # Installing a CLI from its release page is ordinary and worth a confirmation; a program
+                    # fetched over plain HTTP, from a bare IP or a look-alike host is not ordinary.
+                    severity = "high" if kind in ("plain-http", "raw-ip", "lookalike") else sev
                 if pat.message in DECODED_DOWNLOADS and kind != "none" and not commented:
                     severity = max(severity or "low", sev, key=rank)  # decoding first is never an installer's habit
                 message += HOST_NOTE[kind] + (" (in a comment)" if commented else "")
@@ -442,8 +463,10 @@ def _apply(patterns, col: Collector, text: str, context: str, low: str | None = 
             col.add(pat.rule, severity, m.start(), message, context)
 
 
-def analyze_command(command: str, path: str, line: int = 0, context: str = "autoexec", note: str = "") -> list[Finding]:
-    """Rules for a single command line (hook, script, task, agent Bash call)."""
+def analyze_command(command: str, path: str, line: int = 0, context: str = "autoexec", note: str = "",
+                    _depth: int = 0) -> list[Finding]:
+    """Rules for a single command line (hook, script, task, agent Bash call), and for what it really runs once the
+    shell's own disguises are undone (pah.shellfold)."""
     ctx = _sev_context(context)
     low = command.lower()
     col = Collector(path, command, line_offset=max(0, line - 1), note=note, command=True)
@@ -466,8 +489,36 @@ def analyze_command(command: str, path: str, line: int = 0, context: str = "auto
         col.add(R_EXFIL, "critical" if ctx == "autoexec" else "high", 0, "collects the environment and sends it",
                 context)
     for blob in decode_blobs(command):
-        col.items.extend(analyze_command(blob["text"], path, line, context, note=f"decoded {blob['kind']}: "))
+        col.items.extend(analyze_command(blob["text"], path, line, context, note=f"decoded {blob['kind']}: ",
+                                         _depth=_depth + 1))
+    if _depth < 4:
+        _unfolded(col, command, path, line, context, note, _depth)
     return col.items
+
+
+def _unfolded(col: Collector, command: str, path: str, line: int, context: str, note: str, depth: int) -> None:
+    """Judge what the command stands for once quote breaks, $IFS, variables, runners and decoders are undone. For an
+    agent's command, a decode-and-run pipeline whose payload decodes completely to nothing risky is reported, not
+    blocked: the guard has read what the shell would run, which is the point of decoding it."""
+    from .shellfold import unfold
+
+    variants, undecoded = unfold(command)
+    payload_findings: list[Finding] = []
+    decoded = False
+    for text, how, is_payload in variants:
+        found = analyze_command(text, path, line, context, note=f"{note}{how}: ", _depth=depth + 1)
+        col.items.extend(found)
+        if is_payload:
+            decoded = True
+            payload_findings.extend(found)
+    if context != "agent" or not decoded or undecoded:
+        return
+    if any(rank(f.severity) >= rank("medium") for f in payload_findings):
+        return
+    for f in col.items:
+        if f.rule == R_DECODE_EXEC and "pipes decoded data into a shell" in f.message and rank(f.severity) >= rank("medium"):
+            f.severity = "low"
+            f.message += " (it decodes completely to a command with nothing risky in it)"
 
 
 REGISTRY_FLAG = re.compile(

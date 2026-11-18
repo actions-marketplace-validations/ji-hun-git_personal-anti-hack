@@ -7,7 +7,7 @@ in docs/design.md: a case file, where every image shows evidence from bench/resu
 highlighter mark on the line that decided an outcome.
 
     python scripts/make_figures.py                # every figure into docs/figures/
-    python scripts/make_figures.py --only hero    # some of: hero how chain results scan repos social icon
+    python scripts/make_figures.py --only hero    # some of: hero how chain results scan repos intervals social icon
 
 hero      the claim, a recorded agent run that was stopped, and the tested numbers
 how       how the guard decides: four checks in the order a step meets them, and its three answers
@@ -15,6 +15,8 @@ chain     attacks the guard stops only as chains: each step alone, then in one s
 results   malicious repositories caught by the rules and by models reading the repository
 scan      what `pah scan` prints for one TrapRepo case (made by running the scanner)
 repos     the widely used repositories scanned in full for false alarms
+intervals a forest plot: every detection and false-alarm rate with its exact 95% interval (bench/stats.py), the
+          held-out sets of bench/independent.py first
 social    the 1280 x 640 card for the repository's social preview
 icon      the plugin icon, 512 x 512
 
@@ -25,6 +27,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -114,6 +117,38 @@ STR = {
         "scan_cmd": "pah scan ./acme-utils",
         "scan_note": "Trimmed: each high or critical finding also prints why it matters and what to do.",
         "social": "The antivirus for people who use AI agents.",
+        "int_title": "How sure the numbers are",
+        "int_sub": "Each dot is an observed rate and each line its exact 95% confidence interval (Clopper–Pearson). "
+                   "The held-out sets were never used to write or tune the rules.",
+        "int_mal": "Malicious software caught (blocked or warned)",
+        "int_ben": "Benign software flagged (blocked or warned)",
+        "int_held_mal": "Held out: a random draw from Datadog’s dataset of real malicious packages",
+        "int_held_ben": "Held out: a random draw from the 5,000 most-downloaded packages of each registry",
+        "int_ours": "Written or chosen here",
+        "int_sets": {"npm/malicious_intent": "npm packages published to attack",
+                     "pypi/malicious_intent": "PyPI packages published to attack",
+                     "ai-skills/malicious_intent": "Agent skills published to attack",
+                     "ide_extensions/malicious_intent": "IDE extensions published to attack",
+                     "npm/compromised_lib": "Hijacked releases of real npm packages",
+                     "pypi/compromised_lib": "Hijacked releases of real PyPI packages",
+                     "pypi/popular": "Popular PyPI projects", "npm/popular": "Popular npm packages",
+                     "both": "Both registries"},
+        "int_drawn": "{n} of {pop}",
+        "int_all": "all {n}",
+        "int_val": "{k} of {n}",
+        "int_trap": ("TrapRepo test repositories", "{n}, written here; rules fixed until each was caught"),
+        "int_trap_ben": ("TrapRepo benign look-alikes", "{n}, written here"),
+        "int_repos": ("Widely used repositories", "{n}, chosen by hand; {w} warned"),
+        "int_legend": ("All rules", "Campaign checks switched off"),
+        "int_shell": "Shell commands from ViKernel’s benchmark, the half never used to tune the rules",
+        "int_shell_rows": ("Risky commands stopped", "Harmless commands let through"),
+        "int_shell_note": "{n} commands, dev split",
+        "int_shell_legend": ("After the change", "Before, untuned"),
+        "int_foot_shell": "Shell commands: FINAL-Bench/Obfuscated-Shell-Gate (CC-BY-4.0), the public dev split, halved by "
+                          "a fixed seed; bench/shellgate.py.",
+        "int_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so the held-out rates are rates "
+                    "on malware Datadog caught, not on all malware. Sample, protocol and every verdict: "
+                    "bench/independent.py, bench/fixtures/independent-sample.json and bench/results/.",
     },
     "ko": {
         "headline": "AI 에이전트를 쓰는 사람을 위한 백신.",
@@ -178,6 +213,38 @@ STR = {
         "scan_cmd": "pah scan ./acme-utils",
         "scan_note": "줄임: 높음·치명 발견마다 왜 중요한지와 할 일도 출력합니다.",
         "social": "AI 에이전트를 쓰는 사람을 위한 백신.",
+        "int_title": "이 숫자를 얼마나 믿을 수 있나",
+        "int_sub": "점은 관측한 비율, 선은 그 정확한 95% 신뢰구간(Clopper–Pearson)입니다. 독립 세트는 규칙을 만들거나 "
+                   "고치는 데 한 번도 쓰지 않았습니다.",
+        "int_mal": "악성 소프트웨어 탐지(차단 또는 경고)",
+        "int_ben": "정상 소프트웨어 오탐(차단 또는 경고)",
+        "int_held_mal": "독립: Datadog의 실제 악성 패키지 데이터셋에서 무작위 추출",
+        "int_held_ben": "독립: 레지스트리마다 가장 많이 내려받는 패키지 5,000개에서 무작위 추출",
+        "int_ours": "여기서 만들거나 고른 것",
+        "int_sets": {"npm/malicious_intent": "공격용으로 올린 npm 패키지",
+                     "pypi/malicious_intent": "공격용으로 올린 PyPI 패키지",
+                     "ai-skills/malicious_intent": "공격용으로 올린 에이전트 스킬",
+                     "ide_extensions/malicious_intent": "공격용으로 올린 IDE 확장",
+                     "npm/compromised_lib": "탈취된 실제 npm 패키지의 릴리스",
+                     "pypi/compromised_lib": "탈취된 실제 PyPI 패키지의 릴리스",
+                     "pypi/popular": "인기 PyPI 프로젝트", "npm/popular": "인기 npm 패키지",
+                     "both": "두 레지스트리 합계"},
+        "int_drawn": "{pop}개 중 {n}개",
+        "int_all": "{n}개 전부",
+        "int_val": "{n}개 중 {k}개",
+        "int_trap": ("TrapRepo 테스트 레포", "{n}개, 여기서 만듦. 모두 잡을 때까지 규칙을 고침"),
+        "int_trap_ben": ("TrapRepo 정상 레포", "{n}개, 여기서 만듦"),
+        "int_repos": ("널리 쓰이는 레포", "{n}개, 직접 고름. 경고 {w}개"),
+        "int_legend": ("모든 규칙", "캠페인 검사를 끈 경우"),
+        "int_shell": "ViKernel 셸 벤치마크의 명령, 규칙을 고칠 때 보지 않은 절반",
+        "int_shell_rows": ("위험한 명령을 멈춤", "무해한 명령을 통과시킴"),
+        "int_shell_note": "명령 {n}개, dev 분할",
+        "int_shell_legend": ("고친 뒤", "고치기 전"),
+        "int_foot_shell": "셸 명령: FINAL-Bench/Obfuscated-Shell-Gate(CC-BY-4.0) 공개 dev 분할을 고정 시드로 반으로 나눔. "
+                          "bench/shellgate.py.",
+        "int_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, 독립 세트의 비율은 모든 악성 코드가 아니라 "
+                    "Datadog이 잡은 악성 코드에서의 비율입니다. 표본, 절차와 모든 판정: bench/independent.py, "
+                    "bench/fixtures/independent-sample.json, bench/results/.",
     },
 }
 
@@ -591,6 +658,163 @@ def results(lang: str, theme: str) -> str:
     return page(theme, body, RESULTS_CSS, lang=lang)
 
 
+INTERVALS_CSS = """
+.panel{margin-top:26px}
+.panel h3{font-size:19px;line-height:1.3}
+.fp{display:grid;grid-template-columns:300px 1fr 168px;column-gap:16px;margin-top:6px}
+.grp{grid-column:1/-1;font-size:14px;font-weight:700;color:var(--muted);padding:14px 0 7px;border-bottom:1px solid var(--line)}
+.lab{padding:9px 0;font-size:15.5px;line-height:1.25}
+.lab span{display:block;font-size:13.5px;color:var(--muted);margin-top:2px}
+.plot{position:relative}
+.gl{position:absolute;top:0;bottom:0;width:1px;margin-left:-0.5px;background:var(--line)}
+.ci{position:absolute;top:50%;height:2px;margin-top:-1px}
+.cap{position:absolute;top:50%;width:2px;height:12px;margin:-6px 0 0 -1px}
+.pt{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--surface)}
+.ring{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  border:2px solid var(--ink);background:var(--surface)}
+.val{padding:9px 0;font-size:15.5px;line-height:1.25;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.val i{font-style:normal;color:var(--muted)}
+.val span{display:block;font-size:13.5px;color:var(--muted);margin-top:2px}
+.axis{grid-column:2;position:relative;height:26px;border-top:1px solid var(--muted)}
+.tk{position:absolute;top:6px;transform:translateX(-50%);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:22px;margin-top:12px;font-size:14px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend .pt,.legend .ring{position:static;margin:0;display:inline-block;box-shadow:none}
+.legend .pt{background:var(--ink)}
+"""
+
+_STATS: dict = {}
+
+
+def stats_summary() -> dict:
+    """The statistics of docs/statistics.md, computed the same way (bench/stats.py)."""
+    if not _STATS:
+        sys.path.insert(0, str(ROOT / "bench"))
+        import stats  # noqa: PLC0415
+
+        _STATS.update(stats.analyse())
+    return _STATS
+
+
+def _pc(x: float) -> str:
+    return "0" if x <= 0 else "100" if x >= 1 else f"{100 * x:.1f}"
+
+
+def _step(span: float) -> float:
+    return next(s for s in (0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25) if span / s <= 8)
+
+
+def _ticks(lo: float, hi: float) -> list[float]:
+    step = _step(hi - lo)
+    first = math.ceil(lo / step - 1e-9) * step  # never a tick outside the axis
+    return [round(first + i * step, 6) for i in range(int((hi - first) / step + 1e-9) + 1)]
+
+
+def _floor_to_tick(lo: float, hi: float) -> float:
+    """The axis starts on a tick, so its first label sits at its left end."""
+    step = _step(hi - lo)
+    return max(0.0, math.floor(lo / step + 1e-9) * step)
+
+
+def forest(rows: list[dict], dom: tuple[float, float], lang: str) -> str:
+    """A forest plot: one row per estimate, a dot at the observed rate, a line across its 95% interval."""
+    s = STR[lang]
+    ticks = _ticks(*dom)
+
+    def pos(x: float) -> float:
+        return max(0.0, min(100.0, (x - dom[0]) / (dom[1] - dom[0]) * 100))
+
+    def interval(lo: float, hi: float, tone: str, y: str) -> str:
+        return (f'<div class="ci" style="left:{pos(lo):.3f}%;width:{pos(hi) - pos(lo):.3f}%;top:{y};background:{tone}">'
+                f'</div><div class="cap" style="left:{pos(lo):.3f}%;top:{y};background:{tone}"></div>'
+                f'<div class="cap" style="left:{pos(hi):.3f}%;top:{y};background:{tone}"></div>')
+
+    grid = "".join(f'<div class="gl" style="left:{pos(t):.3f}%"></div>' for t in ticks)
+    out = []
+    for r in rows:
+        if "group" in r:
+            out.append(f'<div class="grp">{e(r["group"])}</div>')
+            continue
+        tone = "var(--ink)" if r.get("held", True) else "var(--muted)"
+        k, n = r["rate"]["k"], r["rate"]["n"]
+        lo, hi = r["rate"]["ci95"]
+        x = k / n
+        alt = r.get("ring")
+        dodge = alt is not None and alt["k"] != k  # a second estimate on the same cases, set just below the first
+        y = "calc(50% - 7px)" if dodge else "50%"
+        marks = interval(lo, hi, tone, y)
+        if dodge:
+            marks += interval(*alt["ci95"], "var(--muted)", "calc(50% + 7px)")
+            marks += f'<div class="ring" style="left:{pos(alt["k"] / alt["n"]):.3f}%;top:calc(50% + 7px)"></div>'
+        marks += f'<div class="pt" style="left:{pos(x):.3f}%;top:{y};background:{tone}"></div>'
+        out.append(f'<div class="lab">{e(r["label"])}<span>{e(r["note"])}</span></div>'
+                   f'<div class="plot">{grid}{marks}</div>'
+                   f'<div class="val"><b>{_pc(x)}%</b> <i>({_pc(lo)}–{_pc(hi)})</i>'
+                   f'<span>{e(s["int_val"].format(k=f"{k:,}", n=f"{n:,}"))}</span></div>')
+    axis = "".join(f'<div class="tk" style="left:{pos(t):.3f}%">{100 * t:.10g}%</div>' for t in ticks)
+    return f'<div class="fp">{"".join(out)}<div class="axis">{axis}</div></div>'
+
+
+def intervals(lang: str, theme: str, st: dict | None = None) -> str:
+    s, st = STR[lang], st or stats_summary()
+    ind, t = st.get("independent"), st["traprepo"]
+    mal, ben = [], []
+    if ind:
+        mal.append({"group": s["int_held_mal"]})
+        ben.append({"group": s["int_held_ben"]})
+        for key, v in ind["sets"].items():
+            drawn, pop = v["drawn"], v.get("population") or v["drawn"]
+            note = s["int_all"].format(n=f"{pop:,}") if drawn >= pop else s["int_drawn"].format(n=f"{drawn:,}",
+                                                                                               pop=f"{pop:,}")
+            row = {"label": s["int_sets"].get(key, key), "note": note, "rate": v["flagged"]}
+            if v["kind"] == "malicious":
+                row["ring"] = v["flagged_general_rules"]
+                mal.append(row)
+            else:
+                ben.append(row)
+        both = ind["benign_all"]["flagged"]
+        ben.append({"label": s["int_sets"]["both"], "note": f'{both["n"]:,}', "rate": both})
+    mal += [{"group": s["int_ours"]},
+            {"label": s["int_trap"][0], "note": s["int_trap"][1].format(n=t["malicious_flagged"]["n"]),
+             "rate": t["malicious_flagged"], "held": False}]
+    rr = st["real_repos"]
+    ben += [{"group": s["int_ours"]},
+            {"label": s["int_trap_ben"][0], "note": s["int_trap_ben"][1].format(n=t["benign_flagged"]["n"]),
+             "rate": t["benign_flagged"], "held": False},
+            {"label": s["int_repos"][0], "note": s["int_repos"][1].format(n=rr["flagged"]["n"], w=rr["warned"]["k"]),
+             "rate": rr["flagged"], "held": False}]
+    est = [r for r in mal if "rate" in r]
+    low = min(min(r["rate"]["ci95"][0] for r in est), min((r.get("ring") or r["rate"])["ci95"][0] for r in est))
+    mal_dom = (min(0.9, _floor_to_tick(low, 1.0)), 1.0)
+    high = max(r["rate"]["ci95"][1] for r in ben if "rate" in r)
+    ben_dom = (0.0, next(c for c in (0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0) if c >= high))
+    rings = any(r.get("ring") is not None and r["ring"]["k"] != r["rate"]["k"] for r in est)
+
+    def legend(labels: tuple[str, str]) -> str:
+        return (f'<div class="legend"><span><i class="pt"></i>{e(labels[0])}</span>'
+                f'<span><i class="ring"></i>{e(labels[1])}</span></div>')
+
+    shell = ""
+    sg = st.get("shellgate")
+    if sg:
+        after, before = sg["after"]["halves"]["test"], sg["before"]["halves"]["test"]
+        n = sg["paired"]["test"]["n"]
+        rows = [{"label": s["int_shell_rows"][0], "note": s["int_shell_note"].format(n=after["risky_recall"]["n"]),
+                 "rate": after["risky_recall"], "ring": before["risky_recall"]},
+                {"label": s["int_shell_rows"][1], "note": s["int_shell_note"].format(n=after["benign_pass"]["n"]),
+                 "rate": after["benign_pass"], "ring": before["benign_pass"]}]
+        low_s = min(min(r["rate"]["ci95"][0], r["ring"]["ci95"][0]) for r in rows)
+        shell = (f'<div class="panel"><h3>{e(s["int_shell"])}</h3>{legend(s["int_shell_legend"])}'
+                 f'{forest(rows, (min(0.9, _floor_to_tick(low_s, 1.0)), 1.0), lang)}</div>') if n else ""
+    body = (f'<div class="fig"><h2>{e(s["int_title"])}</h2><p class="sub">{e(s["int_sub"])}</p>'
+            f'<div class="panel"><h3>{e(s["int_mal"])}</h3>{legend(s["int_legend"]) if rings else ""}'
+            f'{forest(mal, mal_dom, lang)}</div>'
+            f'<div class="panel"><h3>{e(s["int_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>{shell}'
+            f'<p class="foot">{e(s["int_foot"] + (" " + s["int_foot_shell"] if shell else ""))}</p></div>')
+    return page(theme, body, INTERVALS_CSS, lang=lang)
+
+
 SCAN_CSS = """
 .term{border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
 .term-head{font-size:14px;padding:11px 18px;border-bottom:1px solid var(--line)}
@@ -771,7 +995,7 @@ def render(doc: str, dest: Path, width: int, height: int | None = None, transpar
         subprocess.run(args + [src.as_uri()], check=True, capture_output=True, timeout=180)
 
 
-FIGURES = ("hero", "how", "chain", "results", "scan", "repos")
+FIGURES = ("hero", "how", "chain", "results", "scan", "repos", "intervals")
 
 
 def main(argv: list[str]) -> int:
@@ -784,7 +1008,8 @@ def main(argv: list[str]) -> int:
             for name in FIGURES:
                 if only and name not in only:
                     continue
-                doc = {"hero": hero, "how": how, "chain": chain, "results": results, "repos": repos}.get(name)
+                doc = {"hero": hero, "how": how, "chain": chain, "results": results, "repos": repos,
+                       "intervals": intervals}.get(name)
                 doc = doc(lang, theme) if doc else scan(lang, theme, raw)
                 dest = OUT / f"{name}-{lang}-{theme}.png"
                 render(doc, dest, WIDTH)

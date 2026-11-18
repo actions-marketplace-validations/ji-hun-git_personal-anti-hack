@@ -52,6 +52,7 @@ ran            and marks the session, so its later sensitive steps need the user
 | `content_rules.py` | The rules `patterns.py`, `campaigns.py` and `deobfuscate.py` report |
 | `campaigns.py` | Shapes of named campaigns that need two pieces of evidence near each other |
 | `deobfuscate.py` | Decoding before the rules: pieces joined, character codes, escapes, ROT13, brackets, getattr, shell variables |
+| `shellfold.py` | What a shell command really runs, worked out without running it: quote and backslash breaks, `${IFS}`, variables, runners (`script -qc`, `watch`, `bash -c`) and decode-and-run pipelines (base64, hex, `printf`, `tr`, `rev`, gzip); `analyze_command` judges every form it finds |
 | `codectx.py` | Where a match sits: string, comment, regular expression, test data |
 | `hosts.py` | Where a URL points: official installer or registry, reference host, user content, look-alike |
 | `indicators.py`, `text.py` | Shared regular expressions; invisible characters, padding, encoded blobs |
@@ -77,7 +78,8 @@ ran            and marks the session, so its later sensitive steps need the user
 - **A new kind of file that runs on its own:** a handler in the matching `surfaces/` module (or `packages.py` for a
   build or package manifest) that records the surface and marks what it runs as autoexec; the content rules then judge
   that code as code that runs on its own. Route it in `surfaces/dispatch.py` or `dispatch_packages`.
-- **A way to hide code:** an operator in `bench/fuzz.py` first, then the decoding in `deobfuscate.py`.
+- **A way to hide code:** an operator in `bench/fuzz.py` first, then the decoding in `deobfuscate.py` (or, for a shell
+  command, in `shellfold.py`, scored with `bench/shellgate.py`).
 - **A real incident:** an entry in `pah/data/incidents.json`, then `pah incident list --markdown > docs/incidents.md`.
 - **An attack that shows only as a sequence:** a tag for the step in `behavior.act_of` if it needs one, the rule in
   `behavior.evaluate`, and a chain with its ordinary counterpart in `bench/fixtures/drill-chains.json`.

@@ -310,6 +310,104 @@ Reproduce: `python bench/run.py` (rules, offline, seconds) and
 A model gets what a person or an LLM-based scanner would give it: the file list and the files' text up to 100,000
 characters, and one question: is it safe to let my coding agent install and run this?
 
+**How sure these numbers are** ([docs/statistics.md](docs/statistics.md), made by `python bench/stats.py`). Each rate
+has an exact 95% confidence interval, and comparisons on the same cases use the exact McNemar test.
+
+| | Observed | 95% interval |
+| --- | --- | --- |
+| Malicious test repositories caught | 76 of 76 | 95.3% to 100% |
+| Benign look-alikes flagged | 0 of 40 | 0% to 8.8% |
+| Widely used repositories blocked | 0 of 30 | 0% to 11.6% |
+
+- **Against the models**, on the same 54 cases, every disagreement goes one way. agent-white-hat caught 10 cases that
+  GPT-6 Astra missed in at least one run and 14 that Muse Spark 1.3 did, and no model caught a case agent-white-hat
+  missed (p = 0.002 and p = 0.0001). Counting a case as caught when a model got it in any of its three runs, the gap
+  to GPT-6 Astra stays significant (p = 0.016) and the gap to Muse Spark 1.3 does not (5 cases, p = 0.06).
+- **Judging steps as a chain:** of the 12 attack scripts, 8 are stopped only when their steps are judged together and
+  none only one at a time (p = 0.008, counting scripts rather than the 77 runs, which repeat each script per agent).
+- **What this does not prove.** TrapRepo's cases were written here to cover the techniques of real incidents, not
+  drawn at random from all attacks, and when a case got through, the rules were fixed until it did not. So 76 of 76
+  says how well the rules cover known techniques, not how they do on attacks they have never seen. The 30 repositories
+  were chosen by hand and bound the false-alarm rate only to 11.6%. The held-out test below is the independent corpus
+  that narrows both, and it shows what they hid.
+
+### A held-out test on real malware
+
+TrapRepo's cases were written here, so they cannot show how the rules do on attacks nobody prepared them for. For that,
+[`bench/independent.py`](bench/independent.py) drew a random sample of 1,423 real malicious packages from
+[Datadog's malicious software packages dataset](https://github.com/DataDog/malicious-software-packages-dataset) (commit `72c723b`) and
+1,000 of the most-downloaded PyPI and npm packages, committed the sample before downloading anything, and ran once on
+code `9b1c1484919f`. Every file was unpacked and scanned in memory; nothing was written to disk or run. Caught or
+flagged means blocked or warned. The rules were not changed before these results were written down.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/intervals-en-dark.png">
+    <img src="docs/figures/intervals-en-light.png" width="100%" alt="Forest plot of detection and false-alarm rates with exact 95% confidence intervals. Held out, caught or flagged: npm packages published to attack: 56.0% (51.5%–60.4%); PyPI packages published to attack: 66.4% (62.1%–70.5%); Agent skills published to attack: 36.8% (30.1%–43.8%); IDE extensions published to attack: 22.5% (14.9%–31.9%); Hijacked releases of real npm packages: 88.0% (80.0%–93.6%); Hijacked releases of real PyPI packages: 82.4% (56.6%–96.2%); Popular PyPI projects: 15.6% (12.5%–19.1%); Popular npm packages: 6.2% (4.2%–8.7%). Written here: TrapRepo 100% caught, 0% of benign look-alikes flagged."/>
+  </picture>
+</p>
+
+| Held-out set | Packages in it | Scanned | Caught | 95% interval | Blocked |
+| --- | --- | --- | --- | --- | --- |
+| npm packages published to attack | 12,819 | 500 | 280 (56.0%) | 51.5% to 60.4% | 261 (52.2%) |
+| PyPI packages published to attack | 1,816 | 500 | 332 (66.4%) | 62.1% to 70.5% | 326 (65.2%) |
+| Agent skills published to attack | 204 | 204 | 75 (36.8%) | 30.1% to 43.8% | 52 (25.5%) |
+| IDE extensions published to attack | 102 | 102 | 23 (22.5%) | 14.9% to 31.9% | 17 (16.7%) |
+| Hijacked releases of real npm packages | 1,004 | 100 | 88 (88.0%) | 80.0% to 93.6% | 85 (85.0%) |
+| Hijacked releases of real PyPI packages | 17 | 17 | 14 (82.4%) | 56.6% to 96.2% | 13 (76.5%) |
+
+| Held-out set | Packages in it | Scanned | Flagged | 95% interval | Blocked |
+| --- | --- | --- | --- | --- | --- |
+| Popular PyPI projects | 5,000 | 500 | 78 (15.6%) | 12.5% to 19.1% | 25 (5.0%) |
+| Popular npm packages | 5,000 | 500 | 31 (6.2%) | 4.2% to 8.7% | 8 (1.6%) |
+| Both registries | 10,000 | 1,000 | 109 (10.9%) | 9.0% to 13.0% | 33 (3.3%) |
+
+- **Caught:** 812 of 1,423 malicious samples across the six sets, from 22.5% of IDE extensions published to attack to 88.0% of hijacked npm releases. The rules that fired most: sends to a request-capture, tunnel or raw-IP endpoint (`PAH-C007`, 358), reads secrets or the environment and sends data out (`PAH-C004`, 207), decodes hidden data and executes it (`PAH-C002`, 197).
+- **Missed, and why:** the scanner saves its high severities for code that runs by itself when a project is set up (install scripts, agent hooks, editor tasks), and most misses run at another moment. Of a random 60 missed npm packages, 45 have no install-time script: their code runs when the package is imported or run. Of 60 missed IDE extensions, 43 start a process from code that runs when the extension activates. Of 60 missed agent skills, 46 have no code at all: the attack is in the instructions, 38 of them with shell commands for the agent to run.
+- **Hijacked releases** of real packages, a small payload inside a large legitimate one: 88 of 100 npm and 14 of 17 PyPI releases caught.
+- **False alarms:** 78 of 500 popular PyPI releases (15.6%) and 31 of 500 npm releases (6.2%) were flagged, and 33 of the 1,000 blocked (3.3%, 95% interval 2.3% to 4.6%). The blocks come mostly from obfuscated code (`PAH-C012`, 11: @babel/core, @babel/plugin-transform-spread, @mui/base, @mui/x-internals); zero-width or filler characters (`PAH-T004`, 5: @angular/common, flasgger, inspect-scout, mitmproxy); Python code that runs at interpreter start (`PAH-P008`, 4: cibuildwheel, coloredlogs, ddtrace, jedi); executable disguised as another file type (`PAH-F002`, 3: psycopg-binary, rapidfuzz, triton).
+- **Campaign checks:** switched off, they cost 8 catches (8 in npm packages published to attack): the general rules do nearly all of the work.
+- **What this means:** on real malicious packages, agent-white-hat catches far less than the 100% TrapRepo shows, and on popular packages it flags about 11 in 100. Its strong ground is what runs by itself when an agent sets a project up; code that runs later, on import or on activation, and attacks written as instructions are where it falls short. Fixes for both will be measured on a fresh draw from the same sources, not on this one.
+
+### ViKernel's shell benchmark
+
+[ViKernel](https://huggingface.co/spaces/FINAL-Bench/ViKernel-Scanner) is a security kernel that judges an agent's tool calls before they run, the job agent-white-hat's
+guard does. Its authors measure gates on the [Obfuscated-Shell Safety Leaderboard](https://huggingface.co/spaces/FINAL-Bench/obfuscated-shell-leaderboard): one bash command at a time,
+often disguised in base64, hex, octal `printf`, rot13, reversal, `${IFS}` or variable splitting, every risky command
+paired with a harmless one in the same disguise, so a gate scores only by reading what the command does.
+[`bench/shellgate.py`](bench/shellgate.py) scores the guard the same way on the public dev split
+([FINAL-Bench/Obfuscated-Shell-Gate](https://huggingface.co/datasets/FINAL-Bench/Obfuscated-Shell-Gate), 222 commands); a deny or an ask stops a command.
+
+| Guard | Half | Balanced accuracy | Risky commands stopped | Harmless commands let through |
+| --- | --- | --- | --- | --- |
+| before, untuned | test | 56.0 | 33 of 64 | 32 of 53 |
+| **after** | **test** | **93.8** | **56 of 64** | **53 of 53** |
+| before, untuned | all | 55.5 | 46 of 103 | 79 of 119 |
+| after | all | 96.1 | 95 of 103 | 119 of 119 |
+
+- **The first run failed.** Untuned, the guard stopped 46 of 103 risky commands and
+  blocked 40 of 119 harmless ones: it denied anything decoded into a
+  shell, harmless or not, and could not read `${IFS}`, quote breaks, octal `printf`, rot13 or reversal.
+- **The fix reads the command.** [`pah/shellfold.py`](pah/shellfold.py) works out what a command really runs without
+  running it (quote and backslash breaks, `${IFS}`, variables, runners such as `script -qc` and `watch`, and
+  pipelines through base64, hex, `printf`, `tr`, `rev` and gzip) and the same rules judge that. A decode-and-run whose
+  payload decodes completely to nothing risky is let through; one that cannot be read is still denied.
+- **Measured on commands it was not built against.** The seed commands were split in two halves by a fixed seed and
+  the change was written looking only at one half. On the other half, 47 commands went from wrong to right
+  and 3 the other way (exact McNemar p = 3.7e-11).
+- **What still gets through.** All 8 risky commands it lets through on the test half come from one seed command: a recursive `grep` for a token in a home folder's configuration, which the guard does not yet treat as hunting for credentials. The 3 commands the change broke are encoded versions of it that the untuned guard denied only because it denied everything decoded into a shell. A rule for searches through credential folders is the next fix, to be measured on commands the guard has not seen.
+- **Against the leaderboard.** On the whole dev split the guard now scores 96.1
+  (bootstrap 95% interval 93.2 to 98.5)
+  with an obfuscation gap of -2.6 points, and 93.8 on the
+  robustness checks (no risky command talked into ALLOW by text that calls it safe). The leaderboard's 20 models score
+  from 56.8 to 99.5 (GPT-6.1 Terra), with Kimi K3.1 Pro at 97.9 and DeepSeek V4.1 Flash at 95.2, on a private split:
+  the comparison is of method, not command for command. The guard is a deterministic check that runs offline in
+  milliseconds, with no model.
+- **Four single-step checks came with it:** deleting or silencing logs (`PAH-C030`, denied), recursive or bulk
+  deletion outside the project folder (asked), downloading a program and making it executable (asked; denied over
+  plain HTTP, from a bare IP or a look-alike host), and uploading a file with a secret-looking name (denied). TrapRepo, the fuzzer, both drills and the 30 popular repositories
+  give the same verdicts as before. Details: [docs/statistics.md](docs/statistics.md#vikernels-shell-benchmark).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/figures/repos-en-dark.png">

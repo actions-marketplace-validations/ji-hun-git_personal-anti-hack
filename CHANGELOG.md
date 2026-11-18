@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+**A held-out test on real malware.** `bench/independent.py` measures the rules on software they were never tuned
+on: a random draw of 1,423 malicious samples from Datadog's malicious software packages dataset (npm and PyPI packages
+published to attack, agent skills, IDE extensions and hijacked releases of real packages) and the latest release of
+1,000 of the most-downloaded PyPI and npm packages. The sample and protocol were committed before the first download
+(71e982b). Every file was unpacked and scanned in memory, through the new `pah.scan.scan_files`, and nothing was
+written to disk or run. It caught 56% of the npm and 66% of the PyPI packages published to attack, 37% of the agent
+skills, 23% of the IDE extensions, and 88% and 82% of the hijacked npm and PyPI releases; it flagged 10.9% of the
+popular packages and blocked 3.3%. TrapRepo's 76 of 76 measures how well the rules cover the techniques they were
+built against; these numbers measure the rest. Most misses run their code at another moment than setup (on import,
+when an editor extension activates) or attack through a skill's instructions; most blocks of popular packages come
+from the obfuscated-code rule on bundled JavaScript, invisible characters in Unicode test data, `.pth` startup hooks
+and prebuilt binaries. `docs/statistics.md` gives every rate an exact 95% interval and names every flagged package;
+the README's new figure is a forest plot of all of it.
+
+**The guard reads disguised shell commands.** Scored on ViKernel's shell benchmark (FINAL-Bench/Obfuscated-Shell-Gate,
+the public dev split: 222 bash commands, each risky one paired with a harmless one in the same disguise), the guard
+first reached 55.5 balanced accuracy. It denied anything decoded into a shell, harmless or not, and could not read
+`${IFS}`, quote and backslash breaks, octal `printf`, rot13 or reversal. The new `pah/shellfold.py` works out what a
+command really runs without running it (those breaks, variables, runners such as `script -qc`, `watch` and `bash -c`,
+and pipelines through base64, hex, `printf`, `tr`, `rev` and gzip), and the same rules judge that. A decode-and-run
+whose payload decodes completely to nothing risky is reported, not blocked; one that cannot be read is still denied.
+Written against half of the commands and measured on the other half, it lifted balanced accuracy there from 56.0 to
+93.8 (exact McNemar p = 3.7e-11); on the whole set it scores 96.1 and lets every harmless command through. New
+single-step checks for an agent's commands: deleting or silencing logs (PAH-C030, denied), recursive or bulk deletion
+outside the project folder (asked), a program downloaded and made executable (asked; denied over plain HTTP, from a
+bare IP or a look-alike host), and a file with a secret-looking name uploaded anywhere (denied). TrapRepo, the fuzzer,
+both drills and the 30 popular repositories give the same verdicts as before. Still open: a recursive search for
+tokens in a configuration folder is not yet treated as hunting for credentials.
+
 ## 0.5.1 (2026-11-17)
 
 **Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,

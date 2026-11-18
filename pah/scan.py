@@ -481,6 +481,11 @@ def collect(target: str | os.PathLike, *, started: float | None = None, max_seco
             return state  # a large model file: judged from the parts that can run code
         data = path.read_bytes()
         state.files[path.name] = File(path.name, len(data), data, decode_bytes(data))
+    _open_archives(state)
+    return state
+
+
+def _open_archives(state: State) -> None:
     archives = [f for f in list(state.files.values()) if _is_archive(f)]
     for f in archives:
         for member in _archive_members(state, f, 1):
@@ -489,7 +494,30 @@ def collect(target: str | os.PathLike, *, started: float | None = None, max_seco
                 for inner in _archive_members(state, member, 2):
                     state.files[inner.rel] = inner
     state.archives_opened = len(archives)
-    return state
+
+
+def scan_files(files: dict[str, bytes], *, target: str = "(in memory)", max_seconds: float | None = None) -> Report:
+    """Scan files held in memory, keyed by their path from the project root, the way scan reads a folder: the same
+    limits, archives opened the same way, the same rules. Nothing is written to disk and nothing is executed, so a
+    package can be judged without ever being unpacked onto the disk; bench/independent.py scans malware samples so."""
+    started = time.monotonic()
+    state = State(root=Path(tempfile.gettempdir()) / "pah-in-memory")  # never read: every file is in state.files
+    total = 0
+    for count, rel in enumerate(sorted(files), 1):
+        if count > MAX_FILES:
+            state.incomplete.append(f"more than {MAX_FILES:,} files; the rest were not scanned")
+            break
+        data = files[rel]
+        if len(data) > MAX_FILE:
+            state.incomplete.append(f"{rel}: {len(data) / 1e6:.0f} MB file not scanned")
+            continue
+        total += len(data)
+        if total > MAX_TOTAL:
+            state.incomplete.append("repository larger than 3 GB; the rest was not scanned")
+            break
+        state.files[rel] = File(rel, len(data), data, decode_bytes(data))
+    _open_archives(state)
+    return _analyze(state, target, started, max_seconds)
 
 
 def _analyze(state: State, target: str, started: float, max_seconds: float | None, online: bool = False) -> Report:

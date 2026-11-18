@@ -74,6 +74,59 @@ def _action_for(findings: list) -> str:
     return "deny" if rank(sev) >= rank("high") else ("ask" if rank(sev) >= rank("medium") else "defer")
 
 
+# ------------------------------------------------------------------------------------------- commands
+
+UPLOAD_FILE = re.compile(r"(?:\s(?:-d|--data(?:-binary|-raw|-urlencode)?|-F|--form)\s*['\"]?(?:[\w.-]+=)?@|"
+                         r"\s(?:-T|--upload-file)\s+|--post-file[= ]|--body-file[= ])['\"]?([^\s'\";|&]+)")
+SENSITIVE_FILE = re.compile(r"(?i)secret|credential|passw|token|\.env\b|\.pem\b|\.key\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|"
+                            r"shadow|wallet|cookie|\.kdbx\b|\.p12\b|\.pfx\b|\.npmrc\b|\.pypirc\b|\.netrc\b")
+_NAME_FILTERS = {"-name", "-iname", "-path", "-ipath", "-regex", "-iregex", "-newer", "-mtime", "-mmin", "-atime",
+                 "-size", "-empty", "-user", "-group", "-perm", "-wholename", "-iwholename"}
+
+
+def deletions_outside(texts: list[str], cwd: str) -> list[str]:
+    """Targets of recursive or bulk deletions (rm -r, find ... -delete or -exec rm, shred) outside the project."""
+    import posixpath
+
+    from .shellfold import _words, statements
+
+    if not cwd:
+        return []
+    home = os.path.expanduser("~").replace("\\", "/")
+    root = cwd.replace("\\", "/").rstrip("/").lower()
+
+    def outside(target: str) -> bool:
+        t = re.sub(r"^(?:~|\$HOME|\$\{HOME\})(?=/|$)", home, target).replace("\\", "/")
+        if not (t.startswith("/") or re.match(r"[A-Za-z]:/", t)):
+            return t.split("/")[0] == ".."
+        return not (posixpath.normpath(t).lower() + "/").startswith(root + "/")
+
+    found: list[str] = []
+    for text in texts:
+        for stmt in statements(text):
+            words = _words(stmt) or []
+            while words and (words[0] in ("sudo", "doas", "command", "builtin", "nohup") or words[0].startswith("-")):
+                words = words[1:]
+            if not words:
+                continue
+            name, args = words[0].rsplit("/", 1)[-1], words[1:]
+            targets: list[str] = []
+            if name == "rm" and any(a == "--recursive" or (a.startswith("-") and not a.startswith("--")
+                                                           and "r" in a.lower()) for a in args):
+                targets = [a for a in args if not a.startswith("-")]
+            elif name in ("shred", "srm", "wipe"):
+                targets = [a for a in args if not a.startswith("-")]
+            elif name == "find" and ("-delete" in args or (
+                    "-exec" in args and args[args.index("-exec") + 1:][:1] in (["rm"], ["/bin/rm"]))):
+                if not _NAME_FILTERS.intersection(args):
+                    for a in args:
+                        if a.startswith(("-", "(", "!")):
+                            break
+                        targets.append(a)
+            found.extend(t for t in targets if outside(t) and t not in found)
+    return found
+
+
 # ------------------------------------------------------------------------------------------- repo scans
 
 SETUP = re.compile(
@@ -198,19 +251,32 @@ def check_command(command: str, cwd: str = "", *, scan_repos: bool = True, max_s
     from .hosts import classify_host, urls
     from .patterns import ENV_DUMP, R_DOWNLOAD_EXEC, analyze_command
 
+    from .content_rules import R_DESTRUCTIVE
+    from .shellfold import unfold
+
     decision = Decision()
     findings = analyze_command(command, "(command)", 0, "agent")
-    sensitive = bool(SECRET_PATHS.search(command) or EXFIL_HOSTS.search(command) or ENV_DUMP.search(command)
-                     or any(not is_private_ip(m.group(1)) for m in RAW_IP_URL.finditer(command))
-                     or re.search(r"\$\{?[A-Z_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z_]*\}?", command))
+    texts = [command] + [text for text, _, _ in unfold(command)[0]]  # what it runs once its disguises are undone
+    every = "\n".join(texts)
+    uploads = [m.group(1) for text in texts for m in UPLOAD_FILE.finditer(text)]
+    sensitive = bool(SECRET_PATHS.search(every) or EXFIL_HOSTS.search(every) or ENV_DUMP.search(every)
+                     or any(not is_private_ip(m.group(1)) for m in RAW_IP_URL.finditer(every))
+                     or re.search(r"\$\{?[A-Z_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z_]*\}?", every)
+                     or any(SENSITIVE_FILE.search(u) for u in uploads))
+    hosts = {classify_host(u) for u in urls(every)}
     for f in findings:
         if f.rule == R_DOWNLOAD_EXEC:
-            kinds = {classify_host(u) for u in urls(command)}
-            if kinds == {"official"}:
+            if hosts == {"official"}:
                 f.severity = "medium"
                 f.message += " (official installer; confirm it is the one you meant)"
         if f.message.endswith("sends data to a remote host") and not sensitive:
-            f.severity = "low"  # an agent posting to an API is ordinary; posting secrets or to capture services is not
+            # An agent posting to an API is ordinary (the session rules catch a send after a credential read).
+            # Posting secrets or to a capture service is not, and neither is sending a local file over plain HTTP, to
+            # a bare IP address or to a look-alike host.
+            f.severity = "medium" if uploads and hosts & {"plain-http", "raw-ip", "lookalike"} else "low"
+    for target in deletions_outside(texts, cwd):
+        findings.append(Finding(R_DESTRUCTIVE, "medium", "(command)", 0,
+                                f"deletes {target}, outside the project folder", command[:200], "agent"))
     for eco, name in names_in_command(command):
         hit = lookalike(name, eco)
         if hit:

@@ -1,0 +1,81 @@
+{
+ "source": "2026-11-18-independent.json",
+ "per_set": 60,
+ "seed": "agent-white-hat independent evaluation 2026-11-18:misses",
+ "sets": {
+  "npm/malicious_intent": {
+   "missed": 220,
+   "profiled": 60,
+   "features": {
+    "no install-time script: runs when imported or run": 45,
+    "starts a process": 38,
+    "npm install-time script": 15,
+    "makes a network call": 13,
+    "reads environment or secret files": 7,
+    "no code files": 5,
+    "decodes or unpacks code": 4
+   }
+  },
+  "pypi/malicious_intent": {
+   "missed": 168,
+   "profiled": 60,
+   "features": {
+    "starts a process": 29,
+    "makes a network call": 28,
+    "setup.py starts a process or makes a network call": 20,
+    "no setup.py": 13,
+    "__init__.py starts a process or makes a network call (runs on import)": 12,
+    "decodes or unpacks code": 12,
+    "reads environment or secret files": 6,
+    "no code files": 2
+   }
+  },
+  "ai-skills/malicious_intent": {
+   "missed": 129,
+   "profiled": 60,
+   "features": {
+    "no code files": 46,
+    "skill text has shell commands": 38,
+    "makes a network call": 8,
+    "skill text downloads something": 8,
+    "reads environment or secret files": 5,
+    "starts a process": 3
+   }
+  },
+  "ide_extensions/malicious_intent": {
+   "missed": 79,
+   "profiled": 60,
+   "features": {
+    "starts a process": 43,
+    "activates when the editor starts": 42,
+    "makes a network call": 23,
+    "reads environment or secret files": 19,
+    "decodes or unpacks code": 14,
+    "no code files": 4
+   }
+  },
+  "npm/compromised_lib": {
+   "missed": 12,
+   "profiled": 12,
+   "features": {
+    "no install-time script: runs when imported or run": 12,
+    "makes a network call": 5,
+    "reads environment or secret files": 5,
+    "starts a process": 4,
+    "decodes or unpacks code": 2
+   }
+  },
+  "pypi/compromised_lib": {
+   "missed": 3,
+   "profiled": 3,
+   "features": {
+    "makes a network call": 3,
+    "no setup.py": 3,
+    "reads environment or secret files": 3,
+    "starts a process": 3,
+    "__init__.py starts a process or makes a network call (runs on import)": 2,
+    "decodes or unpacks code": 1
+   }
+  }
+ }
+}
