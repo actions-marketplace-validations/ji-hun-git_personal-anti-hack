@@ -33,6 +33,35 @@ class StatsTests(unittest.TestCase):
         self.assertAlmostEqual(stats.mcnemar(8, 1), 2 * (1 + 9) * 0.5 ** 9)
         self.assertTrue(math.isclose(stats.mcnemar(5, 0), 0.0625))
 
+    def test_holm(self):
+        adjusted = stats.holm({"a": 0.01, "b": 0.04, "c": 0.03})  # 3 x 0.01; then 2 x 0.03; then max(that, 0.04)
+        self.assertAlmostEqual(adjusted["a"], 0.03)
+        self.assertAlmostEqual(adjusted["c"], 0.06)
+        self.assertAlmostEqual(adjusted["b"], 0.06)
+        self.assertEqual(stats.holm({"x": 0.7, "y": 0.9}), {"x": 1.0, "y": 1.0})
+
+    def test_two_versions_paired_sample_by_sample(self):
+        def row(stratum, now, before, name):
+            return {"set": stratum, "package": name, "version": "1", "verdict": now, "verdict_baseline": before,
+                    "rules": {}}
+        rows = ([row("npm/malicious_intent", "block", "pass", f"m{i}") for i in range(8)]
+                + [row("npm/malicious_intent", "pass", "warn", "lost")]
+                + [row("npm/malicious_intent", "block", "block", f"k{i}") for i in range(3)]
+                + [row("npm/popular", "pass", "warn", f"p{i}") for i in range(4)]
+                + [row("npm/popular", "warn", "pass", "newly-flagged")]
+                + [{"set": "npm/popular", "package": "e", "version": "1", "error": "HTTPError: 404"}])
+        out = stats.paired_rounds(rows)
+        m = out["sets"]["npm/malicious_intent"]
+        self.assertEqual((m["only_now"], m["only_before"], m["now"]["k"], m["before"]["k"], m["now"]["n"]),
+                         (8, 1, 11, 4, 12))
+        self.assertAlmostEqual(m["p"], stats.mcnemar(8, 1))
+        b = out["sets"]["npm/popular"]
+        self.assertEqual((b["only_now"], b["only_before"], b["left_out"], b["now"]["n"]), (1, 4, 1, 5))
+        self.assertEqual(out["lost"], [("npm/malicious_intent", "lost", "1")])
+        self.assertEqual(out["false_alarms"], [("npm", "newly-flagged", "1", "warn")])
+        self.assertEqual((out["overall"]["malicious"]["only_now"], out["overall"]["benign"]["only_before"]), (8, 4))
+        self.assertGreaterEqual(out["overall"]["malicious"]["p_holm"], out["overall"]["malicious"]["p"])
+
     def test_report_is_current(self):
         report = stats.markdown(stats.analyse())
         self.assertEqual((ROOT / "docs" / "statistics.md").read_text(encoding="utf-8"), report,

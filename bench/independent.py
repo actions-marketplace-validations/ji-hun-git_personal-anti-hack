@@ -23,6 +23,11 @@ The protocol, fixed in bench/fixtures/independent-sample.json before the first d
   with the campaign-shape checks (pah/campaigns.py) switched off, to show what the general rules catch alone.
 - A file that cannot be downloaded, verified or unpacked is reported and left out of the counts.
 - One run, reported whatever it shows. Rules changed afterwards are measured on a fresh draw.
+- `run --baseline COMMIT` also judges every sample with the rules as they were at an earlier commit (exported from
+  git and imported as pah_baseline beside the current code), so two versions are compared on the same samples:
+  bench/stats.py tests the samples only one of them catches or flags with an exact McNemar test per set. Round two
+  (bench/fixtures/independent-sample-round2.json, kind independent-round2) runs with --baseline 71e982b, the code
+  round one measured.
 
 Results go to bench/results/<date>-independent.json: per sample its set, name, version, file, digest, verdict and the
 rules that fired. Never the files' contents or the findings' text: malware carries live attacker URLs and tokens.
@@ -37,6 +42,8 @@ import json
 import posixpath
 import random
 import re
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -360,19 +367,59 @@ def package_files(sample: dict, data: bytes) -> tuple[dict[str, bytes], list[str
     return strip_shared_folders(files), notes
 
 
-def judge(files: dict[str, bytes]) -> dict:
-    started = time.monotonic()
-    report = scan_files(files, target="sample", max_seconds=MAX_SECONDS)
+BASELINE_SCAN = None  # in each worker process when run --baseline is given: the earlier code's scan_files
+
+
+def baseline_package(commit: str, dest: Path) -> str:
+    """Export the pah package at an earlier commit into dest as pah_baseline, a name that imports beside the current
+    code (the package imports itself only relatively and finds its data beside its own files). Returns the commit."""
+    sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", f"{commit}^{{commit}}"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    tar = subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", sha, "pah"], capture_output=True,
+                         check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(tar)) as archive:
+        for member in archive.getmembers():
+            parts = member.name.split("/")
+            if not member.isfile() or parts[0] != "pah" or ".." in parts or "__pycache__" in parts:
+                continue
+            out = dest.joinpath("pah_baseline", *parts[1:])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(archive.extractfile(member).read())
+    return sha
+
+
+def _use_baseline(path: str | None) -> None:
+    """Worker initializer: import the exported baseline package, when there is one."""
+    global BASELINE_SCAN
+    if path:
+        sys.path.insert(0, path)
+        from pah_baseline.scan import scan_files as baseline_scan
+        BASELINE_SCAN = baseline_scan
+
+
+def _rules(report) -> dict[str, str]:
     rules: dict[str, str] = {}
     for f in report.findings:
         rules[f.rule] = worst([rules.get(f.rule, "info"), f.severity])
-    out = {"verdict": report.verdict, "rules": dict(sorted(rules.items())), "files": report.stats.get("files"),
+    return dict(sorted(rules.items()))
+
+
+def judge(files: dict[str, bytes]) -> dict:
+    started = time.monotonic()
+    report = scan_files(files, target="sample", max_seconds=MAX_SECONDS)
+    out = {"verdict": report.verdict, "rules": _rules(report), "files": report.stats.get("files"),
            "incomplete": len(report.incomplete), "seconds": round(time.monotonic() - started, 2)}
     if report.verdict in FLAGGED:
         with mock.patch("pah.patterns.campaign_shapes", lambda *a, **k: None):
             out["verdict_without_campaign_shapes"] = scan_files(files, max_seconds=MAX_SECONDS).verdict
     else:
         out["verdict_without_campaign_shapes"] = report.verdict
+    if BASELINE_SCAN is not None:
+        try:
+            before = BASELINE_SCAN(files, target="sample", max_seconds=MAX_SECONDS)
+            out["verdict_baseline"], out["rules_baseline"] = before.verdict, _rules(before)
+        except Exception as err:  # the earlier code failing on a sample must not lose the current verdict
+            out["baseline_error"] = type(err).__name__
     return out
 
 
@@ -429,12 +476,17 @@ def cmd_run(args) -> int:
             except ValueError:
                 continue  # a line cut off when a run was stopped: that sample runs again
             done[_key(row)] = row
+    if args.baseline:  # a row judged without the baseline is not done for this run
+        done = {k: r for k, r in done.items() if "error" in r or "verdict_baseline" in r or "baseline_error" in r}
     todo = [s for s in todo if _key(s) not in done and s["set"] not in args.skip]
     total = len(plan["malicious"]) + len(plan["benign"])
-    print(f"{len(done)} done before, {len(todo)} to go, {args.workers} worker processes; progress in {progress}",
-          flush=True)
+    baseline_dir = tempfile.mkdtemp(prefix="pah-baseline-") if args.baseline else None
+    baseline = baseline_package(args.baseline, Path(baseline_dir)) if args.baseline else None
+    print(f"{len(done)} done before, {len(todo)} to go, {args.workers} worker processes; progress in {progress}"
+          + (f"; baseline rules at {baseline[:12]}" if baseline else ""), flush=True)
     started = time.monotonic()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool, progress.open("a", encoding="utf-8") as log:
+    with ProcessPoolExecutor(max_workers=args.workers, initializer=_use_baseline, initargs=(baseline_dir,)) as pool, \
+            progress.open("a", encoding="utf-8") as log:
         futures = {pool.submit(_work, s): s for s in todo}
         for n, fut in enumerate(as_completed(futures), 1):
             sample = futures[fut]
@@ -452,6 +504,8 @@ def cmd_run(args) -> int:
                 rate = n / max(1e-9, time.monotonic() - started)
                 print(f"[{len(done)}/{total}] {row['set']} {row['package']}: {row.get('verdict', row.get('error'))} "
                       f"({rate:.2f}/s, about {(len(todo) - n) / max(rate, 1e-9) / 60:.0f} min left)", flush=True)
+    if baseline_dir:
+        shutil.rmtree(baseline_dir, ignore_errors=True)
     rows = [done[_key(s)] for s in [*plan["malicious"], *plan["benign"]] if _key(s) in done]
     if len(rows) < total:
         print(f"{total - len(rows)} samples not done yet; run again to resume")
@@ -459,6 +513,8 @@ def cmd_run(args) -> int:
     out = {"name": args.name, "date": time.strftime("%Y-%m-%d"), "platform": sys.platform, "code": code_hash(),
            "version": __version__, "sample": _rel(args.sample),
            "dataset": plan["dataset"], "seed": plan["seed"], "max_seconds": MAX_SECONDS, "rows": rows}
+    if baseline:
+        out["baseline"] = {"commit": baseline}
     dest = RESULTS / f"{args.name}-{args.kind}.json"
     dest.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
     errors = sum("error" in r for r in rows)
@@ -581,6 +637,7 @@ def main(argv=None) -> int:
     r.add_argument("--progress", default=str(Path(tempfile.gettempdir()) / "pah-independent-progress.jsonl"))
     r.add_argument("--workers", type=int, default=3, help="scans run in this many processes (default 3)")
     r.add_argument("--skip", nargs="*", default=[], help="sets to leave for a later run (it resumes from the progress)")
+    r.add_argument("--baseline", help="also judge every sample with the rules at this earlier commit")
     r.set_defaults(fn=cmd_run)
     m = sub.add_parser("profile", help="describe a random 60 misses per set by structure (no contents)")
     m.add_argument("--kind", default="independent")

