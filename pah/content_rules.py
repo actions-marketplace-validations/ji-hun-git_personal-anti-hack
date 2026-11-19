@@ -239,3 +239,15 @@ R_LOG_WIPE = rule(
     "done; it is the clean-up step after a break-in, and an agent has no reason to do it.",
     "Do not run it. If it already ran, assume the logs that would show what happened are gone.",
     attack=("T1070.002", "T1070.003", "T1562.002"))
+R_SELF_PUBLISH = rule(
+    "PAH-C031", "Publishes packages from its own code",
+    "Code that rewrites package.json and runs npm publish spreads through the registry under your npm login: the "
+    "IndonesianFoods spam worm (Nov 2025) published tens of thousands of packages that way, renaming itself each "
+    "time, and Shai-Hulud republished infected versions of its victims' own packages.",
+    "Do not run it where npm credentials are available; check `npm whoami` and your recent publishes.",
+    attack=("T1195.002", "T1584"))
+R_ATTACK_TOOL = rule(
+    "PAH-C032", "Fetches or runs an attack tool",
+    "Credential dumpers and privilege-escalation scanners (mimikatz, LaZagne, linpeas, pspy, Rubeus, SharpHound) "
+    "have no place in a package's install step or among the commands an agent is asked to run.",
+    "Do not run it. If it already ran, treat the machine's credentials as exposed.", attack=("T1003", "T1068", "T1087"))

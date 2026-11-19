@@ -225,6 +225,10 @@ def analyse() -> dict:
     if independent:
         out["sources"]["independent"] = independent.pop("source")
         out["independent"] = independent
+    round_two = _round_two()
+    if round_two:
+        out["sources"]["round_two"] = round_two.pop("source")
+        out["round_two"] = round_two
     shell = _shellgate()
     if shell:
         out["sources"]["shellgate"] = shell.pop("source")
@@ -318,6 +322,114 @@ def _independent() -> dict | None:
             "false_alarms": sorted((r["set"].split("/")[0], r["package"], r["version"], r["verdict"])
                                    for r in false_alarms),
             "left_out_why": dict(sorted(errors.items()))}
+
+
+def holm(ps: dict[str, float]) -> dict[str, float]:
+    """Holm's step-down adjustment: with these, the chance of any false finding among the tests stays under 5%."""
+    out, running = {}, 0.0
+    for i, key in enumerate(sorted(ps, key=lambda k: (ps[k], k))):
+        running = max(running, min(1.0, (len(ps) - i) * ps[key]))
+        out[key] = running
+    return out
+
+
+def paired_rounds(rows: list[dict]) -> dict:
+    """Two versions of the rules on the same samples (bench/independent.py run --baseline), fixed before round two's
+    download: per set, the rate each version catches (malicious) or flags (popular) and an exact McNemar test on the
+    samples only one of them does, Holm-adjusted across the sets; overall, the same test on the discordant samples of
+    all malicious sets together and of all popular packages together, Holm-adjusted across the two. Each sample is
+    its own stratum, so summing the discordant pairs across sets is the stratified matched-pairs test."""
+    sets: dict[str, dict] = {}
+    pairs: dict[str, list[tuple[dict, bool, bool]]] = {}
+    for key in sorted({r["set"] for r in rows}, key=lambda k: (k.endswith("/popular"), _SET_ORDER.get(k, 9), k)):
+        drawn = [r for r in rows if r["set"] == key]
+        ok = [r for r in drawn if "error" not in r and "verdict_baseline" in r]
+        pairs[key] = [(r, r["verdict"] in FLAGGED, r["verdict_baseline"] in FLAGGED) for r in ok]
+        only_now = sum(a and not b for _, a, b in pairs[key])
+        only_before = sum(b and not a for _, a, b in pairs[key])
+        sets[key] = {"kind": "benign" if key.endswith("/popular") else "malicious", "drawn": len(drawn),
+                     "left_out": len(drawn) - len(ok),
+                     "now": rate(sum(a for _, a, _ in pairs[key]), len(ok)),
+                     "before": rate(sum(b for _, _, b in pairs[key]), len(ok)),
+                     "blocked_now": rate(sum(r["verdict"] == "block" for r in ok), len(ok)),
+                     "blocked_before": rate(sum(r["verdict_baseline"] == "block" for r in ok), len(ok)),
+                     "only_now": only_now, "only_before": only_before, "p": mcnemar(only_now, only_before)}
+    for key, p in holm({k: v["p"] for k, v in sets.items()}).items():
+        sets[key]["p_holm"] = p
+    overall = {}
+    for kind in ("malicious", "benign"):
+        group = [v for v in sets.values() if v["kind"] == kind]
+        if group:
+            b, c = sum(v["only_now"] for v in group), sum(v["only_before"] for v in group)
+            overall[kind] = {"n": sum(v["now"]["n"] for v in group), "only_now": b, "only_before": c,
+                             "p": mcnemar(b, c)}
+    for kind, p in holm({k: v["p"] for k, v in overall.items()}).items():
+        overall[kind]["p_holm"] = p
+    lost = sorted((k, r["package"], r["version"]) for k, ps in pairs.items() if not k.endswith("/popular")
+                  for r, a, b in ps if b and not a)
+    flagged = sorted((k.split("/")[0], r["package"], r["version"], r["verdict"]) for k, ps in pairs.items()
+                     if k.endswith("/popular") for r, a, _ in ps if a)
+    return {"sets": sets, "overall": overall, "lost": lost, "false_alarms": flagged}
+
+
+def _round_two() -> dict | None:
+    """Round two of the held-out test (kind independent-round2), when it has been run."""
+    if not sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent-round2.json")):
+        return None
+    name, data = load("independent-round2")
+    sample_path = data["sample"].replace("\\", "/")  # the run recorded it with Windows separators
+    sample = json.loads((ROOT / sample_path).read_text(encoding="utf-8"))
+    errors: dict[str, int] = {}
+    for r in data["rows"]:
+        if "error" in r or "baseline_error" in r:
+            why = r["error"].split(":")[0] if "error" in r else f"round one's rules failed: {r['baseline_error']}"
+            errors[why] = errors.get(why, 0) + 1
+    fa_rules: dict[str, int] = {}
+    for r in data["rows"]:
+        if r["set"].endswith("/popular") and r.get("verdict") in FLAGGED:
+            for rid, sev in r["rules"].items():
+                if sev in ("medium", "high", "critical"):
+                    fa_rules[rid] = fa_rules.get(rid, 0) + 1
+    misses = RESULTS / name.replace("-independent-round2.json", "-independent-round2-misses.json")
+    profile = json.loads(misses.read_text(encoding="utf-8")) if misses.exists() else None
+    return {"source": name, "code": data["code"], "baseline": data.get("baseline", {}).get("commit"),
+            "dataset": data["dataset"], "drawn_on": sample["drawn"], "sample": sample_path,
+            "misses": profile["sets"] if profile else None, "misses_per_set": profile["per_set"] if profile else None,
+            **paired_rounds(data["rows"]), "changes": what_changed(data["rows"]),
+            "rules_behind_false_alarms": dict(sorted(fa_rules.items(), key=lambda kv: (-kv[1], kv[0]))[:10]),
+            "left_out_why": dict(sorted(errors.items()))}
+
+
+_STRONG = ("medium", "high", "critical")
+
+
+def what_changed(rows: list[dict]) -> dict:
+    """Described after round two's results came in, not part of the analysis fixed before them: the rule each
+    newly caught or flagged sample rests on (its only finding at medium severity or above), the findings that fell
+    below medium on the samples only round one's rules caught, and each set's rate with the campaign checks
+    (pah/campaigns.py) switched off."""
+    resting: dict[str, dict[str, int]] = {}
+    general: dict[str, dict] = {}
+    lost, new_flags = [], []
+    for key in sorted({r["set"] for r in rows}, key=lambda k: (k.endswith("/popular"), _SET_ORDER.get(k, 9), k)):
+        ok = [r for r in rows if r["set"] == key and "error" not in r and "verdict_baseline" in r]
+        general[key] = rate(sum(r["verdict_without_campaign_shapes"] in FLAGGED for r in ok), len(ok))
+        counts: dict[str, int] = {}
+        for r in ok:
+            now, before = r["verdict"] in FLAGGED, r["verdict_baseline"] in FLAGGED
+            strong = sorted(rid for rid, sev in r["rules"].items() if sev in _STRONG)
+            if now and not before:
+                why = strong[0] if len(strong) == 1 else "two or more rules" if strong else "no rule above low"
+                counts[why] = counts.get(why, 0) + 1
+                if key.endswith("/popular"):
+                    new_flags.append((key.split("/")[0], r["package"], r["version"], r["verdict"],
+                                      {rid: r["rules"][rid] for rid in strong}))
+            elif before and not now and not key.endswith("/popular"):
+                fell = {rid: [sev, r["rules"].get(rid, "none")] for rid, sev in sorted(r["rules_baseline"].items())
+                        if sev in _STRONG and r["rules"].get(rid) not in _STRONG}
+                lost.append((key, r["package"], r["version"], fell))
+        resting[key] = dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+    return {"new_resting_on": resting, "general_rules": general, "lost": lost, "new_false_alarms": new_flags}
 
 
 _SET_ORDER = {"npm/malicious_intent": 0, "pypi/malicious_intent": 1, "ai-skills/malicious_intent": 2,
@@ -478,6 +590,98 @@ def _independent_section(s: dict) -> list[str]:
     return lines
 
 
+def _round_two_section(s: dict) -> list[str]:
+    r2 = s.get("round_two")
+    if not r2:
+        return []
+    lines = [
+        "## Round two: the fixes on a fresh draw",
+        "",
+        f"Round one's misses and false alarms were studied, so they cannot measure a fix. Round two was drawn on "
+        f"{r2['drawn_on']} ([`{r2['sample']}`](../{r2['sample']})), committed before any rule changed and before "
+        "anything was downloaded: new samples that leave out every package of round one and, for the sets round one "
+        "took whole, the half that was not studied. Every sample was judged by the current rules (code "
+        f"`{r2['code']}`) and by round one's (commit `{(r2['baseline'] or '')[:12]}`), on the same bytes in the same "
+        "process. The analysis was fixed before the download: for each set, an exact McNemar test on the samples only "
+        "one version catches or flags, with Holm's adjustment across the sets; overall, the same test on the "
+        "discordant samples of all malicious sets together and of all popular packages together, adjusted across the "
+        "two. The halves under test were scanned in round one as well, and its report describes a random 60 misses "
+        "per set by structure only; none of their contents was looked at while the rules were changed.",
+        "",
+        "| Set | Scanned | Round one's rules | Current rules | Current, 95% interval | Only current "
+        "| Only round one's | p | Holm |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for key, v in r2["sets"].items():
+        now, before = v["now"], v["before"]
+        lines.append(f"| {SET_NAMES.get(key, key)} | {now['n']} | {before['k']} ({pct(before['rate'])}) "
+                     f"| {now['k']} ({pct(now['rate'])}) | {ci(now)} | {v['only_now']} | {v['only_before']} "
+                     f"| {pval(v['p'])} | {pval(v['p_holm'])} |")
+    lines.append("")
+    words = {"malicious": ("malicious samples", "caught"), "benign": ("popular packages", "flagged")}
+    for kind, v in r2["overall"].items():
+        what, did = words[kind]
+        lines.append(f"- All {what} ({v['n']:,}): {v['only_now']} {did} only by the current rules, "
+                     f"{v['only_before']} only by round one's; exact McNemar p = {pval(v['p'])} "
+                     f"(Holm, two tests: {pval(v['p_holm'])}).")
+    lines.append("")
+    if r2["lost"]:
+        lines += ["Malicious samples round one's rules caught and the current ones miss: "
+                  + ", ".join(f"{p} {ver} ({SET_NAMES.get(k, k)})" for k, p, ver in r2["lost"]) + ".", ""]
+    if r2["false_alarms"]:
+        lines += ["Popular packages the current rules flag: "
+                  + ", ".join(f"{p} {ver} ({eco}, {verdict})" for eco, p, ver, verdict in r2["false_alarms"])
+                  + ". The rules behind them: "
+                  + ", ".join(f"`{rid}` {n}" for rid, n in r2["rules_behind_false_alarms"].items()) + ".", ""]
+    if r2["left_out_why"]:
+        lines += ["Left out because they could not be downloaded, verified or unpacked: "
+                  + ", ".join(f"{n} ({why})" for why, n in r2["left_out_why"].items()) + ".", ""]
+    ch = r2.get("changes")
+    if ch:
+        def rule(why: str) -> str:
+            return f"`{why}`" if why.startswith("PAH-") else why
+
+        resting = [f"{SET_NAMES.get(k, k)}, {sum(v.values())}: " + ", ".join(f"{rule(w)} {n}" for w, n in v.items())
+                   for k, v in ch["new_resting_on"].items() if v]
+        lines += [
+            "### What changed, described after the results",
+            "",
+            "Not part of the analysis fixed before the download. The samples only the current rules catch or flag, "
+            "by the rule each rests on (its only finding at medium severity or above): " + "; ".join(resting) + ".",
+            "",
+        ]
+        if ch["lost"]:
+            lines += ["The findings that fell below medium on the samples only round one's rules caught: "
+                      + "; ".join(f"{p} {ver} ({SET_NAMES.get(k, k)}): "
+                                  + ", ".join(f"`{rid}` {a} before, {b} now" for rid, (a, b) in fell.items())
+                                  for k, p, ver, fell in ch["lost"]) + ".", ""]
+        if ch["new_false_alarms"]:
+            lines += ["Popular packages only the current rules flag: "
+                      + "; ".join(f"{p} {ver} ({eco}, {verdict}: "
+                                  + ", ".join(f"`{rid}` {sev}" for rid, sev in strong.items()) + ")"
+                                  for eco, p, ver, verdict, strong in ch["new_false_alarms"]) + ".", ""]
+        lines += ["With the checks written for named campaigns (`pah/campaigns.py`) switched off, the current rules "
+                  "catch or flag: " + "; ".join(f"{SET_NAMES.get(k, k)} {g['k']} (with them, {r2['sets'][k]['now']['k']})"
+                                               for k, g in ch["general_rules"].items()) + ".", ""]
+    if r2.get("misses"):
+        lines += [
+            "### What the current rules still miss",
+            "",
+            f"`python bench/independent.py profile --kind independent-round2` describes a random "
+            f"{r2['misses_per_set']} of the current rules' misses in each set (all of them where there are fewer) by "
+            "structure only, as for round one.",
+            "",
+            "| Set | Missed | Described | What they have, by number of samples described |",
+            "| --- | --- | --- | --- |",
+        ]
+        for key, v in r2["misses"].items():
+            if v["missed"]:
+                feats = "; ".join(f"{f} {n}" for f, n in list(v["features"].items())[:6])
+                lines.append(f"| {SET_NAMES.get(key, key)} | {v['missed']} | {v['profiled']} | {feats} |")
+        lines.append("")
+    return lines
+
+
 def ci(r: dict) -> str:
     lo, hi = r["ci95"]
     return f"{pct(lo)} to {pct(hi)}"
@@ -515,6 +719,7 @@ def markdown(s: dict) -> str:
         + (": the held-out test below." if "independent" in s else "."),
         "",
         *_independent_section(s),
+        *_round_two_section(s),
         *_shellgate_section(s),
         "## Detection and false alarms",
         "",
@@ -622,6 +827,9 @@ def main(argv=None) -> int:
     ch = s["chains"]
     print(f"chains: {ch['only_as_chain']} runs stopped only as a chain, {ch['only_alone']} only alone, "
           f"p = {pval(ch['p_session_vs_alone'])}")
+    for kind, v in (s.get("round_two") or {}).get("overall", {}).items():
+        print(f"round two, {kind}: {v['only_now']} only by the current rules, {v['only_before']} only by round one's, "
+              f"p = {pval(v['p'])} (Holm {pval(v['p_holm'])})")
     return 0
 
 

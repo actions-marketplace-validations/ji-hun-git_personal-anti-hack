@@ -39,6 +39,9 @@ class State:
     findings: list[Finding] = field(default_factory=list)
     surfaces: list[Surface] = field(default_factory=list)
     autoexec: dict[str, str] = field(default_factory=dict)
+    # Code that runs as soon as it is loaded, though not at install: a package's entry point, the main file of an
+    # editor extension that activates on start. Judged as code, with the strongest shapes raised (scan.ENTRY_RAISE).
+    entry: dict[str, str] = field(default_factory=dict)
     doc_auto: set[str] = field(default_factory=set)
     incomplete: list[str] = field(default_factory=list)
     packages: list[tuple[str, str, str, int, str]] = field(default_factory=list)  # ecosystem, name, path, line, context

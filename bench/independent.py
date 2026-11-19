@@ -23,6 +23,11 @@ The protocol, fixed in bench/fixtures/independent-sample.json before the first d
   with the campaign-shape checks (pah/campaigns.py) switched off, to show what the general rules catch alone.
 - A file that cannot be downloaded, verified or unpacked is reported and left out of the counts.
 - One run, reported whatever it shows. Rules changed afterwards are measured on a fresh draw.
+- `run --baseline COMMIT` also judges every sample with the rules as they were at an earlier commit (exported from
+  git and imported as pah_baseline beside the current code), so two versions are compared on the same samples:
+  bench/stats.py tests the samples only one of them catches or flags with an exact McNemar test per set. Round two
+  (bench/fixtures/independent-sample-round2.json, kind independent-round2) ran with --baseline 71e982b, the code
+  round one measured.
 
 Results go to bench/results/<date>-independent.json: per sample its set, name, version, file, digest, verdict and the
 rules that fired. Never the files' contents or the findings' text: malware carries live attacker URLs and tokens.
@@ -37,6 +42,8 @@ import json
 import posixpath
 import random
 import re
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -107,8 +114,8 @@ def _json(url: str, headers: dict | None = None):
 # ------------------------------------------------------------------------------------------------- the draw
 
 
-def malicious_frame() -> dict[str, dict[str, list[dict]]]:
-    """Every sample of the six sets at COMMIT, from GitHub's tree listings: paths, sizes and blob ids only."""
+def malicious_frame(commit: str = COMMIT) -> dict[str, dict[str, list[dict]]]:
+    """Every sample of the six sets at a commit, from GitHub's tree listings: paths, sizes and blob ids only."""
     api = "https://api.github.com/repos/" + REPO
 
     def tree(sha: str, recursive: bool = False) -> dict:
@@ -118,7 +125,7 @@ def malicious_frame() -> dict[str, dict[str, list[dict]]]:
     def entry(listing: dict, name: str) -> str:
         return next(e["sha"] for e in listing["tree"] if e["path"] == name)
 
-    root = _json(f"{api}/git/commits/{COMMIT}", {"Accept": "application/vnd.github+json"})["tree"]["sha"]
+    root = _json(f"{api}/git/commits/{commit}", {"Accept": "application/vnd.github+json"})["tree"]["sha"]
     samples = tree(entry(tree(root), "samples"))
     frame: dict[str, dict[str, list[dict]]] = {}
     for eco in sorted({s.split("/")[0] for s in MALICIOUS}):
@@ -145,17 +152,35 @@ def _version(path: str) -> str | None:
     return None
 
 
-def draw_malicious(frame: dict) -> list[dict]:
-    out = []
+def draw_malicious(frame: dict, seed: str = SEED, exclude: dict[str, set[str]] | None = None, split: bool = False,
+                   commit: str | None = None) -> tuple[list[dict], dict[str, list[str]]]:
+    """The samples to scan, and for the sets taken whole when split is set, the half kept back for tuning.
+
+    A set with a size draws that many packages at random, leaving out those in exclude (an earlier round). A set
+    taken whole is either scanned whole or, with split, halved at random: rules may be tuned on the first half and
+    are measured on the second."""
+    out, tune = [], {}
     for stratum, k in MALICIOUS.items():
         packages = frame[stratum]
-        rng = random.Random(f"{SEED}:{stratum}")
-        names = sorted(packages)
-        chosen = names if k is None or k >= len(names) else sorted(rng.sample(names, k))
+        rng = random.Random(f"{seed}:{stratum}")
+        if k is None:
+            names = sorted(packages)
+            if split:
+                order = names[:]
+                random.Random(f"{seed}:{stratum}:halves").shuffle(order)
+                tune[stratum] = sorted(order[:len(order) // 2])
+                names = sorted(order[len(order) // 2:])
+            chosen = names
+        else:
+            names = sorted(set(packages) - (exclude or {}).get(stratum, set()))
+            chosen = names if k >= len(names) else sorted(rng.sample(names, k))
         for name in chosen:
             pick = rng.choice(sorted(packages[name], key=lambda x: x["path"]))
-            out.append({"set": stratum, "package": name, "version": _version(pick["path"]), **pick})
-    return out
+            row = {"set": stratum, "package": name, "version": _version(pick["path"]), **pick}
+            if commit and commit != COMMIT:
+                row["commit"] = commit
+            out.append(row)
+    return out, tune
 
 
 def popular(eco: str) -> list[str]:
@@ -185,11 +210,11 @@ def npm_release(name: str) -> dict | None:
             "shasum": dist.get("shasum"), "form": "tarball"}
 
 
-def draw_benign() -> tuple[list[dict], list[dict]]:
+def draw_benign(seed: str = SEED, exclude: dict[str, set[str]] | None = None) -> tuple[list[dict], list[dict]]:
     out, passed_over = [], []
     for eco, k in BENIGN.items():
-        order = popular(eco)
-        random.Random(f"{SEED}:{eco}").shuffle(order)
+        order = [n for n in popular(eco) if n not in (exclude or {}).get(f"{eco}/popular", set())]
+        random.Random(f"{seed}:{eco}").shuffle(order)
         taken = 0
         for name in order:
             if taken == k:
@@ -216,23 +241,36 @@ def _wait_for_github(need: int) -> None:
 
 
 def cmd_plan(args) -> int:
-    benign, passed_over = draw_benign()
+    exclude: dict[str, set[str]] = {}
+    if args.exclude:
+        earlier = json.loads(args.exclude.read_text(encoding="utf-8"))
+        for row in [*earlier["malicious"], *earlier["benign"]]:
+            exclude.setdefault(row["set"], set()).add(row["package"])
+    benign, passed_over = draw_benign(args.seed, exclude)
     print(f"benign: {len(benign)} releases, {len(passed_over)} passed over", flush=True)
-    _wait_for_github(need=15)
-    frame = malicious_frame()
-    malicious = draw_malicious(frame)
+    _wait_for_github(need=16)
+    commit = args.commit
+    if commit == "head":
+        commit = _json(f"https://api.github.com/repos/{REPO}/branches/main",
+                       {"Accept": "application/vnd.github+json"})["commit"]["sha"]
+    frame = malicious_frame(commit)
+    malicious, tune = draw_malicious(frame, args.seed, exclude, args.split, commit)
     plan = {
-        "drawn": time.strftime("%Y-%m-%d"), "seed": SEED, "protocol": "bench/independent.py",
-        "dataset": {"repo": REPO, "commit": COMMIT, "license": "Apache-2.0",
+        "drawn": time.strftime("%Y-%m-%d"), "seed": args.seed, "protocol": "bench/independent.py",
+        "dataset": {"repo": REPO, "commit": commit, "license": "Apache-2.0",
                     "packages": {s: len(p) for s, p in frame.items()},
                     "samples": {s: sum(len(v) for v in p.values()) for s, p in frame.items()}},
-        "plan": {"malicious": MALICIOUS, "benign": BENIGN},
+        "plan": {"malicious": MALICIOUS, "benign": BENIGN, "split": args.split},
+        "excluded": {"sample": _rel(args.exclude), "packages": sum(len(v) for v in exclude.values())} if args.exclude
+        else None,
+        "tune_halves": tune,
         "seen_before_run": args.seen or [],
         "malicious": malicious, "benign": benign, "benign_passed_over": passed_over,
     }
-    SAMPLE.write_text(json.dumps(plan, indent=1) + "\n", encoding="utf-8", newline="\n")
+    args.out.write_text(json.dumps(plan, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"{len(malicious)} malicious samples ({sum(m['bytes'] for m in malicious) / 1e9:.2f} GB), "
-          f"{len(benign)} benign releases, {len(passed_over)} passed over -> {_rel(SAMPLE)}")
+          f"{len(benign)} benign releases, {len(passed_over)} passed over, "
+          f"{sum(len(v) for v in tune.values())} kept back for tuning -> {_rel(args.out)}")
     return 0
 
 
@@ -329,24 +367,65 @@ def package_files(sample: dict, data: bytes) -> tuple[dict[str, bytes], list[str
     return strip_shared_folders(files), notes
 
 
-def judge(files: dict[str, bytes]) -> dict:
-    started = time.monotonic()
-    report = scan_files(files, target="sample", max_seconds=MAX_SECONDS)
+BASELINE_SCAN = None  # in each worker process when run --baseline is given: the earlier code's scan_files
+
+
+def baseline_package(commit: str, dest: Path) -> str:
+    """Export the pah package at an earlier commit into dest as pah_baseline, a name that imports beside the current
+    code (the package imports itself only relatively and finds its data beside its own files). Returns the commit."""
+    sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", f"{commit}^{{commit}}"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    tar = subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", sha, "pah"], capture_output=True,
+                         check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(tar)) as archive:
+        for member in archive.getmembers():
+            parts = member.name.split("/")
+            if not member.isfile() or parts[0] != "pah" or ".." in parts or "__pycache__" in parts:
+                continue
+            out = dest.joinpath("pah_baseline", *parts[1:])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(archive.extractfile(member).read())
+    return sha
+
+
+def _use_baseline(path: str | None) -> None:
+    """Worker initializer: import the exported baseline package, when there is one."""
+    global BASELINE_SCAN
+    if path:
+        sys.path.insert(0, path)
+        from pah_baseline.scan import scan_files as baseline_scan
+        BASELINE_SCAN = baseline_scan
+
+
+def _rules(report) -> dict[str, str]:
     rules: dict[str, str] = {}
     for f in report.findings:
         rules[f.rule] = worst([rules.get(f.rule, "info"), f.severity])
-    out = {"verdict": report.verdict, "rules": dict(sorted(rules.items())), "files": report.stats.get("files"),
+    return dict(sorted(rules.items()))
+
+
+def judge(files: dict[str, bytes]) -> dict:
+    started = time.monotonic()
+    report = scan_files(files, target="sample", max_seconds=MAX_SECONDS)
+    out = {"verdict": report.verdict, "rules": _rules(report), "files": report.stats.get("files"),
            "incomplete": len(report.incomplete), "seconds": round(time.monotonic() - started, 2)}
     if report.verdict in FLAGGED:
         with mock.patch("pah.patterns.campaign_shapes", lambda *a, **k: None):
             out["verdict_without_campaign_shapes"] = scan_files(files, max_seconds=MAX_SECONDS).verdict
     else:
         out["verdict_without_campaign_shapes"] = report.verdict
+    if BASELINE_SCAN is not None:
+        try:
+            before = BASELINE_SCAN(files, target="sample", max_seconds=MAX_SECONDS)
+            out["verdict_baseline"], out["rules_baseline"] = before.verdict, _rules(before)
+        except Exception as err:  # the earlier code failing on a sample must not lose the current verdict
+            out["baseline_error"] = type(err).__name__
     return out
 
 
 def _download(sample: dict) -> bytes:
-    url = RAW + urllib.parse.quote(sample["path"], safe="/@") if sample.get("git_blob") else sample["url"]
+    raw = f"https://raw.githubusercontent.com/{REPO}/{sample.get('commit', COMMIT)}/"
+    url = raw + urllib.parse.quote(sample["path"], safe="/@") if sample.get("git_blob") else sample["url"]
     data = _open(url)
     if not _digest_ok(sample, data):
         raise ValueError("digest does not match the sample file")
@@ -354,10 +433,11 @@ def _download(sample: dict) -> bytes:
 
 
 def _rel(path: Path) -> str:
+    """The path from the repository root with forward slashes, so results written on Windows read anywhere."""
     try:
-        return path.relative_to(ROOT).as_posix()
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _key(sample: dict) -> str:
@@ -386,7 +466,7 @@ def _work(sample: dict) -> dict:
 
 
 def cmd_run(args) -> int:
-    plan = json.loads(SAMPLE.read_text(encoding="utf-8"))
+    plan = json.loads(args.sample.read_text(encoding="utf-8"))
     todo = [*plan["malicious"], *plan["benign"]]
     progress = Path(args.progress)
     done: dict[str, dict] = {}
@@ -397,12 +477,17 @@ def cmd_run(args) -> int:
             except ValueError:
                 continue  # a line cut off when a run was stopped: that sample runs again
             done[_key(row)] = row
+    if args.baseline:  # a row judged without the baseline is not done for this run
+        done = {k: r for k, r in done.items() if "error" in r or "verdict_baseline" in r or "baseline_error" in r}
     todo = [s for s in todo if _key(s) not in done and s["set"] not in args.skip]
     total = len(plan["malicious"]) + len(plan["benign"])
-    print(f"{len(done)} done before, {len(todo)} to go, {args.workers} worker processes; progress in {progress}",
-          flush=True)
+    baseline_dir = tempfile.mkdtemp(prefix="pah-baseline-") if args.baseline else None
+    baseline = baseline_package(args.baseline, Path(baseline_dir)) if args.baseline else None
+    print(f"{len(done)} done before, {len(todo)} to go, {args.workers} worker processes; progress in {progress}"
+          + (f"; baseline rules at {baseline[:12]}" if baseline else ""), flush=True)
     started = time.monotonic()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool, progress.open("a", encoding="utf-8") as log:
+    with ProcessPoolExecutor(max_workers=args.workers, initializer=_use_baseline, initargs=(baseline_dir,)) as pool, \
+            progress.open("a", encoding="utf-8") as log:
         futures = {pool.submit(_work, s): s for s in todo}
         for n, fut in enumerate(as_completed(futures), 1):
             sample = futures[fut]
@@ -420,14 +505,18 @@ def cmd_run(args) -> int:
                 rate = n / max(1e-9, time.monotonic() - started)
                 print(f"[{len(done)}/{total}] {row['set']} {row['package']}: {row.get('verdict', row.get('error'))} "
                       f"({rate:.2f}/s, about {(len(todo) - n) / max(rate, 1e-9) / 60:.0f} min left)", flush=True)
+    if baseline_dir:
+        shutil.rmtree(baseline_dir, ignore_errors=True)
     rows = [done[_key(s)] for s in [*plan["malicious"], *plan["benign"]] if _key(s) in done]
     if len(rows) < total:
         print(f"{total - len(rows)} samples not done yet; run again to resume")
         return 1
     out = {"name": args.name, "date": time.strftime("%Y-%m-%d"), "platform": sys.platform, "code": code_hash(),
-           "version": __version__, "sample": _rel(SAMPLE),
+           "version": __version__, "sample": _rel(args.sample),
            "dataset": plan["dataset"], "seed": plan["seed"], "max_seconds": MAX_SECONDS, "rows": rows}
-    dest = RESULTS / f"{args.name}-independent.json"
+    if baseline:
+        out["baseline"] = {"commit": baseline}
+    dest = RESULTS / f"{args.name}-{args.kind}.json"
     dest.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
     errors = sum("error" in r for r in rows)
     print(f"{len(rows)} samples, {errors} left out -> {_rel(dest)}")
@@ -497,7 +586,7 @@ def features(set_name: str, files: dict[str, bytes]) -> set[str]:
 
 
 def cmd_profile(args) -> int:
-    found = sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent.json"))
+    found = sorted(RESULTS.glob(f"20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{args.kind}.json"))
     if not found:
         raise SystemExit("run the evaluation first")
     data = json.loads(found[-1].read_text(encoding="utf-8"))
@@ -524,7 +613,7 @@ def cmd_profile(args) -> int:
         out["sets"][key] = {"missed": len(rows), "profiled": read,
                             "features": dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))}
         print(f"{key}: {len(rows)} missed, {read} profiled", flush=True)
-    dest = RESULTS / found[-1].name.replace("-independent.json", "-independent-misses.json")
+    dest = RESULTS / found[-1].name.replace(f"-{args.kind}.json", f"-{args.kind}-misses.json")
     dest.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"-> {_rel(dest)}")
     return 0
@@ -535,14 +624,24 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("plan", help="draw the sample (listings and registry metadata only)")
     p.add_argument("--seen", nargs="*", help="drawn samples whose file lists were looked at before the run")
+    p.add_argument("--seed", default=SEED)
+    p.add_argument("--commit", default=COMMIT, help="the dataset commit, or 'head' for the newest")
+    p.add_argument("--exclude", type=Path, help="an earlier sample file whose packages are not drawn again")
+    p.add_argument("--split", action="store_true",
+                   help="halve the sets taken whole: tune on one half, measure on the other")
+    p.add_argument("--out", type=Path, default=SAMPLE)
     p.set_defaults(fn=cmd_plan)
     r = sub.add_parser("run", help="download, unpack and scan every sample in memory")
+    r.add_argument("--sample", type=Path, default=SAMPLE)
+    r.add_argument("--kind", default="independent", help="results go to bench/results/<name>-<kind>.json")
     r.add_argument("--name", default=time.strftime("%Y-%m-%d"))
     r.add_argument("--progress", default=str(Path(tempfile.gettempdir()) / "pah-independent-progress.jsonl"))
     r.add_argument("--workers", type=int, default=3, help="scans run in this many processes (default 3)")
     r.add_argument("--skip", nargs="*", default=[], help="sets to leave for a later run (it resumes from the progress)")
+    r.add_argument("--baseline", help="also judge every sample with the rules at this earlier commit")
     r.set_defaults(fn=cmd_run)
     m = sub.add_parser("profile", help="describe a random 60 misses per set by structure (no contents)")
+    m.add_argument("--kind", default="independent")
     m.set_defaults(fn=cmd_profile)
     args = ap.parse_args(argv)
     return args.fn(args)

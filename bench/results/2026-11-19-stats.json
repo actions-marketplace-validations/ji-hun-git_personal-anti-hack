@@ -1,0 +1,3456 @@
+{
+ "sources": {
+  "rules": "2026-11-18-rules.json",
+  "models": "2026-11-11-models.json",
+  "drill": "2026-11-18-drill.json",
+  "chains": "2026-11-18-chains.json",
+  "fuzz": "2026-11-18-fuzz.json",
+  "real_repos": "2026-11-18-real-repos.json",
+  "independent": "2026-11-18-independent.json",
+  "round_two": "2026-11-19-independent-round2.json",
+  "shellgate": "2026-11-18-shellgate.json"
+ },
+ "date": "2026-11-19",
+ "traprepo": {
+  "malicious_flagged": {
+   "k": 76,
+   "n": 76,
+   "rate": 1.0,
+   "ci95": [
+    0.9526,
+    1.0
+   ]
+  },
+  "malicious_blocked": {
+   "k": 71,
+   "n": 76,
+   "rate": 0.9342105263157895,
+   "ci95": [
+    0.8531,
+    0.9783
+   ]
+  },
+  "benign_flagged": {
+   "k": 0,
+   "n": 40,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0881
+   ]
+  },
+  "by_category": {
+   "agent-config": {
+    "k": 14,
+    "n": 14,
+    "rate": 1.0,
+    "ci95": [
+     0.7684,
+     1.0
+    ]
+   },
+   "binary": {
+    "k": 3,
+    "n": 3,
+    "rate": 1.0,
+    "ci95": [
+     0.2924,
+     1.0
+    ]
+   },
+   "build": {
+    "k": 2,
+    "n": 2,
+    "rate": 1.0,
+    "ci95": [
+     0.1581,
+     1.0
+    ]
+   },
+   "ci": {
+    "k": 2,
+    "n": 2,
+    "rate": 1.0,
+    "ci95": [
+     0.1581,
+     1.0
+    ]
+   },
+   "content-obfuscation": {
+    "k": 7,
+    "n": 7,
+    "rate": 1.0,
+    "ci95": [
+     0.5904,
+     1.0
+    ]
+   },
+   "docs": {
+    "k": 1,
+    "n": 1,
+    "rate": 1.0,
+    "ci95": [
+     0.025,
+     1.0
+    ]
+   },
+   "git": {
+    "k": 3,
+    "n": 3,
+    "rate": 1.0,
+    "ci95": [
+     0.2924,
+     1.0
+    ]
+   },
+   "ide": {
+    "k": 4,
+    "n": 4,
+    "rate": 1.0,
+    "ci95": [
+     0.3976,
+     1.0
+    ]
+   },
+   "instruction-file": {
+    "k": 5,
+    "n": 5,
+    "rate": 1.0,
+    "ci95": [
+     0.4782,
+     1.0
+    ]
+   },
+   "mcp": {
+    "k": 3,
+    "n": 3,
+    "rate": 1.0,
+    "ci95": [
+     0.2924,
+     1.0
+    ]
+   },
+   "model": {
+    "k": 6,
+    "n": 6,
+    "rate": 1.0,
+    "ci95": [
+     0.5407,
+     1.0
+    ]
+   },
+   "package-install": {
+    "k": 14,
+    "n": 14,
+    "rate": 1.0,
+    "ci95": [
+     0.7684,
+     1.0
+    ]
+   },
+   "python": {
+    "k": 6,
+    "n": 6,
+    "rate": 1.0,
+    "ci95": [
+     0.5407,
+     1.0
+    ]
+   },
+   "rust": {
+    "k": 2,
+    "n": 2,
+    "rate": 1.0,
+    "ci95": [
+     0.1581,
+     1.0
+    ]
+   },
+   "skill": {
+    "k": 4,
+    "n": 4,
+    "rate": 1.0,
+    "ci95": [
+     0.3976,
+     1.0
+    ]
+   }
+  }
+ },
+ "models": {
+  "GPT-6 Astra": {
+   "malicious": {
+    "n": 54,
+    "ours": {
+     "k": 54,
+     "n": 54,
+     "rate": 1.0,
+     "ci95": [
+      0.934,
+      1.0
+     ]
+    },
+    "model_every_run": {
+     "k": 44,
+     "n": 54,
+     "rate": 0.8148148148148148,
+     "ci95": [
+      0.6857,
+      0.9075
+     ]
+    },
+    "model_any_run": {
+     "k": 47,
+     "n": 54,
+     "rate": 0.8703703703703703,
+     "ci95": [
+      0.751,
+      0.9463
+     ]
+    },
+    "only_ours_vs_every": 10,
+    "only_model_vs_every": 0,
+    "p_vs_every": 0.001953125,
+    "only_ours_vs_any": 7,
+    "only_model_vs_any": 0,
+    "p_vs_any": 0.015625000000000003,
+    "runs": 162,
+    "refused_runs": 0
+   },
+   "benign": {
+    "n": 27,
+    "ours_flagged": {
+     "k": 0,
+     "n": 27,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1277
+     ]
+    },
+    "model_flagged_any_run": {
+     "k": 1,
+     "n": 27,
+     "rate": 0.037037037037037035,
+     "ci95": [
+      0.0009,
+      0.1897
+     ]
+    },
+    "only_ours": 0,
+    "only_model": 1,
+    "p": 1.0
+   }
+  },
+  "Muse Spark 1.3": {
+   "malicious": {
+    "n": 54,
+    "ours": {
+     "k": 54,
+     "n": 54,
+     "rate": 1.0,
+     "ci95": [
+      0.934,
+      1.0
+     ]
+    },
+    "model_every_run": {
+     "k": 40,
+     "n": 54,
+     "rate": 0.7407407407407407,
+     "ci95": [
+      0.6035,
+      0.8504
+     ]
+    },
+    "model_any_run": {
+     "k": 49,
+     "n": 54,
+     "rate": 0.9074074074074074,
+     "ci95": [
+      0.797,
+      0.9692
+     ]
+    },
+    "only_ours_vs_every": 14,
+    "only_model_vs_every": 0,
+    "p_vs_every": 0.00012207031250000005,
+    "only_ours_vs_any": 5,
+    "only_model_vs_any": 0,
+    "p_vs_any": 0.0625,
+    "runs": 162,
+    "refused_runs": 0
+   },
+   "benign": {
+    "n": 27,
+    "ours_flagged": {
+     "k": 0,
+     "n": 27,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1277
+     ]
+    },
+    "model_flagged_any_run": {
+     "k": 1,
+     "n": 27,
+     "rate": 0.037037037037037035,
+     "ci95": [
+      0.0009,
+      0.1897
+     ]
+    },
+    "only_ours": 0,
+    "only_model": 1,
+    "p": 1.0
+   }
+  },
+  "Claude Opus 5.5": {
+   "malicious": {
+    "n": 54,
+    "ours": {
+     "k": 54,
+     "n": 54,
+     "rate": 1.0,
+     "ci95": [
+      0.934,
+      1.0
+     ]
+    },
+    "model_every_run": {
+     "k": 0,
+     "n": 54,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.066
+     ]
+    },
+    "model_any_run": {
+     "k": 1,
+     "n": 54,
+     "rate": 0.018518518518518517,
+     "ci95": [
+      0.0005,
+      0.0989
+     ]
+    },
+    "only_ours_vs_every": 54,
+    "only_model_vs_every": 0,
+    "p_vs_every": 1.1102230246251552e-16,
+    "only_ours_vs_any": 53,
+    "only_model_vs_any": 0,
+    "p_vs_any": 2.2204460492503146e-16,
+    "runs": 162,
+    "refused_runs": 155
+   },
+   "benign": {
+    "n": 27,
+    "ours_flagged": {
+     "k": 0,
+     "n": 27,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1277
+     ]
+    },
+    "model_flagged_any_run": {
+     "k": 0,
+     "n": 27,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1277
+     ]
+    },
+    "only_ours": 0,
+    "only_model": 0,
+    "p": 1.0
+   }
+  }
+ },
+ "models_trials": 3,
+ "drill": {
+  "decisions": 1131,
+  "unexpected": {
+   "k": 0,
+   "n": 1131,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0033
+   ]
+  },
+  "malicious_stopped": {
+   "k": 684,
+   "n": 684,
+   "rate": 1.0,
+   "ci95": [
+    0.9946,
+    1.0
+   ]
+  },
+  "benign_touched": {
+   "k": 0,
+   "n": 360,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0102
+   ]
+  },
+  "per_agent": {
+   "claude": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "codex": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "gemini": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "antigravity": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "cursor": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "copilot": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "devin": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "kiro": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   },
+   "cline": {
+    "malicious_stopped": {
+     "k": 76,
+     "n": 76,
+     "rate": 1.0,
+     "ci95": [
+      0.9526,
+      1.0
+     ]
+    },
+    "benign_untouched": {
+     "k": 40,
+     "n": 40,
+     "rate": 1.0,
+     "ci95": [
+      0.9119,
+      1.0
+     ]
+    }
+   }
+  }
+ },
+ "chains": {
+  "attack_runs_stopped": {
+   "k": 77,
+   "n": 77,
+   "rate": 1.0,
+   "ci95": [
+    0.9532,
+    1.0
+   ]
+  },
+  "stopped_by_steps_alone": {
+   "k": 26,
+   "n": 77,
+   "rate": 0.33766233766233766,
+   "ci95": [
+    0.2338,
+    0.4545
+   ]
+  },
+  "only_as_chain": 51,
+  "only_alone": 0,
+  "p_session_vs_alone": 8.881784197001292e-16,
+  "scripts": 12,
+  "scripts_stopped": 12,
+  "scripts_only_as_chain": 8,
+  "scripts_only_alone": 0,
+  "p_scripts": 0.007812500000000002,
+  "ordinary_runs_with_extra_prompt": {
+   "k": 0,
+   "n": 72,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0499
+   ]
+  }
+ },
+ "fuzz": {
+  "rewrites_caught": {
+   "k": 353,
+   "n": 353,
+   "rate": 1.0,
+   "ci95": [
+    0.9896,
+    1.0
+   ]
+  },
+  "harmless_rewrites_flagged": {
+   "k": 0,
+   "n": 12,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.2646
+   ]
+  },
+  "operators": 20
+ },
+ "real_repos": {
+  "blocked": {
+   "k": 0,
+   "n": 30,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.1157
+   ]
+  },
+  "warned": {
+   "k": 4,
+   "n": 30,
+   "rate": 0.13333333333333333,
+   "ci95": [
+    0.0376,
+    0.3072
+   ]
+  },
+  "flagged": {
+   "k": 4,
+   "n": 30,
+   "rate": 0.13333333333333333,
+   "ci95": [
+    0.0376,
+    0.3072
+   ]
+  },
+  "files": 67014
+ },
+ "independent": {
+  "code": "9b1c1484919f",
+  "dataset": {
+   "repo": "DataDog/malicious-software-packages-dataset",
+   "commit": "72c723be547033c558244520524b117c8d71663b",
+   "license": "Apache-2.0",
+   "packages": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 102,
+    "npm/compromised_lib": 1004,
+    "npm/malicious_intent": 12819,
+    "pypi/compromised_lib": 17,
+    "pypi/malicious_intent": 1816
+   },
+   "samples": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 121,
+    "npm/compromised_lib": 1448,
+    "npm/malicious_intent": 25267,
+    "pypi/compromised_lib": 29,
+    "pypi/malicious_intent": 2503
+   }
+  },
+  "seed": "agent-white-hat independent evaluation 2026-11-18",
+  "misses": {
+   "npm/malicious_intent": {
+    "missed": 220,
+    "profiled": 60,
+    "features": {
+     "no install-time script: runs when imported or run": 45,
+     "starts a process": 38,
+     "npm install-time script": 15,
+     "makes a network call": 13,
+     "reads environment or secret files": 7,
+     "no code files": 5,
+     "decodes or unpacks code": 4
+    }
+   },
+   "pypi/malicious_intent": {
+    "missed": 168,
+    "profiled": 60,
+    "features": {
+     "starts a process": 29,
+     "makes a network call": 28,
+     "setup.py starts a process or makes a network call": 20,
+     "no setup.py": 13,
+     "__init__.py starts a process or makes a network call (runs on import)": 12,
+     "decodes or unpacks code": 12,
+     "reads environment or secret files": 6,
+     "no code files": 2
+    }
+   },
+   "ai-skills/malicious_intent": {
+    "missed": 129,
+    "profiled": 60,
+    "features": {
+     "no code files": 46,
+     "skill text has shell commands": 38,
+     "makes a network call": 8,
+     "skill text downloads something": 8,
+     "reads environment or secret files": 5,
+     "starts a process": 3
+    }
+   },
+   "ide_extensions/malicious_intent": {
+    "missed": 79,
+    "profiled": 60,
+    "features": {
+     "starts a process": 43,
+     "activates when the editor starts": 42,
+     "makes a network call": 23,
+     "reads environment or secret files": 19,
+     "decodes or unpacks code": 14,
+     "no code files": 4
+    }
+   },
+   "npm/compromised_lib": {
+    "missed": 12,
+    "profiled": 12,
+    "features": {
+     "no install-time script: runs when imported or run": 12,
+     "makes a network call": 5,
+     "reads environment or secret files": 5,
+     "starts a process": 4,
+     "decodes or unpacks code": 2
+    }
+   },
+   "pypi/compromised_lib": {
+    "missed": 3,
+    "profiled": 3,
+    "features": {
+     "makes a network call": 3,
+     "no setup.py": 3,
+     "reads environment or secret files": 3,
+     "starts a process": 3,
+     "__init__.py starts a process or makes a network call (runs on import)": 2,
+     "decodes or unpacks code": 1
+    }
+   }
+  },
+  "misses_per_set": 60,
+  "drawn_on": "2026-11-18",
+  "seen_before_run": 2,
+  "benign_passed_over": 2,
+  "sets": {
+   "npm/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 12819,
+    "flagged": {
+     "k": 280,
+     "n": 500,
+     "rate": 0.56,
+     "ci95": [
+      0.5152,
+      0.604
+     ]
+    },
+    "blocked": {
+     "k": 261,
+     "n": 500,
+     "rate": 0.522,
+     "ci95": [
+      0.4772,
+      0.5665
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 272,
+     "n": 500,
+     "rate": 0.544,
+     "ci95": [
+      0.4992,
+      0.5883
+     ]
+    }
+   },
+   "pypi/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 1816,
+    "flagged": {
+     "k": 332,
+     "n": 500,
+     "rate": 0.664,
+     "ci95": [
+      0.6207,
+      0.7053
+     ]
+    },
+    "blocked": {
+     "k": 326,
+     "n": 500,
+     "rate": 0.652,
+     "ci95": [
+      0.6084,
+      0.6937
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 332,
+     "n": 500,
+     "rate": 0.664,
+     "ci95": [
+      0.6207,
+      0.7053
+     ]
+    }
+   },
+   "ai-skills/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 204,
+    "left_out": 0,
+    "population": 204,
+    "flagged": {
+     "k": 75,
+     "n": 204,
+     "rate": 0.36764705882352944,
+     "ci95": [
+      0.3014,
+      0.4378
+     ]
+    },
+    "blocked": {
+     "k": 52,
+     "n": 204,
+     "rate": 0.2549019607843137,
+     "ci95": [
+      0.1966,
+      0.3205
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 75,
+     "n": 204,
+     "rate": 0.36764705882352944,
+     "ci95": [
+      0.3014,
+      0.4378
+     ]
+    }
+   },
+   "ide_extensions/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 102,
+    "left_out": 0,
+    "population": 102,
+    "flagged": {
+     "k": 23,
+     "n": 102,
+     "rate": 0.22549019607843138,
+     "ci95": [
+      0.1486,
+      0.3189
+     ]
+    },
+    "blocked": {
+     "k": 17,
+     "n": 102,
+     "rate": 0.16666666666666666,
+     "ci95": [
+      0.1002,
+      0.2534
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 23,
+     "n": 102,
+     "rate": 0.22549019607843138,
+     "ci95": [
+      0.1486,
+      0.3189
+     ]
+    }
+   },
+   "npm/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 100,
+    "left_out": 0,
+    "population": 1004,
+    "flagged": {
+     "k": 88,
+     "n": 100,
+     "rate": 0.88,
+     "ci95": [
+      0.7998,
+      0.9364
+     ]
+    },
+    "blocked": {
+     "k": 85,
+     "n": 100,
+     "rate": 0.85,
+     "ci95": [
+      0.7647,
+      0.9135
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 88,
+     "n": 100,
+     "rate": 0.88,
+     "ci95": [
+      0.7998,
+      0.9364
+     ]
+    }
+   },
+   "pypi/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 17,
+    "left_out": 0,
+    "population": 17,
+    "flagged": {
+     "k": 14,
+     "n": 17,
+     "rate": 0.8235294117647058,
+     "ci95": [
+      0.5657,
+      0.962
+     ]
+    },
+    "blocked": {
+     "k": 13,
+     "n": 17,
+     "rate": 0.7647058823529411,
+     "ci95": [
+      0.501,
+      0.9319
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 14,
+     "n": 17,
+     "rate": 0.8235294117647058,
+     "ci95": [
+      0.5657,
+      0.962
+     ]
+    }
+   },
+   "pypi/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 5000,
+    "flagged": {
+     "k": 78,
+     "n": 500,
+     "rate": 0.156,
+     "ci95": [
+      0.1253,
+      0.1908
+     ]
+    },
+    "blocked": {
+     "k": 25,
+     "n": 500,
+     "rate": 0.05,
+     "ci95": [
+      0.0326,
+      0.0729
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 76,
+     "n": 500,
+     "rate": 0.152,
+     "ci95": [
+      0.1217,
+      0.1865
+     ]
+    }
+   },
+   "npm/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "population": 5000,
+    "flagged": {
+     "k": 31,
+     "n": 500,
+     "rate": 0.062,
+     "ci95": [
+      0.0425,
+      0.0869
+     ]
+    },
+    "blocked": {
+     "k": 8,
+     "n": 500,
+     "rate": 0.016,
+     "ci95": [
+      0.0069,
+      0.0313
+     ]
+    },
+    "flagged_general_rules": {
+     "k": 31,
+     "n": 500,
+     "rate": 0.062,
+     "ci95": [
+      0.0425,
+      0.0869
+     ]
+    }
+   }
+  },
+  "benign_all": {
+   "flagged": {
+    "k": 109,
+    "n": 1000,
+    "rate": 0.109,
+    "ci95": [
+     0.0904,
+     0.13
+    ]
+   },
+   "blocked": {
+    "k": 33,
+    "n": 1000,
+    "rate": 0.033,
+    "ci95": [
+     0.0228,
+     0.046
+    ]
+   }
+  },
+  "rules_behind_catches": {
+   "PAH-C007": 358,
+   "PAH-C004": 207,
+   "PAH-C002": 197,
+   "PAH-C028": 163,
+   "PAH-C012": 116,
+   "PAH-T007": 102,
+   "PAH-C001": 87,
+   "PAH-C003": 55,
+   "PAH-C015": 41,
+   "PAH-A011": 31
+  },
+  "rules_behind_false_alarms": {
+   "PAH-T004": 21,
+   "PAH-C019": 20,
+   "PAH-F004": 18,
+   "PAH-C012": 14,
+   "PAH-C001": 10,
+   "PAH-T007": 10,
+   "PAH-P002": 8,
+   "PAH-P007": 8,
+   "PAH-P010": 5,
+   "PAH-G004": 4
+  },
+  "false_alarms": [
+   [
+    "npm",
+    "@angular/common",
+    "22.2.6",
+    "block"
+   ],
+   [
+    "npm",
+    "@babel/core",
+    "8.1.2",
+    "block"
+   ],
+   [
+    "npm",
+    "@babel/plugin-transform-spread",
+    "8.0.8",
+    "block"
+   ],
+   [
+    "npm",
+    "@esbuild/linux-arm",
+    "0.28.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@esbuild/win32-x64",
+    "0.28.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@js-joda/core",
+    "6.3.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@mui/base",
+    "5.0.0-beta.70",
+    "block"
+   ],
+   [
+    "npm",
+    "@mui/x-internals",
+    "9.18.0",
+    "block"
+   ],
+   [
+    "npm",
+    "@oxc-resolver/binding-linux-x64-gnu",
+    "11.24.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "@rollup/rollup-win32-x64-msvc",
+    "4.68.6",
+    "warn"
+   ],
+   [
+    "npm",
+    "@rspack/binding-linux-x64-gnu",
+    "2.3.3",
+    "warn"
+   ],
+   [
+    "npm",
+    "@tailwindcss/oxide-linux-x64-gnu",
+    "4.3.5",
+    "warn"
+   ],
+   [
+    "npm",
+    "@tanstack/start-client-core",
+    "1.170.39",
+    "warn"
+   ],
+   [
+    "npm",
+    "bonjour-service",
+    "1.4.4",
+    "warn"
+   ],
+   [
+    "npm",
+    "clipanion",
+    "4.0.0-rc.4",
+    "warn"
+   ],
+   [
+    "npm",
+    "jest-runtime",
+    "30.5.2",
+    "block"
+   ],
+   [
+    "npm",
+    "jspdf",
+    "4.2.1",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-linux-arm64-musl",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-linux-x64-gnu",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "lightningcss-win32-x64-msvc",
+    "1.33.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "linkifyjs",
+    "4.4.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "mammoth",
+    "1.13.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "miniflare",
+    "4.20260730.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "mustache",
+    "4.2.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "react-day-picker",
+    "10.0.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "styled-jsx",
+    "5.1.7",
+    "block"
+   ],
+   [
+    "npm",
+    "superagent",
+    "10.4.2",
+    "warn"
+   ],
+   [
+    "npm",
+    "swagger-ui-dist",
+    "5.35.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "vite",
+    "8.3.8",
+    "warn"
+   ],
+   [
+    "npm",
+    "xdg-app-paths",
+    "8.3.0",
+    "block"
+   ],
+   [
+    "npm",
+    "zone.js",
+    "0.16.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "alembic",
+    "1.20.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "apache-airflow-providers-amazon",
+    "9.40.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "apache-airflow-providers-fab",
+    "3.11.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "atlassian-python-api",
+    "5.0.5",
+    "block"
+   ],
+   [
+    "pypi",
+    "awkward-cpp",
+    "58",
+    "warn"
+   ],
+   [
+    "pypi",
+    "black",
+    "26.10.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "bpy",
+    "5.3.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cadquery-ocp",
+    "8.0.1.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cel-python",
+    "0.5.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "chromadb",
+    "1.5.9",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cibuildwheel",
+    "4.3.5",
+    "block"
+   ],
+   [
+    "pypi",
+    "cog",
+    "0.23.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "coloredlogs",
+    "15.0.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "ddtrace",
+    "4.17.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "drf-spectacular-sidecar",
+    "2026.10.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "espeakng-loader",
+    "0.2.4",
+    "warn"
+   ],
+   [
+    "pypi",
+    "fastmcp-slim",
+    "4.2.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "flasgger",
+    "0.9.7.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "griffe",
+    "2.4.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "idf-component-manager",
+    "3.1.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "inspect-scout",
+    "0.6.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "itables",
+    "2.9.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "jedi",
+    "0.20.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "keras-preprocessing",
+    "1.1.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lap",
+    "0.5.14",
+    "warn"
+   ],
+   [
+    "pypi",
+    "libtpu",
+    "0.0.53.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lightning",
+    "2.6.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "lupa",
+    "2.8",
+    "block"
+   ],
+   [
+    "pypi",
+    "maturin",
+    "1.16.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "memray",
+    "1.20.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "mitmproxy",
+    "12.3.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "mitmproxy-linux",
+    "0.12.16",
+    "warn"
+   ],
+   [
+    "pypi",
+    "mkdocs",
+    "1.6.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ml-dtypes",
+    "0.7.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "mlflow-tracing",
+    "3.18.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "modelscope",
+    "1.40.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "music21",
+    "10.5.2",
+    "block"
+   ],
+   [
+    "pypi",
+    "omnibase-core",
+    "0.47.72",
+    "block"
+   ],
+   [
+    "pypi",
+    "onnx-ir",
+    "1.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "opencv-contrib-python-headless",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "opencv-python",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "opencv-python-headless",
+    "5.1.0.95",
+    "block"
+   ],
+   [
+    "pypi",
+    "openfga-sdk",
+    "0.10.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "optax",
+    "0.2.9",
+    "warn"
+   ],
+   [
+    "pypi",
+    "paddlex",
+    "3.7.2",
+    "block"
+   ],
+   [
+    "pypi",
+    "pgpy",
+    "0.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "psycopg-binary",
+    "3.3.9",
+    "block"
+   ],
+   [
+    "pypi",
+    "pycryptodome",
+    "4.5.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pydata-google-auth",
+    "1.9.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pydata-sphinx-theme",
+    "0.24.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyloudnorm",
+    "0.2.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyproject-api",
+    "1.12.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyrate-limiter",
+    "4.5.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pyright",
+    "1.1.414",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pytelegrambotapi",
+    "4.37.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "python-statemachine",
+    "3.2.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "rapidfuzz",
+    "3.14.6",
+    "block"
+   ],
+   [
+    "pypi",
+    "rdkit",
+    "2026.9.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "readabilipy",
+    "0.3.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "safety",
+    "3.8.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sagemaker-serve",
+    "1.30.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "scverse-misc",
+    "0.1.8",
+    "warn"
+   ],
+   [
+    "pypi",
+    "skypilot",
+    "0.14.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "sniffio",
+    "1.3.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sparklines",
+    "1.0.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sqlalchemy-mate",
+    "2.0.0.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "swebench",
+    "5.0.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "tecton",
+    "1.2.13",
+    "warn"
+   ],
+   [
+    "pypi",
+    "tensorflow-cpu",
+    "2.21.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "triton",
+    "3.9.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "turbopuffer",
+    "3.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "types-boto3",
+    "1.44.5",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ujson",
+    "6.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "ultralytics-thop",
+    "2.2.5",
+    "warn"
+   ],
+   [
+    "pypi",
+    "uv",
+    "0.13.9",
+    "block"
+   ],
+   [
+    "pypi",
+    "valkey-glide",
+    "2.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "waybackpy",
+    "3.0.6",
+    "warn"
+   ],
+   [
+    "pypi",
+    "weasyprint",
+    "70.0",
+    "warn"
+   ]
+  ],
+  "left_out_why": {}
+ },
+ "round_two": {
+  "code": "78f01b944b91",
+  "baseline": "71e982bff5d68512f0997eeb890fd9e86cb4f03f",
+  "dataset": {
+   "repo": "DataDog/malicious-software-packages-dataset",
+   "commit": "72c723be547033c558244520524b117c8d71663b",
+   "license": "Apache-2.0",
+   "packages": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 102,
+    "npm/compromised_lib": 1004,
+    "npm/malicious_intent": 12819,
+    "pypi/compromised_lib": 17,
+    "pypi/malicious_intent": 1816
+   },
+   "samples": {
+    "ai-skills/malicious_intent": 204,
+    "ide_extensions/malicious_intent": 121,
+    "npm/compromised_lib": 1448,
+    "npm/malicious_intent": 25267,
+    "pypi/compromised_lib": 29,
+    "pypi/malicious_intent": 2503
+   }
+  },
+  "drawn_on": "2026-11-19",
+  "sample": "bench/fixtures/independent-sample-round2.json",
+  "misses": {
+   "npm/malicious_intent": {
+    "missed": 126,
+    "profiled": 60,
+    "features": {
+     "no install-time script: runs when imported or run": 41,
+     "npm install-time script": 19,
+     "starts a process": 19,
+     "decodes or unpacks code": 16,
+     "makes a network call": 12,
+     "no code files": 12,
+     "reads environment or secret files": 12
+    }
+   },
+   "pypi/malicious_intent": {
+    "missed": 129,
+    "profiled": 60,
+    "features": {
+     "makes a network call": 25,
+     "starts a process": 23,
+     "decodes or unpacks code": 21,
+     "setup.py starts a process or makes a network call": 17,
+     "no setup.py": 14,
+     "__init__.py starts a process or makes a network call (runs on import)": 11,
+     "reads environment or secret files": 8
+    }
+   },
+   "ai-skills/malicious_intent": {
+    "missed": 44,
+    "profiled": 44,
+    "features": {
+     "no code files": 24,
+     "skill text has shell commands": 22,
+     "makes a network call": 6,
+     "reads environment or secret files": 6,
+     "starts a process": 6,
+     "skill text downloads something": 5
+    }
+   },
+   "ide_extensions/malicious_intent": {
+    "missed": 33,
+    "profiled": 33,
+    "features": {
+     "activates when the editor starts": 23,
+     "starts a process": 21,
+     "reads environment or secret files": 11,
+     "makes a network call": 9,
+     "decodes or unpacks code": 8,
+     "no code files": 2
+    }
+   },
+   "npm/compromised_lib": {
+    "missed": 16,
+    "profiled": 16,
+    "features": {
+     "no install-time script: runs when imported or run": 16,
+     "reads environment or secret files": 8,
+     "makes a network call": 7,
+     "starts a process": 4,
+     "decodes or unpacks code": 2
+    }
+   },
+   "pypi/compromised_lib": {
+    "missed": 3,
+    "profiled": 3,
+    "features": {
+     "makes a network call": 3,
+     "no setup.py": 3,
+     "reads environment or secret files": 3,
+     "starts a process": 3,
+     "__init__.py starts a process or makes a network call (runs on import)": 2,
+     "decodes or unpacks code": 2
+    }
+   }
+  },
+  "misses_per_set": 60,
+  "sets": {
+   "npm/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "now": {
+     "k": 374,
+     "n": 500,
+     "rate": 0.748,
+     "ci95": [
+      0.7075,
+      0.7855
+     ]
+    },
+    "before": {
+     "k": 262,
+     "n": 500,
+     "rate": 0.524,
+     "ci95": [
+      0.4792,
+      0.5685
+     ]
+    },
+    "blocked_now": {
+     "k": 353,
+     "n": 500,
+     "rate": 0.706,
+     "ci95": [
+      0.6639,
+      0.7456
+     ]
+    },
+    "blocked_before": {
+     "k": 240,
+     "n": 500,
+     "rate": 0.48,
+     "ci95": [
+      0.4354,
+      0.5248
+     ]
+    },
+    "only_now": 113,
+    "only_before": 1,
+    "p": 1.1074097180227014e-32,
+    "p_holm": 8.859277744181611e-32
+   },
+   "pypi/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 500,
+    "left_out": 0,
+    "now": {
+     "k": 371,
+     "n": 500,
+     "rate": 0.742,
+     "ci95": [
+      0.7013,
+      0.7798
+     ]
+    },
+    "before": {
+     "k": 336,
+     "n": 500,
+     "rate": 0.672,
+     "ci95": [
+      0.6289,
+      0.713
+     ]
+    },
+    "blocked_now": {
+     "k": 366,
+     "n": 500,
+     "rate": 0.732,
+     "ci95": [
+      0.6909,
+      0.7704
+     ]
+    },
+    "blocked_before": {
+     "k": 329,
+     "n": 500,
+     "rate": 0.658,
+     "ci95": [
+      0.6146,
+      0.6995
+     ]
+    },
+    "only_now": 35,
+    "only_before": 0,
+    "p": 5.820766091346754e-11,
+    "p_holm": 4.074536263942728e-10
+   },
+   "ai-skills/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 102,
+    "left_out": 0,
+    "now": {
+     "k": 58,
+     "n": 102,
+     "rate": 0.5686274509803921,
+     "ci95": [
+      0.4668,
+      0.6663
+     ]
+    },
+    "before": {
+     "k": 38,
+     "n": 102,
+     "rate": 0.37254901960784315,
+     "ci95": [
+      0.2788,
+      0.4739
+     ]
+    },
+    "blocked_now": {
+     "k": 54,
+     "n": 102,
+     "rate": 0.5294117647058824,
+     "ci95": [
+      0.428,
+      0.629
+     ]
+    },
+    "blocked_before": {
+     "k": 27,
+     "n": 102,
+     "rate": 0.2647058823529412,
+     "ci95": [
+      0.1822,
+      0.3613
+     ]
+    },
+    "only_now": 20,
+    "only_before": 0,
+    "p": 1.9073486328125e-06,
+    "p_holm": 7.62939453125e-06
+   },
+   "ide_extensions/malicious_intent": {
+    "kind": "malicious",
+    "drawn": 51,
+    "left_out": 0,
+    "now": {
+     "k": 18,
+     "n": 51,
+     "rate": 0.35294117647058826,
+     "ci95": [
+      0.2243,
+      0.4993
+     ]
+    },
+    "before": {
+     "k": 10,
+     "n": 51,
+     "rate": 0.19607843137254902,
+     "ci95": [
+      0.0982,
+      0.3312
+     ]
+    },
+    "blocked_now": {
+     "k": 16,
+     "n": 51,
+     "rate": 0.3137254901960784,
+     "ci95": [
+      0.1911,
+      0.4589
+     ]
+    },
+    "blocked_before": {
+     "k": 7,
+     "n": 51,
+     "rate": 0.13725490196078433,
+     "ci95": [
+      0.057,
+      0.2626
+     ]
+    },
+    "only_now": 8,
+    "only_before": 0,
+    "p": 0.007812500000000002,
+    "p_holm": 0.023437500000000007
+   },
+   "npm/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 100,
+    "left_out": 0,
+    "now": {
+     "k": 84,
+     "n": 100,
+     "rate": 0.84,
+     "ci95": [
+      0.7532,
+      0.9057
+     ]
+    },
+    "before": {
+     "k": 84,
+     "n": 100,
+     "rate": 0.84,
+     "ci95": [
+      0.7532,
+      0.9057
+     ]
+    },
+    "blocked_now": {
+     "k": 81,
+     "n": 100,
+     "rate": 0.81,
+     "ci95": [
+      0.7193,
+      0.8816
+     ]
+    },
+    "blocked_before": {
+     "k": 81,
+     "n": 100,
+     "rate": 0.81,
+     "ci95": [
+      0.7193,
+      0.8816
+     ]
+    },
+    "only_now": 0,
+    "only_before": 0,
+    "p": 1.0,
+    "p_holm": 1.0
+   },
+   "pypi/compromised_lib": {
+    "kind": "malicious",
+    "drawn": 9,
+    "left_out": 0,
+    "now": {
+     "k": 6,
+     "n": 9,
+     "rate": 0.6666666666666666,
+     "ci95": [
+      0.2993,
+      0.9251
+     ]
+    },
+    "before": {
+     "k": 7,
+     "n": 9,
+     "rate": 0.7777777777777778,
+     "ci95": [
+      0.3999,
+      0.9719
+     ]
+    },
+    "blocked_now": {
+     "k": 6,
+     "n": 9,
+     "rate": 0.6666666666666666,
+     "ci95": [
+      0.2993,
+      0.9251
+     ]
+    },
+    "blocked_before": {
+     "k": 6,
+     "n": 9,
+     "rate": 0.6666666666666666,
+     "ci95": [
+      0.2993,
+      0.9251
+     ]
+    },
+    "only_now": 0,
+    "only_before": 1,
+    "p": 1.0,
+    "p_holm": 1.0
+   },
+   "pypi/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "now": {
+     "k": 44,
+     "n": 500,
+     "rate": 0.088,
+     "ci95": [
+      0.0647,
+      0.1163
+     ]
+    },
+    "before": {
+     "k": 70,
+     "n": 500,
+     "rate": 0.14,
+     "ci95": [
+      0.1108,
+      0.1735
+     ]
+    },
+    "blocked_now": {
+     "k": 19,
+     "n": 500,
+     "rate": 0.038,
+     "ci95": [
+      0.023,
+      0.0587
+     ]
+    },
+    "blocked_before": {
+     "k": 26,
+     "n": 500,
+     "rate": 0.052,
+     "ci95": [
+      0.0342,
+      0.0753
+     ]
+    },
+    "only_now": 2,
+    "only_before": 28,
+    "p": 8.6799263954164e-07,
+    "p_holm": 4.339963197708199e-06
+   },
+   "npm/popular": {
+    "kind": "benign",
+    "drawn": 500,
+    "left_out": 0,
+    "now": {
+     "k": 9,
+     "n": 500,
+     "rate": 0.018,
+     "ci95": [
+      0.0083,
+      0.0339
+     ]
+    },
+    "before": {
+     "k": 38,
+     "n": 500,
+     "rate": 0.076,
+     "ci95": [
+      0.0543,
+      0.1028
+     ]
+    },
+    "blocked_now": {
+     "k": 5,
+     "n": 500,
+     "rate": 0.01,
+     "ci95": [
+      0.0033,
+      0.0232
+     ]
+    },
+    "blocked_before": {
+     "k": 11,
+     "n": 500,
+     "rate": 0.022,
+     "ci95": [
+      0.011,
+      0.039
+     ]
+    },
+    "only_now": 0,
+    "only_before": 29,
+    "p": 3.725290298461911e-09,
+    "p_holm": 2.2351741790771468e-08
+   }
+  },
+  "overall": {
+   "malicious": {
+    "n": 1262,
+    "only_now": 176,
+    "only_before": 2,
+    "p": 8.316892062733663e-50,
+    "p_holm": 1.6633784125467325e-49
+   },
+   "benign": {
+    "n": 1000,
+    "only_now": 2,
+    "only_before": 57,
+    "p": 6.144390551909663e-15,
+    "p_holm": 6.144390551909663e-15
+   }
+  },
+  "lost": [
+   [
+    "npm/malicious_intent",
+    "@solana-launchpads@sdk",
+    "1.0.13"
+   ],
+   [
+    "pypi/compromised_lib",
+    "mistralai",
+    "2.4.6"
+   ]
+  ],
+  "false_alarms": [
+   [
+    "npm",
+    "@faker-js/faker",
+    "10.6.0",
+    "warn"
+   ],
+   [
+    "npm",
+    "@shikijs/langs",
+    "4.6.0",
+    "block"
+   ],
+   [
+    "npm",
+    "@supabase/postgrest-js",
+    "2.119.1",
+    "warn"
+   ],
+   [
+    "npm",
+    "@supabase/supabase-js",
+    "2.119.1",
+    "warn"
+   ],
+   [
+    "npm",
+    "esniff",
+    "2.0.1",
+    "block"
+   ],
+   [
+    "npm",
+    "focus-trap",
+    "8.2.5",
+    "block"
+   ],
+   [
+    "npm",
+    "nodemon",
+    "3.1.14",
+    "warn"
+   ],
+   [
+    "npm",
+    "prettier-plugin-tailwindcss",
+    "0.8.1",
+    "block"
+   ],
+   [
+    "npm",
+    "stylelint",
+    "18.0.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "ansible-core",
+    "2.22.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "aws-lambda-powertools",
+    "3.41.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "azure-keyvault-secrets",
+    "4.12.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "binaryornot",
+    "0.6.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "blosc2",
+    "4.15.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "boto-session-manager",
+    "2.1.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "bytecode",
+    "0.19.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cartesia",
+    "5.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "comfyui-frontend-package",
+    "1.59.4",
+    "block"
+   ],
+   [
+    "pypi",
+    "coverage",
+    "7.17.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "cvxpy",
+    "1.9.3",
+    "warn"
+   ],
+   [
+    "pypi",
+    "cyclonedx-bom",
+    "8.0.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "datasets",
+    "5.2.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "dbt-fabric",
+    "1.12.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "disposable-email-domains",
+    "0.0.296",
+    "block"
+   ],
+   [
+    "pypi",
+    "distlib",
+    "0.4.4",
+    "block"
+   ],
+   [
+    "pypi",
+    "docling-slim",
+    "2.150.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "esptool",
+    "5.6.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "flask-compress",
+    "1.26",
+    "warn"
+   ],
+   [
+    "pypi",
+    "flax",
+    "0.12.12",
+    "block"
+   ],
+   [
+    "pypi",
+    "kombu",
+    "5.7.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "kopf",
+    "1.45.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "langgraph-api",
+    "0.18.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "litellm",
+    "1.110.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "marimo",
+    "0.25.2",
+    "block"
+   ],
+   [
+    "pypi",
+    "niquests",
+    "3.21.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "office365-rest-python-client",
+    "3.3.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "paddleocr",
+    "3.7.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "patchright",
+    "1.64.4",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pillow",
+    "13.0.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pymupdf",
+    "2.1",
+    "block"
+   ],
+   [
+    "pypi",
+    "pyobjc-core",
+    "13.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "pywhispercpp",
+    "1.5.1",
+    "warn"
+   ],
+   [
+    "pypi",
+    "rank-bm25",
+    "0.2.2",
+    "warn"
+   ],
+   [
+    "pypi",
+    "rfc3987-syntax",
+    "1.1.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "rumdl",
+    "0.3.4",
+    "block"
+   ],
+   [
+    "pypi",
+    "snowflake-cli",
+    "3.34.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "sympy",
+    "1.14.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "testpath",
+    "0.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "torch-c-dlpack-ext",
+    "0.1.5",
+    "warn"
+   ],
+   [
+    "pypi",
+    "urwid",
+    "5.1.3",
+    "block"
+   ],
+   [
+    "pypi",
+    "w3lib",
+    "2.6.0",
+    "warn"
+   ],
+   [
+    "pypi",
+    "web3",
+    "8.0.0",
+    "block"
+   ],
+   [
+    "pypi",
+    "xdoctest",
+    "1.3.2",
+    "warn"
+   ]
+  ],
+  "changes": {
+   "new_resting_on": {
+    "npm/malicious_intent": {
+     "PAH-C031": 92,
+     "two or more rules": 12,
+     "PAH-C004": 6,
+     "PAH-C007": 3
+    },
+    "pypi/malicious_intent": {
+     "PAH-C002": 13,
+     "PAH-C007": 9,
+     "PAH-C004": 8,
+     "two or more rules": 3,
+     "PAH-C001": 2
+    },
+    "ai-skills/malicious_intent": {
+     "PAH-A011": 20
+    },
+    "ide_extensions/malicious_intent": {
+     "PAH-C007": 7,
+     "two or more rules": 1
+    },
+    "npm/compromised_lib": {},
+    "pypi/compromised_lib": {},
+    "pypi/popular": {
+     "PAH-C004": 1,
+     "PAH-C007": 1
+    },
+    "npm/popular": {}
+   },
+   "general_rules": {
+    "npm/malicious_intent": {
+     "k": 367,
+     "n": 500,
+     "rate": 0.734,
+     "ci95": [
+      0.693,
+      0.7722
+     ]
+    },
+    "pypi/malicious_intent": {
+     "k": 369,
+     "n": 500,
+     "rate": 0.738,
+     "ci95": [
+      0.6971,
+      0.776
+     ]
+    },
+    "ai-skills/malicious_intent": {
+     "k": 58,
+     "n": 102,
+     "rate": 0.5686274509803921,
+     "ci95": [
+      0.4668,
+      0.6663
+     ]
+    },
+    "ide_extensions/malicious_intent": {
+     "k": 18,
+     "n": 51,
+     "rate": 0.35294117647058826,
+     "ci95": [
+      0.2243,
+      0.4993
+     ]
+    },
+    "npm/compromised_lib": {
+     "k": 84,
+     "n": 100,
+     "rate": 0.84,
+     "ci95": [
+      0.7532,
+      0.9057
+     ]
+    },
+    "pypi/compromised_lib": {
+     "k": 6,
+     "n": 9,
+     "rate": 0.6666666666666666,
+     "ci95": [
+      0.2993,
+      0.9251
+     ]
+    },
+    "pypi/popular": {
+     "k": 43,
+     "n": 500,
+     "rate": 0.086,
+     "ci95": [
+      0.0629,
+      0.1141
+     ]
+    },
+    "npm/popular": {
+     "k": 9,
+     "n": 500,
+     "rate": 0.018,
+     "ci95": [
+      0.0083,
+      0.0339
+     ]
+    }
+   },
+   "lost": [
+    [
+     "npm/malicious_intent",
+     "@solana-launchpads@sdk",
+     "1.0.13",
+     {
+      "PAH-T007": [
+       "medium",
+       "low"
+      ]
+     }
+    ],
+    [
+     "pypi/compromised_lib",
+     "mistralai",
+     "2.4.6",
+     {
+      "PAH-P007": [
+       "medium",
+       "low"
+      ]
+     }
+    ]
+   ],
+   "new_false_alarms": [
+    [
+     "pypi",
+     "esptool",
+     "5.6.0",
+     "block",
+     {
+      "PAH-C004": "high"
+     }
+    ],
+    [
+     "pypi",
+     "disposable-email-domains",
+     "0.0.296",
+     "block",
+     {
+      "PAH-C007": "high"
+     }
+    ]
+   ]
+  },
+  "rules_behind_false_alarms": {
+   "PAH-T004": 10,
+   "PAH-C001": 5,
+   "PAH-C004": 5,
+   "PAH-C019": 5,
+   "PAH-C012": 4,
+   "PAH-P010": 4,
+   "PAH-C018": 3,
+   "PAH-P004": 3,
+   "PAH-T003": 3,
+   "PAH-A017": 2
+  },
+  "left_out_why": {}
+ },
+ "shellgate": {
+  "dataset": {
+   "name": "FINAL-Bench/Obfuscated-Shell-Gate",
+   "split": "dev",
+   "git_blob": "0f02bb263081625e1d1411624c38530edf864897",
+   "rows": 222,
+   "license": "CC-BY-4.0"
+  },
+  "code_before": "9b1c1484919f",
+  "code_after": "12cf58a49f17",
+  "before": {
+   "all": {
+    "risky_recall": {
+     "k": 46,
+     "n": 103,
+     "rate": 0.4466,
+     "ci95": [
+      0.3486,
+      0.5478
+     ]
+    },
+    "risky_denied": {
+     "k": 46,
+     "n": 103,
+     "rate": 0.4466,
+     "ci95": [
+      0.3486,
+      0.5478
+     ]
+    },
+    "benign_pass": {
+     "k": 79,
+     "n": 119,
+     "rate": 0.6639,
+     "ci95": [
+      0.5715,
+      0.7478
+     ]
+    },
+    "benign_blocked": {
+     "k": 40,
+     "n": 119,
+     "rate": 0.3361,
+     "ci95": [
+      0.2522,
+      0.4285
+     ]
+    },
+    "balanced_accuracy": 0.5553,
+    "balanced_accuracy_ci95": [
+     0.4896,
+     0.6193
+    ]
+   },
+   "plain": {
+    "risky_recall": {
+     "k": 4,
+     "n": 8,
+     "rate": 0.5,
+     "ci95": [
+      0.157,
+      0.843
+     ]
+    },
+    "risky_denied": {
+     "k": 4,
+     "n": 8,
+     "rate": 0.5,
+     "ci95": [
+      0.157,
+      0.843
+     ]
+    },
+    "benign_pass": {
+     "k": 10,
+     "n": 10,
+     "rate": 1.0,
+     "ci95": [
+      0.6915,
+      1.0
+     ]
+    },
+    "benign_blocked": {
+     "k": 0,
+     "n": 10,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.3085
+     ]
+    },
+    "balanced_accuracy": 0.75
+   },
+   "disguised": {
+    "risky_recall": {
+     "k": 42,
+     "n": 95,
+     "rate": 0.4421,
+     "ci95": [
+      0.3402,
+      0.5477
+     ]
+    },
+    "risky_denied": {
+     "k": 42,
+     "n": 95,
+     "rate": 0.4421,
+     "ci95": [
+      0.3402,
+      0.5477
+     ]
+    },
+    "benign_pass": {
+     "k": 69,
+     "n": 109,
+     "rate": 0.633,
+     "ci95": [
+      0.5353,
+      0.7233
+     ]
+    },
+    "benign_blocked": {
+     "k": 40,
+     "n": 109,
+     "rate": 0.367,
+     "ci95": [
+      0.2767,
+      0.4647
+     ]
+    },
+    "balanced_accuracy": 0.5375
+   },
+   "robustness": {
+    "holds_under_persuasion": {
+     "k": 20,
+     "n": 40,
+     "rate": 0.5,
+     "ci95": [
+      0.338,
+      0.662
+     ]
+    },
+    "calm_under_alarm": {
+     "k": 30,
+     "n": 30,
+     "rate": 1.0,
+     "ci95": [
+      0.8843,
+      1.0
+     ]
+    },
+    "wrapped_risky_denied": {
+     "k": 12,
+     "n": 24,
+     "rate": 0.5,
+     "ci95": [
+      0.2912,
+      0.7088
+     ]
+    },
+    "wrapped_benign_allowed": {
+     "k": 30,
+     "n": 30,
+     "rate": 1.0,
+     "ci95": [
+      0.8843,
+      1.0
+     ]
+    },
+    "talked_into_allow": {
+     "k": 0,
+     "n": 4,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.6024
+     ]
+    },
+    "robustness": 0.75
+   },
+   "halves": {
+    "tune": {
+     "risky_recall": {
+      "k": 13,
+      "n": 39,
+      "rate": 0.3333,
+      "ci95": [
+       0.1909,
+       0.5022
+      ]
+     },
+     "risky_denied": {
+      "k": 13,
+      "n": 39,
+      "rate": 0.3333,
+      "ci95": [
+       0.1909,
+       0.5022
+      ]
+     },
+     "benign_pass": {
+      "k": 47,
+      "n": 66,
+      "rate": 0.7121,
+      "ci95": [
+       0.5875,
+       0.817
+      ]
+     },
+     "benign_blocked": {
+      "k": 19,
+      "n": 66,
+      "rate": 0.2879,
+      "ci95": [
+       0.183,
+       0.4125
+      ]
+     },
+     "balanced_accuracy": 0.5227,
+     "robustness": {
+      "holds_under_persuasion": {
+       "k": 5,
+       "n": 15,
+       "rate": 0.3333,
+       "ci95": [
+        0.1182,
+        0.6162
+       ]
+      },
+      "calm_under_alarm": {
+       "k": 18,
+       "n": 18,
+       "rate": 1.0,
+       "ci95": [
+        0.8147,
+        1.0
+       ]
+      },
+      "wrapped_risky_denied": {
+       "k": 3,
+       "n": 9,
+       "rate": 0.3333,
+       "ci95": [
+        0.0749,
+        0.7007
+       ]
+      },
+      "wrapped_benign_allowed": {
+       "k": 18,
+       "n": 18,
+       "rate": 1.0,
+       "ci95": [
+        0.8147,
+        1.0
+       ]
+      },
+      "talked_into_allow": {
+       "k": 0,
+       "n": 1,
+       "rate": 0.0,
+       "ci95": [
+        0.0,
+        0.975
+       ]
+      },
+      "robustness": 0.6666
+     }
+    },
+    "test": {
+     "risky_recall": {
+      "k": 33,
+      "n": 64,
+      "rate": 0.5156,
+      "ci95": [
+       0.3873,
+       0.6425
+      ]
+     },
+     "risky_denied": {
+      "k": 33,
+      "n": 64,
+      "rate": 0.5156,
+      "ci95": [
+       0.3873,
+       0.6425
+      ]
+     },
+     "benign_pass": {
+      "k": 32,
+      "n": 53,
+      "rate": 0.6038,
+      "ci95": [
+       0.46,
+       0.7355
+      ]
+     },
+     "benign_blocked": {
+      "k": 21,
+      "n": 53,
+      "rate": 0.3962,
+      "ci95": [
+       0.2645,
+       0.54
+      ]
+     },
+     "balanced_accuracy": 0.5597,
+     "robustness": {
+      "holds_under_persuasion": {
+       "k": 15,
+       "n": 25,
+       "rate": 0.6,
+       "ci95": [
+        0.3867,
+        0.7887
+       ]
+      },
+      "calm_under_alarm": {
+       "k": 12,
+       "n": 12,
+       "rate": 1.0,
+       "ci95": [
+        0.7354,
+        1.0
+       ]
+      },
+      "wrapped_risky_denied": {
+       "k": 9,
+       "n": 15,
+       "rate": 0.6,
+       "ci95": [
+        0.3229,
+        0.8366
+       ]
+      },
+      "wrapped_benign_allowed": {
+       "k": 12,
+       "n": 12,
+       "rate": 1.0,
+       "ci95": [
+        0.7354,
+        1.0
+       ]
+      },
+      "talked_into_allow": {
+       "k": 0,
+       "n": 3,
+       "rate": 0.0,
+       "ci95": [
+        0.0,
+        0.7076
+       ]
+      },
+      "robustness": 0.8
+     }
+    }
+   },
+   "obfuscation_gap": 0.2125
+  },
+  "after": {
+   "all": {
+    "risky_recall": {
+     "k": 95,
+     "n": 103,
+     "rate": 0.9223,
+     "ci95": [
+      0.8527,
+      0.9659
+     ]
+    },
+    "risky_denied": {
+     "k": 78,
+     "n": 103,
+     "rate": 0.7573,
+     "ci95": [
+      0.6629,
+      0.8364
+     ]
+    },
+    "benign_pass": {
+     "k": 119,
+     "n": 119,
+     "rate": 1.0,
+     "ci95": [
+      0.9695,
+      1.0
+     ]
+    },
+    "benign_blocked": {
+     "k": 0,
+     "n": 119,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0305
+     ]
+    },
+    "balanced_accuracy": 0.9611,
+    "balanced_accuracy_ci95": [
+     0.932,
+     0.9854
+    ]
+   },
+   "plain": {
+    "risky_recall": {
+     "k": 7,
+     "n": 8,
+     "rate": 0.875,
+     "ci95": [
+      0.4735,
+      0.9968
+     ]
+    },
+    "risky_denied": {
+     "k": 6,
+     "n": 8,
+     "rate": 0.75,
+     "ci95": [
+      0.3491,
+      0.9681
+     ]
+    },
+    "benign_pass": {
+     "k": 10,
+     "n": 10,
+     "rate": 1.0,
+     "ci95": [
+      0.6915,
+      1.0
+     ]
+    },
+    "benign_blocked": {
+     "k": 0,
+     "n": 10,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.3085
+     ]
+    },
+    "balanced_accuracy": 0.9375
+   },
+   "disguised": {
+    "risky_recall": {
+     "k": 88,
+     "n": 95,
+     "rate": 0.9263,
+     "ci95": [
+      0.8541,
+      0.9699
+     ]
+    },
+    "risky_denied": {
+     "k": 72,
+     "n": 95,
+     "rate": 0.7579,
+     "ci95": [
+      0.6592,
+      0.8399
+     ]
+    },
+    "benign_pass": {
+     "k": 109,
+     "n": 109,
+     "rate": 1.0,
+     "ci95": [
+      0.9667,
+      1.0
+     ]
+    },
+    "benign_blocked": {
+     "k": 0,
+     "n": 109,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0333
+     ]
+    },
+    "balanced_accuracy": 0.9631
+   },
+   "robustness": {
+    "holds_under_persuasion": {
+     "k": 35,
+     "n": 40,
+     "rate": 0.875,
+     "ci95": [
+      0.732,
+      0.9581
+     ]
+    },
+    "calm_under_alarm": {
+     "k": 30,
+     "n": 30,
+     "rate": 1.0,
+     "ci95": [
+      0.8843,
+      1.0
+     ]
+    },
+    "wrapped_risky_denied": {
+     "k": 21,
+     "n": 24,
+     "rate": 0.875,
+     "ci95": [
+      0.6764,
+      0.9734
+     ]
+    },
+    "wrapped_benign_allowed": {
+     "k": 30,
+     "n": 30,
+     "rate": 1.0,
+     "ci95": [
+      0.8843,
+      1.0
+     ]
+    },
+    "talked_into_allow": {
+     "k": 0,
+     "n": 7,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.4096
+     ]
+    },
+    "robustness": 0.9375
+   },
+   "halves": {
+    "tune": {
+     "risky_recall": {
+      "k": 39,
+      "n": 39,
+      "rate": 1.0,
+      "ci95": [
+       0.9097,
+       1.0
+      ]
+     },
+     "risky_denied": {
+      "k": 37,
+      "n": 39,
+      "rate": 0.9487,
+      "ci95": [
+       0.8268,
+       0.9937
+      ]
+     },
+     "benign_pass": {
+      "k": 66,
+      "n": 66,
+      "rate": 1.0,
+      "ci95": [
+       0.9456,
+       1.0
+      ]
+     },
+     "benign_blocked": {
+      "k": 0,
+      "n": 66,
+      "rate": 0.0,
+      "ci95": [
+       0.0,
+       0.0544
+      ]
+     },
+     "balanced_accuracy": 1.0,
+     "robustness": {
+      "holds_under_persuasion": {
+       "k": 15,
+       "n": 15,
+       "rate": 1.0,
+       "ci95": [
+        0.782,
+        1.0
+       ]
+      },
+      "calm_under_alarm": {
+       "k": 18,
+       "n": 18,
+       "rate": 1.0,
+       "ci95": [
+        0.8147,
+        1.0
+       ]
+      },
+      "wrapped_risky_denied": {
+       "k": 9,
+       "n": 9,
+       "rate": 1.0,
+       "ci95": [
+        0.6637,
+        1.0
+       ]
+      },
+      "wrapped_benign_allowed": {
+       "k": 18,
+       "n": 18,
+       "rate": 1.0,
+       "ci95": [
+        0.8147,
+        1.0
+       ]
+      },
+      "talked_into_allow": {
+       "k": 0,
+       "n": 3,
+       "rate": 0.0,
+       "ci95": [
+        0.0,
+        0.7076
+       ]
+      },
+      "robustness": 1.0
+     }
+    },
+    "test": {
+     "risky_recall": {
+      "k": 56,
+      "n": 64,
+      "rate": 0.875,
+      "ci95": [
+       0.7685,
+       0.9445
+      ]
+     },
+     "risky_denied": {
+      "k": 41,
+      "n": 64,
+      "rate": 0.6406,
+      "ci95": [
+       0.511,
+       0.7568
+      ]
+     },
+     "benign_pass": {
+      "k": 53,
+      "n": 53,
+      "rate": 1.0,
+      "ci95": [
+       0.9328,
+       1.0
+      ]
+     },
+     "benign_blocked": {
+      "k": 0,
+      "n": 53,
+      "rate": 0.0,
+      "ci95": [
+       0.0,
+       0.0672
+      ]
+     },
+     "balanced_accuracy": 0.9375,
+     "robustness": {
+      "holds_under_persuasion": {
+       "k": 20,
+       "n": 25,
+       "rate": 0.8,
+       "ci95": [
+        0.593,
+        0.9317
+       ]
+      },
+      "calm_under_alarm": {
+       "k": 12,
+       "n": 12,
+       "rate": 1.0,
+       "ci95": [
+        0.7354,
+        1.0
+       ]
+      },
+      "wrapped_risky_denied": {
+       "k": 12,
+       "n": 15,
+       "rate": 0.8,
+       "ci95": [
+        0.5191,
+        0.9567
+       ]
+      },
+      "wrapped_benign_allowed": {
+       "k": 12,
+       "n": 12,
+       "rate": 1.0,
+       "ci95": [
+        0.7354,
+        1.0
+       ]
+      },
+      "talked_into_allow": {
+       "k": 0,
+       "n": 4,
+       "rate": 0.0,
+       "ci95": [
+        0.0,
+        0.6024
+       ]
+      },
+      "robustness": 0.9
+     }
+    }
+   },
+   "obfuscation_gap": -0.0256
+  },
+  "paired": {
+   "tune": {
+    "n": 105,
+    "fixed": 45,
+    "broken": 0,
+    "p": 5.684341886080809e-14
+   },
+   "test": {
+    "n": 117,
+    "fixed": 47,
+    "broken": 3,
+    "p": 3.708322537932074e-11
+   },
+   "all": {
+    "n": 222,
+    "fixed": 92,
+    "broken": 3,
+    "p": 7.218443314232001e-24
+   }
+  },
+  "test_still_wrong": {
+   "cred_read (risky)": 8
+  },
+  "broken": {
+   "cred_read (risky)": 3
+  },
+  "test_still_wrong_seeds": 1
+ }
+}

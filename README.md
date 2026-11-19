@@ -160,7 +160,7 @@ operating system, so a separate antivirus product adds little.
 | Full scan | Every file, against signatures | `pah sweep`: Downloads and Desktop, every project in your code folders, installed agent skills, plugins and extensions, editor extensions, startup items, exposed keys and known traces; binaries go to Microsoft Defender (built into Windows) or ClamAV |
 | Real-time protection | Hooks into the file system | `pah protect`: new downloads, clones, extensions, skills and startup items are scanned within seconds; `--install` starts it at login. Your agents' own hooks stop dangerous commands before they run |
 | Quarantine | Moves infected files | `pah quarantine`: moves a blocked download, extension or skill, or only the payload files of a project, and restores them on request |
-| Agent hooks, skills, MCP servers, prompt injection | Not read | 129 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
+| Agent hooks, skills, MCP servers, prompt injection | Not read | 132 rules tied to 2025–2026 incidents; 76 of 76 trap repositories caught, 0 of 40 look-alikes flagged |
 | Behavior over time | Behavior monitoring of processes | Each step your agent takes is judged by the steps before it: a credential read, then an upload; a download, then `chmod +x`, then a run; a web page, then the guard switched off ([attack chains](#attack-chains)) |
 | AI model files | Known samples, if any | Pickles, PyTorch, Keras and GGUF files read without loading them: what loading would import or run |
 | Known malware binaries (ransomware, droppers) | Signature engine | The engine already on your computer, called locally (`pah audit`, `pah sweep`) |
@@ -367,7 +367,42 @@ flagged means blocked or warned. The rules were not changed before these results
 - **Hijacked releases** of real packages, a small payload inside a large legitimate one: 88 of 100 npm and 14 of 17 PyPI releases caught.
 - **False alarms:** 78 of 500 popular PyPI releases (15.6%) and 31 of 500 npm releases (6.2%) were flagged, and 33 of the 1,000 blocked (3.3%, 95% interval 2.3% to 4.6%). The blocks come mostly from obfuscated code (`PAH-C012`, 11: @babel/core, @babel/plugin-transform-spread, @mui/base, @mui/x-internals); zero-width or filler characters (`PAH-T004`, 5: @angular/common, flasgger, inspect-scout, mitmproxy); Python code that runs at interpreter start (`PAH-P008`, 4: cibuildwheel, coloredlogs, ddtrace, jedi); executable disguised as another file type (`PAH-F002`, 3: psycopg-binary, rapidfuzz, triton).
 - **Campaign checks:** switched off, they cost 8 catches (8 in npm packages published to attack): the general rules do nearly all of the work.
-- **What this means:** on real malicious packages, agent-white-hat catches far less than the 100% TrapRepo shows, and on popular packages it flags about 11 in 100. Its strong ground is what runs by itself when an agent sets a project up; code that runs later, on import or on activation, and attacks written as instructions are where it falls short. Fixes for both will be measured on a fresh draw from the same sources, not on this one.
+- **What this means:** on real malicious packages, agent-white-hat catches far less than the 100% TrapRepo shows, and on popular packages it flags about 11 in 100. Its strong ground is what runs by itself when an agent sets a project up; code that runs later, on import or on activation, and attacks written as instructions are where it falls short. Round two, below, measures the fixes for both on a fresh draw from the same sources, not on this one.
+
+### Round two: the fixes on a fresh draw
+
+Round one's misses and false alarms were studied to write fixes, so its samples can no longer measure them. Round two ([`bench/fixtures/independent-sample-round2.json`](bench/fixtures/independent-sample-round2.json)) is a fresh random draw from the same sources, committed before any rule changed and before anything was downloaded: new packages for the sets round one sampled, and for the sets it took whole, the half that was not studied. Those halves were scanned in round one too, and its description of misses by structure may include some of them, but none of their contents was looked at while the rules were changed. Every sample was judged twice, on the same bytes, by the current rules (code `78f01b944b91`) and by round one's (commit `71e982b`). The analysis was fixed before the download too: an exact McNemar test on the samples only one version catches or flags, per set with Holm's adjustment, and over all malicious samples and all popular packages. It ran once, and no rule has changed since.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/round2-en-dark.png">
+    <img src="docs/figures/round2-en-light.png" width="100%" alt="Forest plot of round two: each set's rate under the current rules with its exact 95% interval, and round one's rules on the same samples. npm packages published to attack: 74.8% (70.8%–78.5%), round one's rules 52.4%; PyPI packages published to attack: 74.2% (70.1%–78.0%), round one's rules 67.2%; Agent skills published to attack: 56.9% (46.7%–66.6%), round one's rules 37.3%; IDE extensions published to attack: 35.3% (22.4%–49.9%), round one's rules 19.6%; Hijacked releases of real npm packages: 84.0% (75.3%–90.6%), round one's rules 84.0%; Hijacked releases of real PyPI packages: 66.7% (29.9%–92.5%), round one's rules 77.8%; Popular PyPI projects: 8.8% (6.5%–11.6%), round one's rules 14.0%; Popular npm packages: 1.8% (0.8%–3.4%), round one's rules 7.6%."/>
+  </picture>
+</p>
+
+| Set | Scanned | Round one's rules | Current rules | 95% interval | Only current | Only round one's | p (Holm) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| npm packages published to attack | 500 | 262 (52.4%) | 374 (74.8%) | 70.8% to 78.5% | 113 | 1 | 8.9e-32 |
+| PyPI packages published to attack | 500 | 336 (67.2%) | 371 (74.2%) | 70.1% to 78.0% | 35 | 0 | 4.1e-10 |
+| Agent skills published to attack | 102 | 38 (37.3%) | 58 (56.9%) | 46.7% to 66.6% | 20 | 0 | 7.6e-06 |
+| IDE extensions published to attack | 51 | 10 (19.6%) | 18 (35.3%) | 22.4% to 49.9% | 8 | 0 | 0.023 |
+| Hijacked releases of real npm packages | 100 | 84 (84.0%) | 84 (84.0%) | 75.3% to 90.6% | 0 | 0 | 1.000 |
+| Hijacked releases of real PyPI packages | 9 | 7 (77.8%) | 6 (66.7%) | 29.9% to 92.5% | 0 | 1 | 1.000 |
+| All malicious samples | 1,262 | 737 | 911 |  | 176 | 2 | 1.7e-49 |
+
+| Set | Scanned | Round one's rules | Current rules | 95% interval | Only current | Only round one's | p (Holm) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Popular PyPI projects | 500 | 70 (14.0%) | 44 (8.8%) | 6.5% to 11.6% | 2 | 28 | 4.3e-06 |
+| Popular npm packages | 500 | 38 (7.6%) | 9 (1.8%) | 0.8% to 3.4% | 0 | 29 | 2.2e-08 |
+| All popular packages | 1,000 | 108 (10.8%) | 53 (5.3%) | 4.0% to 6.9% | 2 | 57 | 6.1e-15 |
+
+- **Caught:** 911 of 1,262 malicious samples, against 737 with round one's rules on the same files; 176 are caught only now and 2 only before. Each of the four sets published to attack gained, significantly after Holm's adjustment. The hijacked releases did not move: 84 of 100 npm releases both times, and 6 of 9 PyPI releases, one fewer.
+- **Where the gain comes from** (counted after the results, not part of the analysis fixed before them): 92 of the 113 new npm catches rest on one rule, code that publishes packages (`PAH-C031`), the shape of self-publishing spam such as IndonesianFoods; the other 21 rest on secrets or host details sent out, request-capture endpoints, or two rules together. The 35 new PyPI catches come from decoded code that is run (`PAH-C002`, 13), request-capture endpoints (`PAH-C007`, 9), secrets or host details sent out (`PAH-C004`, 8), two rules together (3) and downloads that are run (`PAH-C001`, 2). All 20 newly caught agent skills come from instructions that tell the agent to do something risky (`PAH-A011`), and 7 of the 8 newly caught IDE extensions from request-capture endpoints in code that runs when the editor starts, which round one's rules rated low.
+- **Lost:** both samples only round one's rules caught rested on a single medium finding that a fix lowered: a very long line, now low in data files (`PAH-T007`, @solana-launchpads@sdk 1.0.13), and a name close to a popular package's (`PAH-P007`, the hijacked mistralai 2.4.6).
+- **False alarms:** 53 of 1,000 popular packages flagged (5.3%, 95% interval 4.0% to 6.9%), against 108 (10.8%), and 24 blocked (2.4%, 1.5% to 3.5%), against 37. 57 are no longer flagged and 2 newly are, both blocked by the rule that treats a package's `__init__.py` as code run on import: esptool 5.6.0, whose serial-port server reads the machine's name next to its network code (`PAH-C004`), and disposable-email-domains 0.0.296, whose list of domains includes webhook.site and two dynamic-DNS hosts (`PAH-C007`, rated low before). The rules behind the 53: zero-width or filler characters (`PAH-T004`, 10), downloads that are run (`PAH-C001`, 5), secrets or the environment sent out (`PAH-C004`, 5), installs from a URL or git (`PAH-C019`, 5).
+- **Campaign checks:** switched off, they cost 9 catches (7 npm, 2 PyPI) and one false alarm.
+- **Still missed,** at the same moments as in round one: of a random 60 missed npm packages, 41 have no install-time script; all 16 missed hijacked npm releases run when imported; of the 33 missed IDE extensions, 23 activate when the editor starts; of the 44 missed agent skills, 24 have no code files and 22 carry shell commands in the skill text.
+- **What this means:** the fixes hold on samples they were not written from: more caught in every set published to attack, and half the false alarms. But most of the npm gain is one behaviour, packages that publish themselves; the hijacked releases, a small payload inside a large real package, did not move; and code that runs on import or activation is still where most misses are. The two new blocks come from treating data written as Python, a list of domains, like code that runs on import. A fix for them is for a fresh draw to measure, not this one.
 
 ### ViKernel's shell benchmark
 

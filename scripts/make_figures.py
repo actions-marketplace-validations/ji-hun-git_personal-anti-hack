@@ -7,7 +7,7 @@ in docs/design.md: a case file, where every image shows evidence from bench/resu
 highlighter mark on the line that decided an outcome.
 
     python scripts/make_figures.py                # every figure into docs/figures/
-    python scripts/make_figures.py --only hero    # some of: hero how chain results scan repos intervals social icon
+    python scripts/make_figures.py --only hero    # some of: hero how chain results scan repos intervals round2 social icon
 
 hero      the claim, a recorded agent run that was stopped, and the tested numbers
 how       how the guard decides: four checks in the order a step meets them, and its three answers
@@ -149,6 +149,17 @@ STR = {
         "int_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so the held-out rates are rates "
                     "on malware Datadog caught, not on all malware. Sample, protocol and every verdict: "
                     "bench/independent.py, bench/fixtures/independent-sample.json and bench/results/.",
+        "r2_title": "Round two: the fixes on samples never studied",
+        "r2_sub": "A fresh random draw, fixed before any rule changed. Every sample was judged by the current rules "
+                  "(dot) and by round one’s (ring); lines are exact 95% intervals. Under each set: the samples only "
+                  "one version caught or flagged, and the exact McNemar p, Holm-adjusted across the sets.",
+        "r2_mal": "Malicious software caught (blocked or warned)",
+        "r2_ben": "Popular packages flagged (blocked or warned)",
+        "r2_legend": ("Current rules", "Round one’s rules, same samples"),
+        "r2_note": "only now {b}, only before {c}; p {p}",
+        "r2_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so these are rates on malware "
+                   "Datadog caught. Sample, protocol and every verdict: bench/independent.py, "
+                   "bench/fixtures/independent-sample-round2.json and bench/results/.",
     },
     "ko": {
         "headline": "AI 에이전트를 쓰는 사람을 위한 백신.",
@@ -245,6 +256,17 @@ STR = {
         "int_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, 독립 세트의 비율은 모든 악성 코드가 아니라 "
                     "Datadog이 잡은 악성 코드에서의 비율입니다. 표본, 절차와 모든 판정: bench/independent.py, "
                     "bench/fixtures/independent-sample.json, bench/results/.",
+        "r2_title": "2차: 한 번도 들여다보지 않은 샘플로 잰 수정 효과",
+        "r2_sub": "규칙을 고치기 전에 고정한 새 무작위 추출입니다. 모든 샘플을 현재 규칙(점)과 1차 규칙(고리)으로 판정했고, "
+                  "선은 정확한 95% 구간입니다. 세트마다 한쪽만 잡거나 경고한 샘플 수와, 세트 전체에 Holm 보정한 정확 "
+                  "McNemar p를 적었습니다.",
+        "r2_mal": "악성 소프트웨어 탐지(차단 또는 경고)",
+        "r2_ben": "인기 패키지 오탐(차단 또는 경고)",
+        "r2_legend": ("현재 규칙", "1차 규칙, 같은 샘플"),
+        "r2_note": "현재만 {b}, 1차만 {c}, p {p}",
+        "r2_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, Datadog이 잡은 악성 코드에서의 비율입니다. "
+                   "표본, 절차와 모든 판정: bench/independent.py, bench/fixtures/independent-sample-round2.json, "
+                   "bench/results/.",
     },
 }
 
@@ -741,7 +763,8 @@ def forest(rows: list[dict], dom: tuple[float, float], lang: str) -> str:
         lo, hi = r["rate"]["ci95"]
         x = k / n
         alt = r.get("ring")
-        dodge = alt is not None and alt["k"] != k  # a second estimate on the same cases, set just below the first
+        # a second estimate on the same cases, set just below the first; when it is the same, drawn only if asked
+        dodge = alt is not None and (alt["k"] != k or r.get("always_ring", False))
         y = "calc(50% - 7px)" if dodge else "50%"
         marks = interval(lo, hi, tone, y)
         if dodge:
@@ -812,6 +835,36 @@ def intervals(lang: str, theme: str, st: dict | None = None) -> str:
             f'{forest(mal, mal_dom, lang)}</div>'
             f'<div class="panel"><h3>{e(s["int_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>{shell}'
             f'<p class="foot">{e(s["int_foot"] + (" " + s["int_foot_shell"] if shell else ""))}</p></div>')
+    return page(theme, body, INTERVALS_CSS, lang=lang)
+
+
+def _p(p: float) -> str:
+    return f"{p:.1e}" if p < 1e-3 else f"{p:.2g}" if p < 0.1 else f"{p:.2f}"
+
+
+def round_two(lang: str, theme: str, st: dict | None = None) -> str | None:
+    """Round two of the held-out test: each set's rate under the current rules (dot), with round one's rules on the
+    same samples (ring) and the paired test under its name. None until round two has run."""
+    s, st = STR[lang], st or stats_summary()
+    r2 = st.get("round_two")
+    if not r2:
+        return None
+    mal, ben = [], []
+    for key, v in r2["sets"].items():
+        note = s["r2_note"].format(b=f"{v['only_now']:,}", c=f"{v['only_before']:,}", p=_p(v["p_holm"]))
+        row = {"label": s["int_sets"].get(key, key), "note": note, "rate": v["now"], "ring": v["before"],
+               "always_ring": True}  # an equal rate is a result here, not a ring left out
+        (mal if v["kind"] == "malicious" else ben).append(row)
+    low = min(min(r["rate"]["ci95"][0], r["ring"]["ci95"][0]) for r in mal)
+    high = max(max(r["rate"]["ci95"][1], r["ring"]["ci95"][1]) for r in ben)
+    mal_dom = (min(0.9, _floor_to_tick(low, 1.0)), 1.0)
+    ben_dom = (0.0, next(c for c in (0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0) if c >= high))
+    legend = (f'<div class="legend"><span><i class="pt"></i>{e(s["r2_legend"][0])}</span>'
+              f'<span><i class="ring"></i>{e(s["r2_legend"][1])}</span></div>')
+    body = (f'<div class="fig"><h2>{e(s["r2_title"])}</h2><p class="sub">{e(s["r2_sub"])}</p>'
+            f'<div class="panel"><h3>{e(s["r2_mal"])}</h3>{legend}{forest(mal, mal_dom, lang)}</div>'
+            f'<div class="panel"><h3>{e(s["r2_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>'
+            f'<p class="foot">{e(s["r2_foot"])}</p></div>')
     return page(theme, body, INTERVALS_CSS, lang=lang)
 
 
@@ -995,7 +1048,7 @@ def render(doc: str, dest: Path, width: int, height: int | None = None, transpar
         subprocess.run(args + [src.as_uri()], check=True, capture_output=True, timeout=180)
 
 
-FIGURES = ("hero", "how", "chain", "results", "scan", "repos", "intervals")
+FIGURES = ("hero", "how", "chain", "results", "scan", "repos", "intervals", "round2")
 
 
 def main(argv: list[str]) -> int:
@@ -1009,8 +1062,10 @@ def main(argv: list[str]) -> int:
                 if only and name not in only:
                     continue
                 doc = {"hero": hero, "how": how, "chain": chain, "results": results, "repos": repos,
-                       "intervals": intervals}.get(name)
+                       "intervals": intervals, "round2": round_two}.get(name)
                 doc = doc(lang, theme) if doc else scan(lang, theme, raw)
+                if doc is None:  # a figure whose results do not exist yet
+                    continue
                 dest = OUT / f"{name}-{lang}-{theme}.png"
                 render(doc, dest, WIDTH)
                 written.append(dest)

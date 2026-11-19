@@ -83,7 +83,8 @@ CODE_EXT = {".js", ".cjs", ".mjs", ".jsx", ".ts", ".cts", ".mts", ".tsx", ".py",
             ".scpt", ".hta", ".wsf", ".jse", ".vbe", ".dockerfile"}
 CODE_NAMES = {"makefile", "gnumakefile", "dockerfile", "rakefile", "gemfile", "vagrantfile", "justfile", "procfile", ".envrc",
               ".bashrc", ".zshrc", ".profile", "jenkinsfile", "build", "configure", "gradlew", "mvnw"}
-EXEC_EXT = {".exe", ".dll", ".so", ".dylib", ".node", ".bin", ".o", ".a", ".sys", ".scr", ".com", ".elf", ".out", ".app"}
+EXEC_EXT = {".exe", ".dll", ".pyd", ".so", ".dylib", ".node", ".bin", ".o", ".a", ".sys", ".scr", ".com", ".elf", ".out",
+            ".app"}  # .pyd is a Windows Python extension: a DLL by definition
 SCRIPT_EXT = {".sh", ".bash", ".zsh", ".py", ".js", ".mjs", ".cjs", ".ps1", ".bat", ".cmd", ".vbs", ".vbe", ".jse", ".wsf",
               ".hta", ".exe", ".dll", ".scr", ".rb", ".pl", ".command", ".applescript", ".scpt", ".lnk", ".jar"}
 SENSITIVE_TARGET = re.compile(r"(?:^|[\\/])\.(?:ssh|aws|gnupg|kube|docker|claude|codex|gemini|cursor|openclaw|config[\\/]gcloud)"
@@ -151,6 +152,15 @@ def _in_skill(state: State, rel: str) -> bool:
     return False
 
 
+def _ships_binaries(state: State) -> bool:
+    """A built Python wheel, or an npm package limited to some operating systems or CPUs: formats made to carry
+    prebuilt binaries (esbuild, rollup and lightningcss publish one such package per platform)."""
+    if any(rel.endswith(".dist-info/WHEEL") for rel in state.files):
+        return True
+    pkg = state.files.get("package.json")
+    return bool(pkg and pkg.text and re.search(r'"(?:os|cpu)"\s*:\s*\[', pkg.text))
+
+
 def _binary_checks(state: State, f: File) -> None:
     ext = posixpath.splitext(f.rel.lower())[1]
     kind = _magic(f.data)
@@ -161,10 +171,20 @@ def _binary_checks(state: State, f: File) -> None:
             state.add(R_DISGUISED_BINARY, "high", f.rel, 0, f"{kind} executable named *{ext or ' (no extension)'}", f.rel, "code")
         else:
             sev = "high" if _in_skill(state, f.rel) else ("medium" if f.rel.count("/") <= 1 else "low")
-            state.add(R_NATIVE, sev, f.rel, 0, f"{kind} binary", f.rel, "code")
+            note = ""
+            if sev == "medium" and _ships_binaries(state):
+                sev, note = "low", " (in a built wheel or a platform package, which exist to carry binaries)"
+            state.add(R_NATIVE, sev, f.rel, 0, f"{kind} binary{note}", f.rel, "code")
         _strings(state, f, f"strings in the {kind} binary: ")
     if _is_pyc(f):
-        if not _pyc_source(state, f):
+        if not _pyc_source(state, f) and posixpath.basename(posixpath.dirname(f.rel)) == "__pycache__" \
+                and not _in_skill(state, f.rel):  # a skill's instructions can tell an agent to run a .pyc directly
+            # Python loads a __pycache__ file only for a source it is importing, so without the source it never runs
+            # (PEP 3147); bytecode that does run sourceless sits where the .py would be.
+            state.add(R_PYC, "low", f.rel, 0, "cached bytecode whose source is missing (Python never loads it)",
+                      f.rel, "code")
+            _strings(state, f, "strings in compiled bytecode: ")
+        elif not _pyc_source(state, f):
             state.add(R_PYC, "high", f.rel, 0, "bytecode with no .py source next to it", f.rel, "code")
             _strings(state, f, "strings in compiled bytecode: ")
         else:  # a cache of source that is scanned anyway; committed caches are still worth knowing about
@@ -520,7 +540,41 @@ def scan_files(files: dict[str, bytes], *, target: str = "(in memory)", max_seco
     return _analyze(state, target, started, max_seconds)
 
 
+def _python_entries(state: State) -> None:
+    """In a Python package (sdist, wheel or source tree), each top-level package's __init__.py runs on import."""
+    if not any(r in state.files for r in ("setup.py", "pyproject.toml", "setup.cfg", "PKG-INFO")) and not any(
+            r.endswith(".dist-info/METADATA") for r in state.files):
+        return
+    for rel in state.files:
+        if re.fullmatch(r"(?:src/)?[A-Za-z_]\w*/__init__\.py", rel):
+            state.entry.setdefault(rel, "a Python package's __init__.py, run as soon as it is imported")
+
+
+def _raise_entry(why: str, f: File, found: list) -> list:
+    """Code that runs as soon as it is loaded keeps code severities, except for the shapes no library needs at load
+    time: a request-capture, tunnel or bare-IP endpoint, host details sent out, and, for an editor extension that
+    starts with the editor, a program downloaded from a host that is not an official installer and run."""
+    from .content_rules import R_DOWNLOAD_EXEC, R_EXFIL, R_EXFIL_HOST
+    from .model import Finding, rank
+    from .patterns import _DNS_SEND, FINGERPRINT, NETWORK
+
+    extension = why.startswith("an editor extension")
+    for x in found:
+        if "(in a comment)" in x.message or "string that is data" in x.message or rank(x.severity) >= rank("high"):
+            continue
+        if x.rule == R_EXFIL_HOST or (extension and x.rule == R_DOWNLOAD_EXEC and "not an official installer" in x.message):
+            x.severity, x.message = "high", x.message + f" (in {why})"
+    text = f.text or ""
+    fp = FINGERPRINT.search(text)
+    if fp and (NETWORK.search(text) or _DNS_SEND.search(text)):
+        found.append(Finding(R_EXFIL, "high", f.rel, text.count("\n", 0, fp.start()) + 1,
+                             f"takes host details (machine or user name, network interfaces, DNS servers) and makes a "
+                             f"network call in {why}", text[fp.start():fp.start() + 120], "code"))
+    return found
+
+
 def _analyze(state: State, target: str, started: float, max_seconds: float | None, online: bool = False) -> Report:
+    _python_entries(state)
     for f in list(state.files.values()):
         if _skipped_dir(f.rel) and f.name.lower() not in ("package.json", "binding.gyp") and not f.name.endswith(".pth"):
             continue
@@ -548,7 +602,10 @@ def _analyze(state: State, target: str, started: float, max_seconds: float | Non
             break
         context = _context(state, f)
         decode = f.size <= DECODE_BLOBS_UNDER or context == "autoexec"
-        state.findings.extend(scan_text(f.text, f.rel, context, decode=decode))
+        found = scan_text(f.text, f.rel, context, decode=decode)
+        if context == "code" and f.rel in state.entry:
+            found = _raise_entry(state.entry[f.rel], f, found)
+        state.findings.extend(found)
         scanned += 1
     if online and state.packages:
         from .intel import check_packages

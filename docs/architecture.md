@@ -9,13 +9,18 @@ collect()      read the folder, file or archive; open archive members (scan.py)
    |
 dispatch       each file to the handlers that understand it (surfaces/, packages.py):
    |           hooks, settings, MCP servers, skills, instruction files, editor tasks, workflows, git, manifests
-   |           -> surfaces (what runs, and what starts it) and files marked "autoexec"
+   |           -> surfaces (what runs, and what starts it), files marked "autoexec", and entry files: the code that
+   |              runs as soon as the package is loaded (npm main, an eagerly activated editor extension, a top-level
+   |              __init__.py)
 toxic_flows    the repository's agent setup as a whole (surfaces/agent_setup.py, flows.py)
    |
 propagate      what autoexec code imports or starts through a runtime also runs on its own (scan.py)
    |
 scan_text      content rules on every text file, in its context: autoexec, code, doc, config (patterns.py)
-   |           with decoding first (deobfuscate.py), campaign shapes (campaigns.py), hidden text (text.py)
+   |           with decoding first (deobfuscate.py), campaign shapes (campaigns.py), hidden text (text.py);
+   |           in an entry file, a capture or tunnel endpoint and details of the machine sent out count as high,
+   |           since nothing has to call them, and so does a program downloaded and run by an editor extension that
+   |           starts with the editor (scan.py)
    |
 adjust         where a file sits changes what a finding means: fixtures, CI, containers (policy.py)
    |
@@ -81,6 +86,10 @@ ran            and marks the session, so its later sensitive steps need the user
 - **A way to hide code:** an operator in `bench/fuzz.py` first, then the decoding in `deobfuscate.py` (or, for a shell
   command, in `shellfold.py`, scored with `bench/shellgate.py`).
 - **A real incident:** an entry in `pah/data/incidents.json`, then `pah incident list --markdown > docs/incidents.md`.
+- **A lesson from the held-out test:** study only samples the next round will not measure (`bench/independent.py plan
+  --exclude` keeps them out of the next draw; `--split` halves the sets taken whole and sets one half aside for
+  tuning), pin the principle in `tests/test_heldout_lessons.py` with inputs written for the test (never code copied
+  from a sample), and commit the next draw before downloading it.
 - **An attack that shows only as a sequence:** a tag for the step in `behavior.act_of` if it needs one, the rule in
   `behavior.evaluate`, and a chain with its ordinary counterpart in `bench/fixtures/drill-chains.json`.
 - **A model format:** a reader in `models.py` that lists what loading would import or call, and a case in
