@@ -225,10 +225,11 @@ def analyse() -> dict:
     if independent:
         out["sources"]["independent"] = independent.pop("source")
         out["independent"] = independent
-    round_two = _round_two()
-    if round_two:
-        out["sources"]["round_two"] = round_two.pop("source")
-        out["round_two"] = round_two
+    for key, (kind, before) in PAIRED_ROUNDS.items():
+        paired = _paired_round(kind, before)
+        if paired:
+            out["sources"][key] = paired.pop("source")
+            out[key] = paired
     shell = _shellgate()
     if shell:
         out["sources"]["shellgate"] = shell.pop("source")
@@ -344,6 +345,8 @@ def paired_rounds(rows: list[dict]) -> dict:
     for key in sorted({r["set"] for r in rows}, key=lambda k: (k.endswith("/popular"), _SET_ORDER.get(k, 9), k)):
         drawn = [r for r in rows if r["set"] == key]
         ok = [r for r in drawn if "error" not in r and "verdict_baseline" in r]
+        if not ok:  # nothing in this set could be scanned: its samples are counted among those left out
+            continue
         pairs[key] = [(r, r["verdict"] in FLAGGED, r["verdict_baseline"] in FLAGGED) for r in ok]
         only_now = sum(a and not b for _, a, b in pairs[key])
         only_before = sum(b and not a for _, a, b in pairs[key])
@@ -372,17 +375,22 @@ def paired_rounds(rows: list[dict]) -> dict:
     return {"sets": sets, "overall": overall, "lost": lost, "false_alarms": flagged}
 
 
-def _round_two() -> dict | None:
-    """Round two of the held-out test (kind independent-round2), when it has been run."""
-    if not sorted(RESULTS.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-independent-round2.json")):
+# Rounds judged by two versions of the rules (bench/independent.py run --baseline): the results' kind and the name of
+# the earlier version, round two against round one's rules, round three against round two's.
+PAIRED_ROUNDS = {"round_two": ("independent-round2", "round one's"), "round_three": ("independent-round3", "round two's")}
+
+
+def _paired_round(kind: str, before: str) -> dict | None:
+    """A round of the held-out test judged by two versions of the rules, when it has been run."""
+    if not sorted(RESULTS.glob(f"20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{kind}.json")):
         return None
-    name, data = load("independent-round2")
-    sample_path = data["sample"].replace("\\", "/")  # the run recorded it with Windows separators
+    name, data = load(kind)
+    sample_path = data["sample"].replace("\\", "/")  # round two's run recorded it with Windows separators
     sample = json.loads((ROOT / sample_path).read_text(encoding="utf-8"))
     errors: dict[str, int] = {}
     for r in data["rows"]:
         if "error" in r or "baseline_error" in r:
-            why = r["error"].split(":")[0] if "error" in r else f"round one's rules failed: {r['baseline_error']}"
+            why = r["error"].split(":")[0] if "error" in r else f"{before} rules failed: {r['baseline_error']}"
             errors[why] = errors.get(why, 0) + 1
     fa_rules: dict[str, int] = {}
     for r in data["rows"]:
@@ -390,7 +398,7 @@ def _round_two() -> dict | None:
             for rid, sev in r["rules"].items():
                 if sev in ("medium", "high", "critical"):
                     fa_rules[rid] = fa_rules.get(rid, 0) + 1
-    misses = RESULTS / name.replace("-independent-round2.json", "-independent-round2-misses.json")
+    misses = RESULTS / name.replace(f"-{kind}.json", f"-{kind}-misses.json")
     profile = json.loads(misses.read_text(encoding="utf-8")) if misses.exists() else None
     return {"source": name, "code": data["code"], "baseline": data.get("baseline", {}).get("commit"),
             "dataset": data["dataset"], "drawn_on": sample["drawn"], "sample": sample_path,
@@ -404,10 +412,10 @@ _STRONG = ("medium", "high", "critical")
 
 
 def what_changed(rows: list[dict]) -> dict:
-    """Described after round two's results came in, not part of the analysis fixed before them: the rule each
-    newly caught or flagged sample rests on (its only finding at medium severity or above), the findings that fell
-    below medium on the samples only round one's rules caught, and each set's rate with the campaign checks
-    (pah/campaigns.py) switched off."""
+    """A description, not a test: the rule each newly caught or flagged sample rests on (its only finding at medium
+    severity or above), the findings that fell below medium on the samples only the earlier rules caught, and each
+    set's rate with the campaign checks (pah/campaigns.py) switched off. Written after round two's results came in;
+    fixed before round three's download."""
     resting: dict[str, dict[str, int]] = {}
     general: dict[str, dict] = {}
     lost, new_flags = [], []
@@ -594,7 +602,7 @@ def _round_two_section(s: dict) -> list[str]:
     r2 = s.get("round_two")
     if not r2:
         return []
-    lines = [
+    intro = [
         "## Round two: the fixes on a fresh draw",
         "",
         f"Round one's misses and false alarms were studied, so they cannot measure a fix. Round two was drawn on "
@@ -608,50 +616,79 @@ def _round_two_section(s: dict) -> list[str]:
         "two. The halves under test were scanned in round one as well, and its report describes a random 60 misses "
         "per set by structure only; none of their contents was looked at while the rules were changed.",
         "",
-        "| Set | Scanned | Round one's rules | Current rules | Current, 95% interval | Only current "
-        "| Only round one's | p | Holm |",
+    ]
+    return intro + _paired_body(r2, "independent-round2", "round one's", "described after the results",
+                                "Not part of the analysis fixed before the download.", "as for round one")
+
+
+def _round_three_section(s: dict) -> list[str]:
+    r3 = s.get("round_three")
+    if not r3:
+        return []
+    intro = [
+        "## Round three: round two's lessons on a fresh draw",
+        "",
+        f"Round two's misses and false alarms were studied, so they cannot measure a fix. Round three was drawn on "
+        f"{r3['drawn_on']} ([`{r3['sample']}`](../{r3['sample']})) at the dataset's commit "
+        f"`{r3['dataset']['commit'][:12]}`, committed before any rule changed and before anything was downloaded: new "
+        "samples that leave out every package of rounds one and two, so the sets round one took whole have only the "
+        "packages added to the dataset since. Every sample was judged by the current rules (code "
+        f"`{r3['code']}`) and by round two's (commit `{(r3['baseline'] or '')[:12]}`), on the same bytes in the same "
+        "process. The analysis is round two's and was fixed before the download: for each set, an exact McNemar test "
+        "on the samples only one version catches or flags, with Holm's adjustment across the sets; overall, the same "
+        "test on the discordant samples of all malicious sets together and of all popular packages together, "
+        "adjusted across the two. A set with no sample in the draw is left out.",
+        "",
+    ]
+    return intro + _paired_body(r3, "independent-round3", "round two's", "described as fixed before the download",
+                                "A description, not a test, fixed before the download.", "as for rounds one and two")
+
+
+def _paired_body(r: dict, kind: str, before: str, changes: str, changes_note: str, as_for: str) -> list[str]:
+    """The tables and notes of a round judged by two versions of the rules; before names the earlier version."""
+    cap = before[0].upper() + before[1:]
+    lines = [
+        f"| Set | Scanned | {cap} rules | Current rules | Current, 95% interval | Only current "
+        f"| Only {before} | p | Holm |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for key, v in r2["sets"].items():
-        now, before = v["now"], v["before"]
-        lines.append(f"| {SET_NAMES.get(key, key)} | {now['n']} | {before['k']} ({pct(before['rate'])}) "
+    for key, v in r["sets"].items():
+        now, then = v["now"], v["before"]
+        lines.append(f"| {SET_NAMES.get(key, key)} | {now['n']} | {then['k']} ({pct(then['rate'])}) "
                      f"| {now['k']} ({pct(now['rate'])}) | {ci(now)} | {v['only_now']} | {v['only_before']} "
                      f"| {pval(v['p'])} | {pval(v['p_holm'])} |")
     lines.append("")
     words = {"malicious": ("malicious samples", "caught"), "benign": ("popular packages", "flagged")}
-    for kind, v in r2["overall"].items():
-        what, did = words[kind]
+    for group, v in r["overall"].items():
+        what, did = words[group]
         lines.append(f"- All {what} ({v['n']:,}): {v['only_now']} {did} only by the current rules, "
-                     f"{v['only_before']} only by round one's; exact McNemar p = {pval(v['p'])} "
+                     f"{v['only_before']} only by {before}; exact McNemar p = {pval(v['p'])} "
                      f"(Holm, two tests: {pval(v['p_holm'])}).")
     lines.append("")
-    if r2["lost"]:
-        lines += ["Malicious samples round one's rules caught and the current ones miss: "
-                  + ", ".join(f"{p} {ver} ({SET_NAMES.get(k, k)})" for k, p, ver in r2["lost"]) + ".", ""]
-    if r2["false_alarms"]:
+    if r["lost"]:
+        lines += [f"Malicious samples {before} rules caught and the current ones miss: "
+                  + ", ".join(f"{p} {ver} ({SET_NAMES.get(k, k)})" for k, p, ver in r["lost"]) + ".", ""]
+    if r["false_alarms"]:
         lines += ["Popular packages the current rules flag: "
-                  + ", ".join(f"{p} {ver} ({eco}, {verdict})" for eco, p, ver, verdict in r2["false_alarms"])
+                  + ", ".join(f"{p} {ver} ({eco}, {verdict})" for eco, p, ver, verdict in r["false_alarms"])
                   + ". The rules behind them: "
-                  + ", ".join(f"`{rid}` {n}" for rid, n in r2["rules_behind_false_alarms"].items()) + ".", ""]
-    if r2["left_out_why"]:
+                  + ", ".join(f"`{rid}` {n}" for rid, n in r["rules_behind_false_alarms"].items()) + ".", ""]
+    if r["left_out_why"]:
         lines += ["Left out because they could not be downloaded, verified or unpacked: "
-                  + ", ".join(f"{n} ({why})" for why, n in r2["left_out_why"].items()) + ".", ""]
-    ch = r2.get("changes")
+                  + ", ".join(f"{n} ({why})" for why, n in r["left_out_why"].items()) + ".", ""]
+    ch = r.get("changes")
     if ch:
         def rule(why: str) -> str:
             return f"`{why}`" if why.startswith("PAH-") else why
 
         resting = [f"{SET_NAMES.get(k, k)}, {sum(v.values())}: " + ", ".join(f"{rule(w)} {n}" for w, n in v.items())
                    for k, v in ch["new_resting_on"].items() if v]
-        lines += [
-            "### What changed, described after the results",
-            "",
-            "Not part of the analysis fixed before the download. The samples only the current rules catch or flag, "
-            "by the rule each rests on (its only finding at medium severity or above): " + "; ".join(resting) + ".",
-            "",
-        ]
+        lines += [f"### What changed, {changes}", ""]
+        if resting:
+            lines += [f"{changes_note} The samples only the current rules catch or flag, by the rule each rests on "
+                      "(its only finding at medium severity or above): " + "; ".join(resting) + ".", ""]
         if ch["lost"]:
-            lines += ["The findings that fell below medium on the samples only round one's rules caught: "
+            lines += [f"The findings that fell below medium on the samples only {before} rules caught: "
                       + "; ".join(f"{p} {ver} ({SET_NAMES.get(k, k)}): "
                                   + ", ".join(f"`{rid}` {a} before, {b} now" for rid, (a, b) in fell.items())
                                   for k, p, ver, fell in ch["lost"]) + ".", ""]
@@ -661,20 +698,20 @@ def _round_two_section(s: dict) -> list[str]:
                                   + ", ".join(f"`{rid}` {sev}" for rid, sev in strong.items()) + ")"
                                   for eco, p, ver, verdict, strong in ch["new_false_alarms"]) + ".", ""]
         lines += ["With the checks written for named campaigns (`pah/campaigns.py`) switched off, the current rules "
-                  "catch or flag: " + "; ".join(f"{SET_NAMES.get(k, k)} {g['k']} (with them, {r2['sets'][k]['now']['k']})"
+                  "catch or flag: " + "; ".join(f"{SET_NAMES.get(k, k)} {g['k']} (with them, {r['sets'][k]['now']['k']})"
                                                for k, g in ch["general_rules"].items()) + ".", ""]
-    if r2.get("misses"):
+    if r.get("misses"):
         lines += [
             "### What the current rules still miss",
             "",
-            f"`python bench/independent.py profile --kind independent-round2` describes a random "
-            f"{r2['misses_per_set']} of the current rules' misses in each set (all of them where there are fewer) by "
-            "structure only, as for round one.",
+            f"`python bench/independent.py profile --kind {kind}` describes a random "
+            f"{r['misses_per_set']} of the current rules' misses in each set (all of them where there are fewer) by "
+            f"structure only, {as_for}.",
             "",
             "| Set | Missed | Described | What they have, by number of samples described |",
             "| --- | --- | --- | --- |",
         ]
-        for key, v in r2["misses"].items():
+        for key, v in r["misses"].items():
             if v["missed"]:
                 feats = "; ".join(f"{f} {n}" for f, n in list(v["features"].items())[:6])
                 lines.append(f"| {SET_NAMES.get(key, key)} | {v['missed']} | {v['profiled']} | {feats} |")
@@ -720,6 +757,7 @@ def markdown(s: dict) -> str:
         "",
         *_independent_section(s),
         *_round_two_section(s),
+        *_round_three_section(s),
         *_shellgate_section(s),
         "## Detection and false alarms",
         "",
@@ -827,9 +865,10 @@ def main(argv=None) -> int:
     ch = s["chains"]
     print(f"chains: {ch['only_as_chain']} runs stopped only as a chain, {ch['only_alone']} only alone, "
           f"p = {pval(ch['p_session_vs_alone'])}")
-    for kind, v in (s.get("round_two") or {}).get("overall", {}).items():
-        print(f"round two, {kind}: {v['only_now']} only by the current rules, {v['only_before']} only by round one's, "
-              f"p = {pval(v['p'])} (Holm {pval(v['p_holm'])})")
+    for key, (_, before) in PAIRED_ROUNDS.items():
+        for kind, v in (s.get(key) or {}).get("overall", {}).items():
+            print(f"{key.replace('_', ' ')}, {kind}: {v['only_now']} only by the current rules, {v['only_before']} "
+                  f"only by {before}, p = {pval(v['p'])} (Holm {pval(v['p_holm'])})")
     return 0
 
 
