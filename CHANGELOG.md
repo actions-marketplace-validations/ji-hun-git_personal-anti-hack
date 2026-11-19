@@ -97,6 +97,47 @@ run against the code round two measured (`--baseline 3c92edf`), with round two's
 of what changed is fixed before the download too. `bench/independent.py plan --exclude` takes several earlier
 samples, and leaves their packages out of the sets taken whole unless `--split` halves them.
 
+**What round two taught.** Round two's misses and false alarms were studied only after round three was drawn and
+pushed (f3b41d8), and led to the fixes below; round three measures them. Each principle is pinned by a test in
+tests/test_heldout_lessons.py with inputs written for it. Malicious samples were looked at in memory and by shape
+only (strings emptied, hosts removed): one diagnostic file that held redacted lines was blocked by the antivirus, which
+means it touched disk, and was deleted.
+
+*Misses.* Install scripts that take the user or machine name in a shell (`$(whoami)`, `$USER`, `%COMPUTERNAME%`) and,
+a few statements later, run a network command built from variables, as the beacons that hex-encode the name into a
+subdomain do (PAH-C004, high). Reverse shells written over several statements: a socket connected out and handed to a
+shell through `os.dup2`, or piped to a spawned shell in Node (PAH-C021). A string that code writes to a file and then
+runs is judged as code, which catches droppers that keep their second stage, a download that is run, in a string. A
+setup.py that replaces pip's install steps and makes a network call warns (PAH-C006, medium): none of the 2,000
+popular packages of rounds one and two does. Discord's and Telegram Desktop's token stores count as credentials.
+
+*False alarms.* Invisible characters in a table of characters (a whitespace set, an identifier class in a grammar, a
+list of named symbols, a regex class), in test data files, and an emoji's presentation selector repeated are not
+hidden text; files in a top-level `dist/` folder count as bundles; a run of distinct zero-width characters is a set,
+not a payload. A quoted piece that a method applies to (`"&".join(names)`) is not a literal piece of a hidden string,
+and a dotted grammar scope (`keyword.other.constructor.constructor-type`) is not the Function constructor. In an entry
+file, only code that runs on import is raised: not a function that nothing calls while importing (a server's
+`main()`), and not a name in a list of names. Reported low instead of medium or high: an in-tree build backend for
+existing (its code is judged as install-time code), install commands from code hosts over SSH or git and public PyPI
+mirrors in documentation, registry flags pointing at documentation domains, escape bytes inside PDFs, megabyte lines
+in minified bundles outside the code that runs on load, and `core.hooksPath` set to a folder inside the project, as
+hook managers do. Checking against the 30 popular repositories narrowed the beacon rule before commit: `uname -a` is
+how nvm and the Maven wrapper tell the operating system, and a `whoami` in an error message far from a download is not
+a beacon.
+
+*On round two's samples* (tuning data, not a measurement), against round two's code: 383 of 500 npm packages
+published to attack caught (374), 399 of 500 PyPI ones (371), 58 of 102 agent skills (58), 16 of 51 IDE extensions
+(18), 84 of 100 hijacked npm releases (84) and 6 of 9 hijacked PyPI releases (6); popular packages flagged 28 of 1,000
+(53), blocked 10 (24); of round one's popular packages, 36 flagged (43), blocked 9 (13). No popular package of the
+2,000 is newly flagged. The two IDE extensions lost, copies of basedpyright and a Smarty formatter, had been caught
+only for megabyte-long lines in their language-server bundles, which the originals share. TrapRepo (76 of 76, 0 of
+40), the fuzzer (353 of 353), both drills and the 30 popular repositories give the same verdicts as before.
+
+*Not fixed.* Clones of the pino logger that start a detached copy of Node on one of their own scripts when loaded
+(10 of round two's npm misses): the shape is update-notifier's own, and telling them apart needs what the started
+script does, in another file. Hijacked @mastra releases, whose payload sits in an added dependency. Most misses still
+run on import or when an extension activates, or are written as instructions.
+
 ## 0.5.1 (2026-11-17)
 
 **Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,

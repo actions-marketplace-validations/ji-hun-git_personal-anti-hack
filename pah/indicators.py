@@ -16,7 +16,9 @@ SECRET_PATHS = re.compile(
     r"|\.continue[\\/]config\.(?:ya?ml|json)|\bstate\.vscdb\b|\.copilot[\\/]hosts\.json|github-copilot[\\/](?:hosts|apps)\.json"
     r"|(?:Chrome|Chromium|Edge|Brave|Opera|Vivaldi|Yandex)[^\n]{0,80}(?:Login Data|Cookies|Local State|Web Data)"
     r"|\bLogin Data\b|\bkey[34]\.db\b|\blogins\.json\b|\bwallet\.dat\b|[\\/]Exodus[\\/]|[\\/]Electrum[\\/]"
-    r"|nkbihfbeogaeaoehlefnkodbefgpgknn|bfnaelmomeimhlpmgjnjophhpkkoljpa|login\.keychain|Library[\\/]Keychains",
+    r"|nkbihfbeogaeaoehlefnkodbefgpgknn|bfnaelmomeimhlpmgjnjophhpkkoljpa|login\.keychain|Library[\\/]Keychains"
+    # Messaging apps keep their login tokens here: Discord's local storage, Telegram Desktop's session folder.
+    r"|Local Storage(?:['\"]\s*[,+]\s*['\"]|[\\/]{1,2})leveldb|Telegram Desktop(?:['\"]\s*[,+]\s*['\"]|[\\/]{1,2})tdata",
     re.I)
 
 EXFIL_HOSTS = re.compile(

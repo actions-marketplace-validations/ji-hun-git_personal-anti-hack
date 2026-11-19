@@ -122,6 +122,8 @@ def invisible(text: str) -> list[dict]:
         run = m.group()
         if len(run) <= 2 and all(c in "\uFE0E\uFE0F" for c in run):
             continue  # text or emoji presentation of the previous character
+        if len(set(run)) == 1 and run[0] in "\uFE0E\uFE0F":
+            continue  # one presentation selector repeated (a pasted emoji): every byte the same, so nothing is carried
         if len(run) <= 2:
             scattered.append(m)  # an ideographic variation sequence, or one or two bytes: no payload on its own
             continue
