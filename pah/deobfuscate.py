@@ -20,7 +20,9 @@ _LIT = r"(?:'(?:[^'\\\n]|\\.){0,200}'|\"(?:[^\"\\\n]|\\.){0,200}\")"
 SPLIT_STRINGS = re.compile(
     rf"\[[ \t]*{_LIT}(?:[ \t]*,[ \t]*{_LIT})+[ \t]*,?[ \t]*\][ \t]*\.[ \t]*join\([ \t]*(?:''|\"\")[ \t]*\)"  # a list of quoted pieces joined with ''
     rf"|(?:''|\"\")[ \t]*\.[ \t]*join\([ \t]*[\[(][ \t]*{_LIT}(?:[ \t]*,[ \t]*{_LIT})+[ \t]*,?[ \t]*[\])][ \t]*\)"  # Python's ''.join over quoted pieces
-    rf"|{_LIT}(?:[ \t]*\+[ \t]*{_LIT})+")  # quoted pieces added together
+    # quoted pieces added together; a piece that a method, index or format applies to ("&".join(x), "%s" % x) is not
+    # literal text, so `scheme + "://" + ".".join(names)` builds nothing that was written out in pieces
+    rf"|{_LIT}(?![ \t]*[.\[%(])(?:[ \t]*\+[ \t]*{_LIT}(?![ \t]*[.\[%(]))+")
 
 
 SPLIT_HINT = re.compile(r"['\"][ \t]*\+[ \t]*['\"]|\][ \t]*\.[ \t]*join\([ \t]*(?:''|\"\")|(?:''|\"\")[ \t]*\.[ \t]*join\(")

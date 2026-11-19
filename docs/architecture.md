@@ -86,10 +86,12 @@ ran            and marks the session, so its later sensitive steps need the user
 - **A way to hide code:** an operator in `bench/fuzz.py` first, then the decoding in `deobfuscate.py` (or, for a shell
   command, in `shellfold.py`, scored with `bench/shellgate.py`).
 - **A real incident:** an entry in `pah/data/incidents.json`, then `pah incident list --markdown > docs/incidents.md`.
-- **A lesson from the held-out test:** study only samples the next round will not measure (`bench/independent.py plan
-  --exclude` keeps them out of the next draw; `--split` halves the sets taken whole and sets one half aside for
-  tuning), pin the principle in `tests/test_heldout_lessons.py` with inputs written for the test (never code copied
-  from a sample), and commit the next draw before downloading it.
+- **A lesson from the held-out test:** draw and push the next round first (`bench/independent.py plan --exclude`
+  names every earlier sample, so none is drawn again; `--split` halves sets taken whole and sets one half aside for
+  tuning), then study only samples that round will not measure. Pin each principle in `tests/test_heldout_lessons.py`
+  with inputs written for the test (never code copied from a sample), and check it against the cached popular
+  packages of earlier rounds before trusting it. Look at malicious samples by shape (strings emptied, hosts removed)
+  and keep them in memory: excerpts printed to a file can be quarantined by antivirus, which means they touched disk.
 - **An attack that shows only as a sequence:** a tag for the step in `behavior.act_of` if it needs one, the rule in
   `behavior.evaluate`, and a chain with its ordinary counterpart in `bench/fixtures/drill-chains.json`.
 - **A model format:** a reader in `models.py` that lists what loading would import or call, and a case in

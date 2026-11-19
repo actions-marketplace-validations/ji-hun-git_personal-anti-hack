@@ -428,9 +428,12 @@ def pyproject(state: State, f: File) -> None:
             for cand in (f"{module}.py", f"{module}/__init__.py"):
                 target = posixpath.normpath(posixpath.join(f.dir, base, cand))
                 state.mark_autoexec(target, "in-tree build backend")
+        # Like setup.py, the backend is code that runs on pip install: its module is judged as install-time code
+        # above, so having one is not a warning by itself (Pillow, cvxpy and PyMuPDF build this way).
         fixture = bool(re.search(r"(?:^|/)(?:tests?|testing|fixtures?|examples?)/", f.rel))
-        state.add(R_PY_BUILD, "low" if fixture else "medium", f.rel, line_of(text, "backend-path"),
-                  f"in-tree backend {backend}" + (" (in a test fixture)" if fixture else ""), "backend-path")
+        state.add(R_PY_BUILD, "low", f.rel, line_of(text, "backend-path"),
+                  f"in-tree backend {backend}" + (" (in a test fixture)" if fixture else " (its code is judged as code "
+                                                  "that runs on install)"), "backend-path")
     deps = list((data.get("project") or {}).get("dependencies") or []) + list(build.get("requires") or [])
     for group in ((data.get("project") or {}).get("optional-dependencies") or {}).values():
         deps += list(group or [])

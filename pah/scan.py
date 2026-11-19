@@ -550,22 +550,75 @@ def _python_entries(state: State) -> None:
             state.entry.setdefault(rel, "a Python package's __init__.py, run as soon as it is imported")
 
 
+_MEGA_LINE = re.compile(r"one line of \d{1,3}(?:,\d{3}){2,} characters")
+_LIST_ENTRY = re.compile(r"\s*[rbuRBU]?(['\"])[^'\"\n]{1,200}\1\s*,?\s*(?:#.*)?")
+_HEADER = re.compile(r"(?:async\s+)?(def|class)\s+(\w+)")
+
+
+def _line_start(text: str, line: int) -> int:
+    pos = 0
+    for _ in range(line - 1):
+        pos = text.find("\n", pos) + 1
+        if not pos:
+            return len(text)
+    return pos
+
+
+def _runs_on_import(text: str, pos: int) -> bool:
+    """Python code at pos runs when the module is imported: it is at module level, in a class body or a module-level
+    block, or inside a function or class that module-level code uses (called, started as a thread, registered) or that
+    a decorator registers. Code in a function nothing uses while importing (a server's main(), run under
+    `if __name__ == "__main__"`) waits to be called."""
+    before = text[:pos].split("\n")
+    current = before[-1]
+    indent = len(current) - len(current.lstrip())
+    outer, in_def = None, False
+    for i in range(len(before) - 2, -1, -1):
+        line = before[i]
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or indent == 0:
+            if indent == 0:
+                break
+            continue
+        ind = len(line) - len(line.lstrip())
+        if ind < indent:
+            indent = ind
+            m = _HEADER.match(stripped)
+            if m:
+                in_def = in_def or m.group(1) == "def"
+                outer = (m.group(2), i)
+    if not in_def or outer is None:
+        return True
+    name, at = outer
+    decorated = at > 0 and before[at - 1].lstrip().startswith("@")
+    used = re.search(rf"(?m)^(?!(?:async\s+)?(?:def|class)\s)(?=[^\s#])[^\n]*\b{re.escape(name)}\b", text)
+    return bool(decorated or used)
+
+
 def _raise_entry(why: str, f: File, found: list) -> list:
     """Code that runs as soon as it is loaded keeps code severities, except for the shapes no library needs at load
     time: a request-capture, tunnel or bare-IP endpoint, host details sent out, and, for an editor extension that
     starts with the editor, a program downloaded from a host that is not an official installer and run."""
-    from .content_rules import R_DOWNLOAD_EXEC, R_EXFIL, R_EXFIL_HOST
+    from .content_rules import R_DOWNLOAD_EXEC, R_EXFIL, R_EXFIL_HOST, R_LONG_LINE
     from .model import Finding, rank
     from .patterns import _DNS_SEND, FINGERPRINT, NETWORK
 
     extension = why.startswith("an editor extension")
+    text = f.text or ""
+    python = f.rel.lower().endswith(".py")
+    lines = text.split("\n")
     for x in found:
         if "(in a comment)" in x.message or "string that is data" in x.message or rank(x.severity) >= rank("high"):
             continue
+        if python and 0 < x.line <= len(lines) and (_LIST_ENTRY.fullmatch(lines[x.line - 1])
+                                                    or not _runs_on_import(text, _line_start(text, x.line))):
+            continue  # a name in a list of names, or code in a function nothing calls while importing
         if x.rule == R_EXFIL_HOST or (extension and x.rule == R_DOWNLOAD_EXEC and "not an official installer" in x.message):
             x.severity, x.message = "high", x.message + f" (in {why})"
-    text = f.text or ""
-    fp = FINGERPRINT.search(text)
+        elif x.rule == R_LONG_LINE and rank(x.severity) < rank("medium") and _MEGA_LINE.search(x.message):
+            # a megabyte on one line is how bundles ship as static assets, not usually how the code that runs on load does
+            x.severity, x.message = "medium", x.message + f" (in {why})"
+    fp = next((m for m in FINGERPRINT.finditer(text) if not python or _runs_on_import(text, m.start())), None)
     if fp and (NETWORK.search(text) or _DNS_SEND.search(text)):
         found.append(Finding(R_EXFIL, "high", f.rel, text.count("\n", 0, fp.start()) + 1,
                              f"takes host details (machine or user name, network interfaces, DNS servers) and makes a "

