@@ -118,6 +118,36 @@ class DrawTests(unittest.TestCase):
             self.assertEqual(len(names) + len(tested), 699)
             self.assertFalse(set(names) & tested)
 
+    def test_a_third_round_takes_only_packages_no_earlier_round_used(self):
+        frame = {s: {f"p{i}": [{"path": f"samples/{s}/p{i}/1/x.zip", "bytes": 1, "git_blob": "0"}]
+                     for i in range(1, 700)} for s in independent.MALICIOUS}
+        used: dict[str, set[str]] = {}
+        first, _ = independent.draw_malicious(frame)
+        second, tune = independent.draw_malicious(frame, "round 2", _names(first), split=True)
+        for row in [*first, *second]:
+            used.setdefault(row["set"], set()).add(row["package"])
+        for stratum, names in tune.items():
+            used[stratum].update(names)
+        added = {s: {**packages, **{f"new{i}": [{"path": f"samples/{s}/new{i}/1/x.zip", "bytes": 1, "git_blob": "0"}]
+                                    for i in (1, 2)}} for s, packages in frame.items()}  # published since
+        third, kept_back = independent.draw_malicious(added, "round 3", used, commit="def")
+        self.assertEqual(kept_back, {})
+        for row in third:
+            self.assertNotIn(row["package"], used[row["set"]])
+        for stratum, k in independent.MALICIOUS.items():
+            drawn = sorted(r["package"] for r in third if r["set"] == stratum)
+            if k is None:  # both halves were used: only what the dataset added since is left
+                self.assertEqual(drawn, ["new1", "new2"])
+            else:
+                self.assertEqual(len(drawn), min(k, 699 + 2 - len(used[stratum])))
+
+
+def _names(rows: list[dict]) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for row in rows:
+        out.setdefault(row["set"], set()).add(row["package"])
+    return out
+
 
 class BaselineTests(unittest.TestCase):
     def test_an_earlier_commit_judges_beside_the_current_code(self):

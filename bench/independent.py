@@ -28,6 +28,16 @@ The protocol, fixed in bench/fixtures/independent-sample.json before the first d
   bench/stats.py tests the samples only one of them catches or flags with an exact McNemar test per set. Round two
   (bench/fixtures/independent-sample-round2.json, kind independent-round2) ran with --baseline 71e982b, the code
   round one measured.
+- Round three (bench/fixtures/independent-sample-round3.json, kind independent-round3) was drawn at the dataset's
+  newest commit before any rule changed after round two, with --exclude naming both earlier samples: it leaves out
+  every package of rounds one and two, so the sets round one took whole hold only the packages added to the dataset
+  since, and a set with none is left out. The newest commit was still 72c723b, so round three has no agent skills,
+  IDE extensions or hijacked PyPI releases and cannot measure fixes for them. It runs with --baseline 3c92edf, the
+  code round two measured (code
+  78f01b944b91), and bench/stats.py analyses it as it did round two: per set an exact McNemar test on the samples only
+  one version catches or flags, Holm-adjusted across the sets, and the same test over all malicious samples and over
+  all popular packages, Holm-adjusted across the two. Its description of what changed (the rule each new catch rests
+  on, what fell on each catch lost, the rates with the campaign checks off) is fixed before the download this time.
 
 Results go to bench/results/<date>-independent.json: per sample its set, name, version, file, digest, verdict and the
 rules that fired. Never the files' contents or the findings' text: malware carries live attacker URLs and tokens.
@@ -156,20 +166,22 @@ def draw_malicious(frame: dict, seed: str = SEED, exclude: dict[str, set[str]] |
                    commit: str | None = None) -> tuple[list[dict], dict[str, list[str]]]:
     """The samples to scan, and for the sets taken whole when split is set, the half kept back for tuning.
 
-    A set with a size draws that many packages at random, leaving out those in exclude (an earlier round). A set
-    taken whole is either scanned whole or, with split, halved at random: rules may be tuned on the first half and
-    are measured on the second."""
+    A set with a size draws that many packages at random, leaving out those in exclude (earlier rounds). A set taken
+    whole is scanned whole, less the packages in exclude, or with split halved at random: rules may be tuned on the
+    first half and are measured on the second. Round two split the sets round one took whole; once both halves are
+    used, a later round takes only the packages added to the dataset since."""
     out, tune = [], {}
     for stratum, k in MALICIOUS.items():
         packages = frame[stratum]
         rng = random.Random(f"{seed}:{stratum}")
         if k is None:
-            names = sorted(packages)
             if split:
-                order = names[:]
+                order = sorted(packages)
                 random.Random(f"{seed}:{stratum}:halves").shuffle(order)
                 tune[stratum] = sorted(order[:len(order) // 2])
                 names = sorted(order[len(order) // 2:])
+            else:
+                names = sorted(set(packages) - (exclude or {}).get(stratum, set()))
             chosen = names
         else:
             names = sorted(set(packages) - (exclude or {}).get(stratum, set()))
@@ -242,10 +254,12 @@ def _wait_for_github(need: int) -> None:
 
 def cmd_plan(args) -> int:
     exclude: dict[str, set[str]] = {}
-    if args.exclude:
-        earlier = json.loads(args.exclude.read_text(encoding="utf-8"))
+    for path in args.exclude:
+        earlier = json.loads(path.read_text(encoding="utf-8"))
         for row in [*earlier["malicious"], *earlier["benign"]]:
             exclude.setdefault(row["set"], set()).add(row["package"])
+        for stratum, names in (earlier.get("tune_halves") or {}).items():
+            exclude.setdefault(stratum, set()).update(names)
     benign, passed_over = draw_benign(args.seed, exclude)
     print(f"benign: {len(benign)} releases, {len(passed_over)} passed over", flush=True)
     _wait_for_github(need=16)
@@ -261,8 +275,8 @@ def cmd_plan(args) -> int:
                     "packages": {s: len(p) for s, p in frame.items()},
                     "samples": {s: sum(len(v) for v in p.values()) for s, p in frame.items()}},
         "plan": {"malicious": MALICIOUS, "benign": BENIGN, "split": args.split},
-        "excluded": {"sample": _rel(args.exclude), "packages": sum(len(v) for v in exclude.values())} if args.exclude
-        else None,
+        "excluded": {"samples": [_rel(p) for p in args.exclude], "packages": sum(len(v) for v in exclude.values())}
+        if args.exclude else None,
         "tune_halves": tune,
         "seen_before_run": args.seen or [],
         "malicious": malicious, "benign": benign, "benign_passed_over": passed_over,
@@ -626,7 +640,8 @@ def main(argv=None) -> int:
     p.add_argument("--seen", nargs="*", help="drawn samples whose file lists were looked at before the run")
     p.add_argument("--seed", default=SEED)
     p.add_argument("--commit", default=COMMIT, help="the dataset commit, or 'head' for the newest")
-    p.add_argument("--exclude", type=Path, help="an earlier sample file whose packages are not drawn again")
+    p.add_argument("--exclude", type=Path, nargs="*", default=[],
+                   help="earlier sample files whose packages are not drawn again")
     p.add_argument("--split", action="store_true",
                    help="halve the sets taken whole: tune on one half, measure on the other")
     p.add_argument("--out", type=Path, default=SAMPLE)

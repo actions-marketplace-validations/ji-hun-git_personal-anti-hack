@@ -62,6 +62,26 @@ class StatsTests(unittest.TestCase):
         self.assertEqual((out["overall"]["malicious"]["only_now"], out["overall"]["benign"]["only_before"]), (8, 4))
         self.assertGreaterEqual(out["overall"]["malicious"]["p_holm"], out["overall"]["malicious"]["p"])
 
+    def test_round_three_reports_against_round_two_rules(self):
+        def row(stratum, now, before, name, rules, rules_before):
+            return {"set": stratum, "package": name, "version": "1", "verdict": now, "verdict_baseline": before,
+                    "verdict_without_campaign_shapes": now, "rules": rules, "rules_baseline": rules_before}
+        rows = ([row("npm/malicious_intent", "block", "pass", f"m{i}", {"PAH-C031": "high"}, {}) for i in range(3)]
+                + [row("npm/malicious_intent", "pass", "warn", "lost", {"PAH-T007": "low"}, {"PAH-T007": "medium"})]
+                + [row("pypi/popular", "warn", "pass", "new-flag", {"PAH-C007": "medium"}, {"PAH-C007": "low"})])
+        r3 = {"code": "abc", "baseline": "def0", "dataset": {"commit": "0123456789abcdef"}, "drawn_on": "2026-11-19",
+              "sample": "bench/fixtures/independent-sample-round3.json", "misses": None, "misses_per_set": None,
+              **stats.paired_rounds(rows), "changes": stats.what_changed(rows), "rules_behind_false_alarms": {},
+              "left_out_why": {}}
+        text = "\n".join(stats._round_three_section({"round_three": r3}))
+        self.assertIn("## Round three", text)
+        self.assertIn("| Round two's rules |", text)
+        self.assertIn("lost 1 (npm packages published to attack)", text)
+        self.assertIn("`PAH-C031` 3", text)
+        self.assertIn("`PAH-T007` medium before, low now", text)
+        self.assertIn("new-flag 1 (pypi, warn: `PAH-C007` medium)", text)
+        self.assertEqual(stats._round_three_section({}), [])
+
     def test_report_is_current(self):
         report = stats.markdown(stats.analyse())
         self.assertEqual((ROOT / "docs" / "statistics.md").read_text(encoding="utf-8"), report,

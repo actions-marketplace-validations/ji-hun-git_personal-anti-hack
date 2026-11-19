@@ -89,6 +89,14 @@ misses still run on import or when an extension activates, or are written as ins
 run. `docs/statistics.md` adds what changed, counted after the results, and the README a forest plot of both versions
 on the same samples.
 
+**Round three is drawn** (`bench/fixtures/independent-sample-round3.json`), before any rule changed after round two:
+500 npm and 500 PyPI packages published to attack, 100 hijacked npm releases and 1,000 popular packages, none of them
+in rounds one or two. The dataset's newest commit is still 72c723b, so with nothing added since round one, the agent
+skills, IDE extensions and hijacked PyPI releases are used up and round three cannot measure fixes for them. It will
+run against the code round two measured (`--baseline 3c92edf`), with round two's analysis; this time the description
+of what changed is fixed before the download too. `bench/independent.py plan --exclude` takes several earlier
+samples, and leaves their packages out of the sets taken whole unless `--split` halves them.
+
 ## 0.5.1 (2026-11-17)
 
 **Fixed: a download in a long folder was not matched to its run.** The session record masks anything token-shaped,

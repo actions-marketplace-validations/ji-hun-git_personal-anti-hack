@@ -160,6 +160,17 @@ STR = {
         "r2_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so these are rates on malware "
                    "Datadog caught. Sample, protocol and every verdict: bench/independent.py, "
                    "bench/fixtures/independent-sample-round2.json and bench/results/.",
+        "r3_title": "Round three: round two’s lessons on samples never studied",
+        "r3_sub": "A fresh random draw, fixed before any rule changed after round two. Every sample was judged by the "
+                  "current rules (dot) and by round two’s (ring); lines are exact 95% intervals. Under each set: the "
+                  "samples only one version caught or flagged, and the exact McNemar p, Holm-adjusted across the sets.",
+        "r3_mal": "Malicious software caught (blocked or warned)",
+        "r3_ben": "Popular packages flagged (blocked or warned)",
+        "r3_legend": ("Current rules", "Round two’s rules, same samples"),
+        "r3_note": "only now {b}, only before {c}; p {p}",
+        "r3_foot": "Datadog’s samples were found mostly by one rule set (GuardDog), so these are rates on malware "
+                   "Datadog caught. Sample, protocol and every verdict: bench/independent.py, "
+                   "bench/fixtures/independent-sample-round3.json and bench/results/.",
     },
     "ko": {
         "headline": "AI 에이전트를 쓰는 사람을 위한 백신.",
@@ -266,6 +277,17 @@ STR = {
         "r2_note": "현재만 {b}, 1차만 {c}, p {p}",
         "r2_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, Datadog이 잡은 악성 코드에서의 비율입니다. "
                    "표본, 절차와 모든 판정: bench/independent.py, bench/fixtures/independent-sample-round2.json, "
+                   "bench/results/.",
+        "r3_title": "3차: 한 번도 들여다보지 않은 샘플로 잰 2차의 교훈",
+        "r3_sub": "2차 뒤로 규칙을 고치기 전에 고정한 새 무작위 추출입니다. 모든 샘플을 현재 규칙(점)과 2차 규칙(고리)으로 "
+                  "판정했고, 선은 정확한 95% 구간입니다. 세트마다 한쪽만 잡거나 경고한 샘플 수와, 세트 전체에 Holm 보정한 "
+                  "정확 McNemar p를 적었습니다.",
+        "r3_mal": "악성 소프트웨어 탐지(차단 또는 경고)",
+        "r3_ben": "인기 패키지 오탐(차단 또는 경고)",
+        "r3_legend": ("현재 규칙", "2차 규칙, 같은 샘플"),
+        "r3_note": "현재만 {b}, 2차만 {c}, p {p}",
+        "r3_foot": "Datadog 샘플은 대부분 한 규칙 세트(GuardDog)로 찾은 것이므로, Datadog이 잡은 악성 코드에서의 비율입니다. "
+                   "표본, 절차와 모든 판정: bench/independent.py, bench/fixtures/independent-sample-round3.json, "
                    "bench/results/.",
     },
 }
@@ -842,16 +864,17 @@ def _p(p: float) -> str:
     return f"{p:.1e}" if p < 1e-3 else f"{p:.2g}" if p < 0.1 else f"{p:.2f}"
 
 
-def round_two(lang: str, theme: str, st: dict | None = None) -> str | None:
-    """Round two of the held-out test: each set's rate under the current rules (dot), with round one's rules on the
-    same samples (ring) and the paired test under its name. None until round two has run."""
+def paired_round(round_key: str, pre: str, lang: str, theme: str, st: dict | None = None) -> str | None:
+    """A round of the held-out test judged by two versions of the rules: each set's rate under the current rules
+    (dot), with the earlier rules on the same samples (ring) and the paired test under its name. None until the round
+    has run."""
     s, st = STR[lang], st or stats_summary()
-    r2 = st.get("round_two")
+    r2 = st.get(round_key)
     if not r2:
         return None
     mal, ben = [], []
     for key, v in r2["sets"].items():
-        note = s["r2_note"].format(b=f"{v['only_now']:,}", c=f"{v['only_before']:,}", p=_p(v["p_holm"]))
+        note = s[f"{pre}_note"].format(b=f"{v['only_now']:,}", c=f"{v['only_before']:,}", p=_p(v["p_holm"]))
         row = {"label": s["int_sets"].get(key, key), "note": note, "rate": v["now"], "ring": v["before"],
                "always_ring": True}  # an equal rate is a result here, not a ring left out
         (mal if v["kind"] == "malicious" else ben).append(row)
@@ -859,13 +882,21 @@ def round_two(lang: str, theme: str, st: dict | None = None) -> str | None:
     high = max(max(r["rate"]["ci95"][1], r["ring"]["ci95"][1]) for r in ben)
     mal_dom = (min(0.9, _floor_to_tick(low, 1.0)), 1.0)
     ben_dom = (0.0, next(c for c in (0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0) if c >= high))
-    legend = (f'<div class="legend"><span><i class="pt"></i>{e(s["r2_legend"][0])}</span>'
-              f'<span><i class="ring"></i>{e(s["r2_legend"][1])}</span></div>')
-    body = (f'<div class="fig"><h2>{e(s["r2_title"])}</h2><p class="sub">{e(s["r2_sub"])}</p>'
-            f'<div class="panel"><h3>{e(s["r2_mal"])}</h3>{legend}{forest(mal, mal_dom, lang)}</div>'
-            f'<div class="panel"><h3>{e(s["r2_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>'
-            f'<p class="foot">{e(s["r2_foot"])}</p></div>')
+    legend = (f'<div class="legend"><span><i class="pt"></i>{e(s[f"{pre}_legend"][0])}</span>'
+              f'<span><i class="ring"></i>{e(s[f"{pre}_legend"][1])}</span></div>')
+    body = (f'<div class="fig"><h2>{e(s[f"{pre}_title"])}</h2><p class="sub">{e(s[f"{pre}_sub"])}</p>'
+            f'<div class="panel"><h3>{e(s[f"{pre}_mal"])}</h3>{legend}{forest(mal, mal_dom, lang)}</div>'
+            f'<div class="panel"><h3>{e(s[f"{pre}_ben"])}</h3>{forest(ben, ben_dom, lang)}</div>'
+            f'<p class="foot">{e(s[f"{pre}_foot"])}</p></div>')
     return page(theme, body, INTERVALS_CSS, lang=lang)
+
+
+def round_two(lang: str, theme: str, st: dict | None = None) -> str | None:
+    return paired_round("round_two", "r2", lang, theme, st)
+
+
+def round_three(lang: str, theme: str, st: dict | None = None) -> str | None:
+    return paired_round("round_three", "r3", lang, theme, st)
 
 
 SCAN_CSS = """
@@ -1048,7 +1079,7 @@ def render(doc: str, dest: Path, width: int, height: int | None = None, transpar
         subprocess.run(args + [src.as_uri()], check=True, capture_output=True, timeout=180)
 
 
-FIGURES = ("hero", "how", "chain", "results", "scan", "repos", "intervals", "round2")
+FIGURES = ("hero", "how", "chain", "results", "scan", "repos", "intervals", "round2", "round3")
 
 
 def main(argv: list[str]) -> int:
@@ -1062,7 +1093,8 @@ def main(argv: list[str]) -> int:
                 if only and name not in only:
                     continue
                 doc = {"hero": hero, "how": how, "chain": chain, "results": results, "repos": repos,
-                       "intervals": intervals, "round2": round_two}.get(name)
+                       "intervals": intervals, "round2": round_two,
+                       "round3": round_three}.get(name)
                 doc = doc(lang, theme) if doc else scan(lang, theme, raw)
                 if doc is None:  # a figure whose results do not exist yet
                     continue
